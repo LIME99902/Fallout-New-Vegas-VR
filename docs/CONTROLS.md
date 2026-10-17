@@ -1,0 +1,136 @@
+# FNVR motion controls guide
+
+This is the default right-handed layout. With **Left-handed** turned on (Settings → Body & profiles), the two hands swap: the left hand aims and shoots, and the right stick moves.
+
+"Grip" is the side button under your middle finger. A "fist" is grip + trigger squeezed together.
+
+## Walking around
+
+| Control | What it does |
+|---|---|
+| Left stick | Move |
+| Left stick click (hold) | Sprint |
+| Swing both arms like running | Move where you look (swing hard to sprint) |
+| Right stick left/right | Turn |
+| Right A | Jump |
+| Right stick click | Sneak (crouch) |
+| Really crouch or lean | Your view and arms follow (reach the floor, lean over things) |
+
+## Fighting
+
+| Control | What it does |
+|---|---|
+| Point your right hand | Aim. Shots go where the hand points, not where you look |
+| Right trigger | Fire / attack |
+| Swing your hand fast | Melee or punch (with fists or a melee weapon the trigger doesn't attack; you swing) |
+| Right B | Reload |
+| Left hand on the gun + left grip | Two-handed aim (steadies the gun) |
+| Raise a scoped gun to your eye | Scope view |
+| Left trigger | Bullet time (with VATS Alternative - Bullet Time), or aim down sights if that option is on |
+
+## Hands and objects
+
+| Control | What it does |
+|---|---|
+| Right grip | Activate: talk, open doors and containers, pick up items |
+| Either grip next to a loose object (no weapon out) | Grab it and hold it in that hand |
+| Let go of the grip while moving your hand | Throw the held object |
+| Grip on a ledge or wall | Climb |
+| Just move your hands | Your hands knock loose objects around |
+
+## Body gestures
+
+| Gesture | What it does |
+|---|---|
+| Right grip at your right hip | Draw or holster a pistol / one-handed melee weapon |
+| Right grip over your right shoulder | Draw or holster a long gun / two-handed melee weapon |
+| Either grip at the middle of your chest | Open or close the pause menu |
+| Left X | Pause menu too |
+| Raise your left wrist to your face | Open the Pip-Boy. Lower it to close |
+
+You feel a short buzz when your hand enters a holster or chest spot.
+
+## Grappling hook
+
+| Control | What it does |
+|---|---|
+| Left fist (left grip + left trigger) | Fire the grapple where your left hand points; you get pulled there |
+| Right fist (right grip + right trigger) | Fire with the right hand. Only when no gun is out, since with a gun the trigger shoots. Turn on in settings |
+| Let go before you arrive | Launch yourself with the speed you've built up |
+| Fire the other hand mid-pull | Swing on to a new point |
+
+All of this is set under Settings → Movement & comfort:
+- Range, top speed, start speed, time to top speed, launch strength, end hop and air slowdown.
+- Rope on or off, rumble, hooking onto people, and safe landing.
+
+## Pip-Boy (wrist open)
+
+| Control | What it does |
+|---|---|
+| Right A | Select |
+| Right B | Back |
+| Left X | The Pip-Boy's X action (e.g. drop) |
+| Left grip / right grip | The Pip-Boy's left / right bumper buttons |
+| Left stick | Scroll / move the cursor |
+| Right stick up/down | Move through lists (d-pad) |
+| Triggers | The Pip-Boy's trigger buttons |
+| Stick clicks | The Pip-Boy's stick-click buttons |
+| **F10** (keyboard) | Switch between the world pausing and the world keeping running while the Pip-Boy is open |
+
+### Moving the menu on the Pip-Boy screen
+With the Pip-Boy open, **click the left stick** to start adjusting:
+
+| Control | Slide mode (starts here) | Tilt mode |
+|---|---|---|
+| Left stick | Slide the menu along your arm (left/right, up/down) | Tilt and turn it |
+| Right stick up/down | Bigger / smaller | Taller / shorter |
+| Right stick left/right | Closer / further from the screen | Turn |
+| Right A | Switch to tilt mode | Switch to slide mode |
+| Left X | Reset to the default spot | Quarter turn |
+| Right B | **Save** and stop adjusting | **Save** and stop adjusting |
+
+Once saved, the menu stays in that spot every time.
+
+## Menus (pause menu, containers, dialogue, settings)
+
+| Control | What it does |
+|---|---|
+| Point the right hand | The menu revolver points at the screen |
+| Right trigger | Select what you point at |
+| Right A or right grip | Select |
+| Right B | Back |
+| Right stick up/down | Move up/down (d-pad) |
+
+## Quick-loot window (looking at a container or body)
+
+Needs Just Assorted Mods' quick-loot menu. This mapping is still being tested.
+
+| Control | What it does |
+|---|---|
+| Right grip | Take the selected item (sends the mod's **R** key) |
+| Right B | Take everything (sends the mod's take-all key) |
+| Right stick up/down | Scroll the list |
+| Left Y | Open the full container menu |
+| Right A | Jump (as normal) |
+
+The take keys are sent as keyboard presses, so the game window must be the active window on your PC.
+
+## Setup and calibration
+
+| Control | What it does |
+|---|---|
+| Hold **both thumbsticks in** ~1 second (or **F11**) | Open or close the VR settings panel |
+| **Click both thumbsticks** while pointing the right controller at the centre of your view | Calibrate the aim angle (also re-centres your standing height and lean) |
+| Settings → Body & profiles → Calibrate my body | Stand straight, then hold both arms out: sets height and arm reach |
+
+## Keyboard keys
+
+| Key | What it does |
+|---|---|
+| F3 / F4 | Move where shots land left / right by half a degree (saved) |
+| F6 / F7 | Move where shots land down / up by half a degree (saved) |
+| F8 | Head tracking on/off |
+| F9 | Fill the whole headset view on/off |
+| F10 | Pip-Boy: world keeps running / world pauses |
+| Ctrl+F10 | Real 3D stereo on/off (heavier on the PC) |
+| F11 | VR settings panel |
