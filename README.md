@@ -4,7 +4,7 @@ FNVR is an [xNVSE](https://github.com/xNVSE/NVSE) plugin that plays **Fallout: N
 
 You aim with your hand. You swing melee weapons and punches for real. You pick things up, throw them and climb. Guns go in holsters on your body, and you read the Pip-Boy on your actual wrist while the world keeps moving. On top of all that there is a Dying Light-style grappling hook.
 
-> Current version: **1.6.5**. This is a one-person hobby project made for the author's own setup (see the [mod list](docs/MODLIST.md)). It works well there, but other setups are untested.
+> Current version: **1.6.5**, **[download it here](https://github.com/LIME99902/Fallout-New-Vegas-VR/raw/main/release/FNVR-1.6.5.zip)**. This is a one-person hobby project made for the author's own setup (see the [mod list](docs/MODLIST.md)). It works well there, but other setups are untested.
 
 - **[Motion controls guide](docs/CONTROLS.md)**: every button, gesture and keyboard key.
 - **[Mod list](docs/MODLIST.md)**: the full load order and plugins FNVR is played with.
@@ -26,8 +26,8 @@ You aim with your hand. You swing melee weapons and punches for real. You pick t
 ## Install
 
 1. Install xNVSE and make sure the game starts through it.
-2. Copy `FNVR.dll` (from the latest release) to `Fallout New Vegas\Data\NVSE\Plugins\`.
-3. Optional: copy `config/FNVR.ini` to `Fallout New Vegas\Data\NVSE\Plugins\FNVR\FNVR.ini`. FNVR creates this file itself with defaults if it's missing.
+2. Download **[FNVR-1.6.5.zip](https://github.com/LIME99902/Fallout-New-Vegas-VR/raw/main/release/FNVR-1.6.5.zip)** and unzip it into your `Fallout New Vegas` folder. It puts `FNVR.dll` in `Data\NVSE\Plugins\`.
+3. The zip also includes a starter `Data\NVSE\Plugins\FNVR\FNVR.ini`. FNVR fills in everything else with defaults.
 4. Start SteamVR, put the headset on and launch the game through xNVSE.
 5. In game:
    1. Hold **both thumbsticks in for a second** to open the VR settings panel.
