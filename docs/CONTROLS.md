@@ -72,7 +72,7 @@ All of this is set under Settings → Movement & comfort:
 | Left X | The Pip-Boy's X action (e.g. drop) |
 | Left grip / right grip | The Pip-Boy's left / right bumper buttons |
 | Left stick | Scroll / move the cursor |
-| Right stick up/down | Move through lists (d-pad) |
+| Right stick | The game's right stick: moves the map cursor (pick a fast-travel spot), scrolls |
 | Triggers | The Pip-Boy's trigger buttons |
 | Stick clicks | The Pip-Boy's stick-click buttons |
 | **F10** (keyboard) | Switch between the world pausing and the world keeping running while the Pip-Boy is open |

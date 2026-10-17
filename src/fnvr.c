@@ -28,9 +28,9 @@
 #include "nvse_api.h"
 #include "openvr_capi.h"
 
-#define FNVR_VERSION        165
-#define FNVR_VERSION_STR    "1.6.5 (F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
-#define FNVR_VERSION_SHORT  "1.6.5"
+#define FNVR_VERSION        166
+#define FNVR_VERSION_STR    "1.6.6 (Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_SHORT  "1.6.6"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -1572,12 +1572,13 @@ static void Controllers_Poll(bool menu)
         if (rClick) b |= g_bindMask[BIND_SNEAK];
         /* left grip no longer opens VATS (it grabs objects / steadies the gun) */
     }
-    if (menu) {   /* in menus, the aim stick also works as a d-pad for tabs */
+    if (menu && !(g_pipOpen && g_wristPip)) {   /* in menus, the aim stick also works as a d-pad for tabs (not in the Pip-Boy: there it is the real right stick) */
         if (am->rAxis[0].y >  0.7f) b |= XB_DPAD_UP;
         if (am->rAxis[0].y < -0.7f) b |= XB_DPAD_DOWN;
     }
     p->wButtons = b;
-    if (g_pipOpen && g_wristPip) { p->sThumbRX = 0; p->sThumbRY = 0; }   /* Pip-Boy up: the right stick only flips tabs (as d-pad), never turns you */
+    if (g_pipOpen && g_wristPip) {   /* Pip-Boy up: the right stick is the game's right stick (moves the map cursor, scrolls) */
+        p->sThumbRX = AxisToShort(am->rAxis[0].x); p->sThumbRY = AxisToShort(am->rAxis[0].y); }
     if (g_pipOpen) {   /* triggers work as the Pip-Boy's own trigger buttons */
         p->bLeftTrigger  = (BYTE)(fminf(fmaxf(mv->rAxis[1].x, 0.0f), 1.0f) * 255.0f);
         p->bRightTrigger = (BYTE)(fminf(fmaxf(am->rAxis[1].x, 0.0f), 1.0f) * 255.0f);
