@@ -15,7 +15,7 @@ Only **xNVSE** is strictly required by FNVR; everything else is the author's per
 
 | Plugin | Version | Notes |
 |---|---|---|
-| **FNVR** | 1.6.6 | This mod |
+| **FNVR** | 1.9.8 | This mod |
 | xNVSE ★ | 6.4.4 | Script extender - required by FNVR |
 | JIP LN NVSE ★ | 57.30 | Needed for the quick-loot window |
 | JohnnyGuitar NVSE | 5.20 |  |

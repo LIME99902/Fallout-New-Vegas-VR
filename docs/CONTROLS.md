@@ -21,10 +21,10 @@ This is the default right-handed layout. With **Left-handed** turned on (Setting
 | Control | What it does |
 |---|---|
 | Point your right hand | Aim. Shots go where the hand points, not where you look |
-| Right trigger | Fire / attack |
-| Swing your hand fast | Melee or punch (with fists or a melee weapon the trigger doesn't attack; you swing) |
+| Right trigger | Fire / attack (revolvers fire as fast as you pull) |
+| Swing your hand fast | Melee or punch (the trigger can attack too - setting; automatic melee weapons use the trigger) |
 | Right B | Reload |
-| Left hand on the gun + left grip | Two-handed aim (steadies the gun) |
+| Left hand on the gun (or melee handle) + left grip | Two-handed grip (steadies the gun / swings the weapon with both hands) |
 | Raise a scoped gun to your eye | Scope view |
 | Left trigger | Bullet time (with VATS Alternative - Bullet Time), or aim down sights if that option is on |
 
@@ -54,8 +54,8 @@ You feel a short buzz when your hand enters a holster or chest spot.
 
 | Control | What it does |
 |---|---|
-| Left fist (left grip + left trigger) | Fire the grapple where your left hand points; you get pulled there |
-| Right fist (right grip + right trigger) | Fire with the right hand. Only when no gun is out, since with a gun the trigger shoots. Turn on in settings |
+| Left grip, then left trigger | Fire the grapple where your left hand points; you get pulled there (trigger first = bullet time instead) |
+| Right grip, then right trigger | Fire with the right hand. Only when no gun is out, since with a gun the trigger shoots. Turn on in settings |
 | Let go before you arrive | Launch yourself with the speed you've built up |
 | Fire the other hand mid-pull | Swing on to a new point |
 
@@ -101,17 +101,27 @@ Once saved, the menu stays in that spot every time.
 | Right B | Back |
 | Right stick up/down | Move up/down (d-pad) |
 
-## Quick-loot window (looking at a container or body)
+## Pop-up menus (talking, trading, containers, messages)
 
-Needs Just Assorted Mods' quick-loot menu. This mapping is still being tested.
+The world keeps running while these are open, and your character holds still.
 
 | Control | What it does |
 |---|---|
-| Right grip | Take the selected item (sends the mod's **R** key) |
+| Right A | Select |
+| Turn your head well away (75° by default) | Close the menu |
+
+Size, height and the look-away angle are on the **HUD & menus** settings page.
+
+## Quick-loot window (looking at a container or body)
+
+Needs Just Assorted Mods' quick-loot menu.
+
+| Control | What it does |
+|---|---|
+| Right A | Take the selected item (sends the mod's **E** key) |
 | Right B | Take everything (sends the mod's take-all key) |
-| Right stick up/down | Scroll the list |
-| Left Y | Open the full container menu |
-| Right A | Jump (as normal) |
+| Right stick up/down | Scroll the list (it never turns you while the window is up) |
+| Right grip or left Y | Open the full container menu |
 
 The take keys are sent as keyboard presses, so the game window must be the active window on your PC.
 

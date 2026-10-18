@@ -28,9 +28,9 @@
 #include "nvse_api.h"
 #include "openvr_capi.h"
 
-#define FNVR_VERSION        166
-#define FNVR_VERSION_STR    "1.6.6 (Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
-#define FNVR_VERSION_SHORT  "1.6.6"
+#define FNVR_VERSION        198
+#define FNVR_VERSION_STR    "1.9.8 (holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_SHORT  "1.9.8"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -126,6 +126,18 @@ static const SetCameraFOV_t SetCameraFOV = (SetCameraFOV_t)0x00C52020;
 static void *GetPlayer(void) { return *(void **)PLAYER_PTR_ADDR; }
 static float *PlayerRotX(void *p) { return (float *)((char *)p + REFR_ROTX_OFFSET); }
 static float *PlayerRotZ(void *p) { return (float *)((char *)p + REFR_ROTZ_OFFSET); }
+/* While the Pip-Boy or the quick-loot window is up, the right stick works those menus - so the character's
+   facing is held still, and the running world never spins around you. */
+static bool g_headingLockWant = false;
+static float g_pipStickScale = 0.35f;   /* INI [Controls] fPipBoyStickStrength: right stick strength on the Pip-Boy map */
+static void HeadingLock_Apply(void)
+{
+    static bool held = false; static float hz = 0;
+    void *pl = GetPlayer();
+    if (!g_headingLockWant || !pl) { held = false; return; }
+    float *rz = PlayerRotZ(pl), *rx = (float *)((char *)pl + REFR_ROTX_OFFSET); static float hx = 0;
+    if (!held) { held = true; hz = *rz; hx = *rx; } else { *rz = hz; *rx = hx; }
+}
 
 static IDirect3DDevice9 *GetGameDevice(void)
 {
@@ -199,6 +211,7 @@ static float g_aimPitchOffsetDeg = -60.0f;/* tilt of the aiming direction relati
 static bool  g_leftHanded = false;
 static WORD  g_runScancode = 0x2A;      /* keyboard Run key (Left Shift) */
 static bool  g_meleeSwings = true;
+static bool  g_meleeTrigger = false;   /* INI [Controls] bMeleeTrigger: the right trigger attacks with melee weapons and fists too */
 static bool  g_fingerTracking = true;
 static int   g_fingerAxis = 2;           /* local axis fingers bend around (0 X, 1 Y, 2 Z) */
 static float g_fingerSign = 1.0f;        /* bend direction */
@@ -266,11 +279,16 @@ static float g_grapRange = 40.0f, g_grapSpeed = 28.0f, g_grapLaunch = 1.0f;   /*
 static float g_grapRamp = 0.6f, g_grapStart = 0.35f, g_grapDrag = 0.35f, g_grapHop = 3.5f;   /* INI [Grapple] fTimeToTop (s), fStartSpeed (0-1), fAirDrag, fEndHop (m/s) */
 static bool  g_weaponOutThisFrame = true;
 static bool  g_lootCenter = true; static float g_lootOffX = 0.0f;
+static bool  g_lootDiag = false;   /* (right grip was just squeezed: write down what the loot check saw) */
 static bool  g_lootShown = false, g_lootControls = true;   /* the quick-loot window is up; INI [Controls] bLootMenuControls */
-static WORD  g_jlmTake = 0x1000, g_jlmEquip = 0x4000, g_jlmAll = 0x0002; static int g_jlmKey2 = 19, g_jlmKeyAll = 42;   /* its buttons, from JustMods.ini */   /* INI [Display] bCenterLootMenu, fLootMenuOffset */
+static WORD  g_jlmTake = 0x1000, g_jlmEquip = 0x4000, g_jlmAll = 0x0002; static int g_jlmKey1 = 18, g_jlmKey2 = 19, g_jlmKeyAll = 42;   /* its buttons, from JustMods.ini */   /* INI [Display] bCenterLootMenu, fLootMenuOffset */
 static bool  g_pipWorldFirst = false;     /* INI [Controls] bPipBoyWorldFirst */
 static bool  g_pipBoxShow = true, g_pipMenuBg = true;   /* INI [PipScreen] bShowScreenBox, bMenuBackground */
 static bool  g_paNoFall = true;          /* INI [Controls] bPowerArmorNoFallDamage */
+static bool g_grapPulling = false;
+static bool g_hideBodyGrap = true;
+static void Hol_Load(void);   /* INI [Grapple] bHideBody: no body below you while grappling */
+static char *g_bodyHidden = NULL;
 static float g_grapTrigH[2] = { 0, 0 };  /* each hand's trigger, 0..1 (0 = left, 1 = right) */
 static bool  g_chestPause = true; static float g_chestDown = 0.32f, g_chestFwd = 0.10f, g_chestR = 0.14f;   /* INI [Controls] bChestPause etc. */
 static WORD  g_chestPress = 0; static double g_chestPressUntil = 0;
@@ -284,8 +302,15 @@ static bool g_pipOnBoxIni = true; static float g_pipBoxFitIni = 1.0f, g_pipBoxLi
 static bool  g_pipOvEnabledIni = true; static float g_pipOvIni[4] = { 0.10f, 0.045f, 0.0f, 0.11f };        /* INI [Controls] bPipBoyNoAnimation */     /* INI [Display] bMenusOnScreen: in-game menus & prompts on the curved screen too */       /* the far main-menu screen is showing */
 static float g_mmGunUpIni = 0.045f, g_mmGunFwdIni = 0.03f;   /* INI [Controls] fMenuGunUp / fMenuGunForward */
 static float g_mmCurveR = 3.0f;          /* INI [Display] fMainMenuCurveRadius: gentle curved-TV bend (metres) */
-static float g_uiArcDeg = 110.0f;        /* INI [Display] fUIArc (degrees the panel wraps around you) */
-static float g_uiScale = 0.4f;                  /* INI [Display] fUIScale: share of the view the interface fills */
+static float g_uiArcDeg = 80.0f;         /* INI [Display] fUIArc (degrees the HUD panel wraps around you) */
+static float g_menuDist = 0.9f, g_menuArcDeg = 60.0f;   /* INI [Display] fMenuDistance / fMenuArc: pop-up menus (talking, trading...) */
+static float g_uiScale = 0.6f;                  /* INI [Display] fUIScale: share of the view the HUD fills */
+static float g_menuScale = 0.5f;                /* INI [Display] fMenuScale: share of the view pop-up menus fill */
+static float g_dlgScale = 0.5f;
+static float g_menuYOff = -0.12f;               /* INI [Display] fMenuHeight: pop-up menus moved up (+) / down (-), share of the view */                 /* INI [Display] fDialogueScale: share of the view talking (dialogue) fills */
+static bool g_farActive2;
+static bool g_dlgSnapWant = false;
+static volatile bool g_uiXfOn = false; static float g_uiXfBase[4], g_uiXfCur[4];   /* interface camera: the game's frustum and the one FNVR set */
 static bool  g_adsEnabled = false;              /* INI [Controls] bAimDownSights: left trigger aims down sights */
 static bool  g_pipOpen = false;      /* the Pip-Boy is open (shown on your wrist, not as a flat screen) */
 static int   g_pipPulse = 0;          /* (unused) */
@@ -296,6 +321,31 @@ static float g_pipScale = 1.0f;       /* INI [Controls] fPipBoyScale: how much b
 static bool  g_wristPip = true;       /* INI [Controls] bWristPipBoy */
 static int   g_pipModeRaw = 0;
 static bool g_pipRealTime;
+/* ---- Live menus: talking, trading, containers and pop-up messages with the world still running ----
+   These menus normally freeze the game and FNVR showed them on a screen in a separate room. With live menus on,
+   the world keeps running and you stay in it (the menu shows on the curved panel in front of you, as the HUD
+   does); look well away from it and it closes. [Display] bLiveMenus, fLookAwayClose (degrees, 0 = off). */
+static bool  g_liveMenus = true; static float g_lookAwayDeg = 75.0f;
+static void Hud_Load(void);
+static volatile bool g_liveMenuNow = false;
+static const int g_liveMenuIds[] = { 1001 /* messages */, 1008 /* container */, 1009 /* dialogue */, 1016 /* how many */, 1035 /* repair */,
+                                     1053 /* barter */, 1058 /* repair services */, 1061 /* weapon mods */, 1075 /* companion wheel */, 1077 /* crafting */ };
+static bool g_liveBlocked = false;   /* (another, non-live menu is up) */
+static bool LiveMenu_Check(void)
+{
+    g_liveBlocked = false;
+    if (!g_liveMenus) return false;
+    const volatile bool *v = (const volatile bool *)0x011F308F;
+    bool any = false;
+    for (int id = 1001; id <= 1090; id++) {
+        if (!v[id] || id == 1004 /* HUD */) continue;
+        bool live = false;
+        for (unsigned k = 0; k < sizeof g_liveMenuIds / sizeof g_liveMenuIds[0]; k++) if (g_liveMenuIds[k] == id) live = true;
+        if (!live) { g_liveBlocked = true; return false; }   /* another menu is up too (pause menu, loading, lockpicking...): the game's normal way */
+        any = true;
+    }
+    return any;
+}
 static bool g_pipInstant;
 static double g_headSnapAt = 0; static bool g_headSnapPending = false;
 static double g_reequipAt = 0, g_hiddenLogAt = 0;
@@ -387,6 +437,7 @@ static void LoadSettings(void)
     g_handAim = GetPrivateProfileIntA("Controls", "bHandAim", 1, g_iniPath) != 0;
     g_leftHanded = GetPrivateProfileIntA("Controls", "bLeftHanded", 0, g_iniPath) != 0;
     g_meleeSwings = GetPrivateProfileIntA("Controls", "bMeleeSwings", 1, g_iniPath) != 0;
+    g_meleeTrigger = GetPrivateProfileIntA("Controls", "bMeleeTrigger", 0, g_iniPath) != 0;
     g_fingerTracking = GetPrivateProfileIntA("Controls", "bFingerTracking", 1, g_iniPath) != 0;
     g_fingerAxis = (int)GetPrivateProfileIntA("Controls", "iFingerBendAxis", 2, g_iniPath) % 3;
     g_fingerSign = GetPrivateProfileIntA("Controls", "bFingerBendReverse", 0, g_iniPath) ? -1.0f : 1.0f;
@@ -398,8 +449,10 @@ static void LoadSettings(void)
     g_wristPip = GetPrivateProfileIntA("Controls", "bWristPipBoy", 1, g_iniPath) != 0;
     g_flatMenus = GetPrivateProfileIntA("Display", "bFlatMenus", 0, g_iniPath) != 0;
     g_curvedUI = GetPrivateProfileIntA("Display", "bCurvedUI", 1, g_iniPath) != 0;
-    { char sb[32]; GetPrivateProfileStringA("Display", "fUIDistance", "0.45", sb, sizeof sb, g_iniPath); float v = (float)atof(sb); if (v >= 0.2f && v <= 5.0f) g_uiDist = v;
-      GetPrivateProfileStringA("Display", "fUIArc", "110", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= 30.0f && v <= 200.0f) g_uiArcDeg = v;
+    { char sb[32]; GetPrivateProfileStringA("Display", "fUIDistance", "0.6", sb, sizeof sb, g_iniPath); float v = (float)atof(sb); if (v >= 0.2f && v <= 5.0f) g_uiDist = v;
+      GetPrivateProfileStringA("Display", "fUIArc", "80", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= 30.0f && v <= 200.0f) g_uiArcDeg = v;
+      GetPrivateProfileStringA("Display", "fMenuDistance", "0.9", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= 0.3f && v <= 5.0f) g_menuDist = v;
+      GetPrivateProfileStringA("Display", "fMenuArc", "60", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= 20.0f && v <= 200.0f) g_menuArcDeg = v;
       GetPrivateProfileStringA("Display", "fMainMenuDistance", "1.8", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= 0.3f && v <= 10.0f) g_mmDist = v;
       GetPrivateProfileStringA("Display", "fMainMenuWidth", "2.8", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= 0.3f && v <= 10.0f) g_mmWidth = v;
       GetPrivateProfileStringA("Display", "fMainMenuCurveRadius", "3.0", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= 0.5f && v <= 50.0f) g_mmCurveR = v; }
@@ -422,6 +475,8 @@ static void LoadSettings(void)
     g_chestPause = GetPrivateProfileIntA("Controls", "bChestPause", 1, g_iniPath) != 0;
     g_momentumOnIni = GetPrivateProfileIntA("Controls", "bJumpMomentum", 1, g_iniPath) != 0;
     g_grapOn = GetPrivateProfileIntA("Grapple", "bEnabled", 1, g_iniPath) != 0;
+    g_hideBodyGrap = GetPrivateProfileIntA("Grapple", "bHideBody", 1, g_iniPath) != 0;
+    Hol_Load();
     g_grapSafe = GetPrivateProfileIntA("Grapple", "bSafeLanding", 1, g_iniPath) != 0;
     { char gb3[32];
       GetPrivateProfileStringA("Grapple", "fRange", "40", gb3, sizeof gb3, g_iniPath); g_grapRange = fminf(fmaxf((float)atof(gb3), 5.0f), 150.0f);
@@ -446,11 +501,12 @@ static void LoadSettings(void)
         if (b1 > 0 && b1 < 0x10000) g_jlmTake = (WORD)b1;
         if (b2 > 0 && b2 < 0x10000) g_jlmEquip = (WORD)b2;
         if (ba > 0 && ba < 0x10000) g_jlmAll = (WORD)ba;
-        g_jlmKey2 = GetPrivateProfileIntA("JLM", "JLMKey2", 19, jp); g_jlmKeyAll = GetPrivateProfileIntA("JLM", "JLMKeyAdditional", 42, jp);
+        g_jlmKey1 = GetPrivateProfileIntA("JLM", "JLMKey1", 18, jp); g_jlmKey2 = GetPrivateProfileIntA("JLM", "JLMKey2", 19, jp); g_jlmKeyAll = GetPrivateProfileIntA("JLM", "JLMKeyAdditional", 42, jp);
     }
     { char lb[32]; GetPrivateProfileStringA("Display", "fLootMenuOffset", "0", lb, sizeof lb, g_iniPath); g_lootOffX = (float)atof(lb); }
     g_pipMenuBg = GetPrivateProfileIntA("PipScreen", "bMenuBackground", 1, g_iniPath) != 0;
     g_armSwing = GetPrivateProfileIntA("Controls", "bArmSwing", 1, g_iniPath) != 0;
+    { char sb[32]; GetPrivateProfileStringA("Controls", "fPipBoyStickStrength", "0.35", sb, sizeof sb, g_iniPath); float v = (float)atof(sb); g_pipStickScale = v > 0.05f && v <= 1.0f ? v : 0.35f; }
     g_armSwingSprint = GetPrivateProfileIntA("Controls", "bArmSwingSprint", 1, g_iniPath) != 0;
     { char ab[32]; GetPrivateProfileStringA("Controls", "fArmSwingSensitivity", "1.0", ab, sizeof ab, g_iniPath); g_armSwingSens = fminf(fmaxf((float)atof(ab), 0.3f), 3.0f); }
     g_grapRumble = GetPrivateProfileIntA("Grapple", "bRumble", 1, g_iniPath) != 0;
@@ -487,9 +543,15 @@ static void LoadSettings(void)
     g_mmShot = GetPrivateProfileIntA("Controls", "bMenuPointerShot", 1, g_iniPath) != 0;
     { char gb[32]; GetPrivateProfileStringA("Controls", "fMenuGunUp", "0.045", gb, sizeof gb, g_iniPath); g_mmGunUpIni = (float)atof(gb);
       GetPrivateProfileStringA("Controls", "fMenuGunForward", "0.03", gb, sizeof gb, g_iniPath); g_mmGunFwdIni = (float)atof(gb); }
-    { char sb[32]; GetPrivateProfileStringA("Display", "fUIScale", "0.4", sb, sizeof sb, g_iniPath); float v = (float)atof(sb); if (v >= 0.15f && v <= 1.0f) g_uiScale = v; }
+    { char sb[32]; GetPrivateProfileStringA("Display", "fUIScale", "0.6", sb, sizeof sb, g_iniPath); float v = (float)atof(sb); if (v >= 0.15f && v <= 1.0f) g_uiScale = v;
+      GetPrivateProfileStringA("Display", "fMenuScale", "0.5", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= 0.15f && v <= 1.0f) g_menuScale = v;
+      GetPrivateProfileStringA("Display", "fDialogueScale2", "0.5", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= 0.15f && v <= 1.0f) g_dlgScale = v;
+      GetPrivateProfileStringA("Display", "fMenuHeight", "-0.12", sb, sizeof sb, g_iniPath); v = (float)atof(sb); if (v >= -0.5f && v <= 0.5f) g_menuYOff = v; }
     g_adsEnabled = GetPrivateProfileIntA("Controls", "bAimDownSights", 0, g_iniPath) != 0;
     g_pipRealTime = GetPrivateProfileIntA("Controls", "bPipBoyRealTime", 1, g_iniPath) != 0;
+    g_liveMenus = GetPrivateProfileIntA("Display", "bLiveMenus", 1, g_iniPath) != 0;
+    Hud_Load();
+    { char lb[32]; GetPrivateProfileStringA("Display", "fLookAwayClose", "75", lb, sizeof lb, g_iniPath); g_lookAwayDeg = (float)atof(lb); }
     g_pipInstant = GetPrivateProfileIntA("Controls", "bInstantPipBoy", 1, g_iniPath) != 0;
     { char sb[32]; GetPrivateProfileStringA("Controls", "fPipBoyScale", "1.0", sb, sizeof sb, g_iniPath); float v = (float)atof(sb); if (v >= 0.5f && v <= 4.0f) g_pipScale = v; }
     g_handWalls = GetPrivateProfileIntA("Grab", "bHandWallCollision", 1, g_iniPath) != 0;
@@ -1023,6 +1085,9 @@ static int PlayerWeaponType(void)
     return *(BYTE *)(weapon + 0xF4);
 }
 
+static void *PlayerWeaponForm(void);
+/* An automatic weapon (the game's own "automatic" flag): for melee that's the chainsaw-type weapons. */
+static bool PlayerWeaponAutomatic(void) { char *w = (char *)PlayerWeaponForm(); return w && !IsBadReadPtr(w + 0x100, 1) && (*(BYTE *)(w + 0x100) & 2); }
 static void *PlayerWeaponForm(void)
 {
     char *player = (char *)GetPlayer();
@@ -1218,6 +1283,27 @@ static void Key_RealTick(void)
 {
     for (int i = 0; i < 2; i++) if (g_sendKey[i] && QpcMs() > g_sendRelAt[i]) { Key_Send(g_sendKey[i], true); g_sendKey[i] = 0; }
 }
+/* While the Pip-Boy is open with the world running, the game would still take its buttons as moves (A = jump,
+   right stick = turn). The character's movement and looking are switched off for that time (the game's own
+   DisablePlayerControls), and switched back on when it closes. */
+/* mode: 0 = nothing held, 1 = looking held (Pip-Boy: its A still selects), 2 = movement + looking held (live menus) */
+static TrackedDevicePose_t g_waitPoses[16]; static bool g_haveWaitPose;
+static void PipControls_Hold(int want)
+{
+    static int on = 0; static void *dis[3], *en[3]; static bool failed = false;
+    if (want == on || failed || !g_scriptIntf || !g_scriptIntf->CompileScript || !g_scriptIntf->CallFunctionAlt) return;
+    if (!dis[1]) {
+        dis[1] = g_scriptIntf->CompileScript("Begin Function { }\nDisablePlayerControls 0 0 0 0 1 0 0\nEnd\n");
+        en[1]  = g_scriptIntf->CompileScript("Begin Function { }\nEnablePlayerControls 0 0 0 0 1 0 0\nEnd\n");
+        dis[2] = g_scriptIntf->CompileScript("Begin Function { }\nDisablePlayerControls 1 0 0 0 1 0 0\nEnd\n");
+        en[2]  = g_scriptIntf->CompileScript("Begin Function { }\nEnablePlayerControls 1 0 0 0 1 0 0\nEnd\n");
+        if (!dis[1] || !en[1] || !dis[2] || !en[2]) { failed = true; Log("Menus: couldn't set up holding your character still"); return; }
+    }
+    if (on) g_scriptIntf->CallFunctionAlt(en[on], GetPlayer(), 0);
+    on = want;
+    if (on) g_scriptIntf->CallFunctionAlt(dis[on], GetPlayer(), 0);
+    static int l = 0; if (l++ < 8) Log("Menus: character %s", on == 2 ? "movement and looking held" : on == 1 ? "looking held (Pip-Boy)" : "back to normal");
+}
 static void Key_Tap(int key)
 {
     if (key <= 0 || key > 255 || !g_scriptIntf || !g_scriptIntf->CompileScript || !g_scriptIntf->CallFunctionAlt) return;
@@ -1411,9 +1497,10 @@ static void Controllers_Poll(bool menu)
     p->bLeftTrigger  = (BYTE)(fminf(fmaxf(mv->rAxis[1].x, 0.0f), 1.0f) * 255.0f);   /* aim / block */
     p->bRightTrigger = (BYTE)(fminf(fmaxf(am->rAxis[1].x, 0.0f), 1.0f) * 255.0f);   /* attack */
     Melee_Update(menu);
-    if (!menu && g_meleeSwings) {   /* melee weapons and fists attack only by swinging, not with the trigger */
+    if (!menu && g_meleeSwings && !g_meleeTrigger) {   /* melee weapons and fists attack by swinging, not with the trigger -
+                                                         except automatic ones (chainsaw, Ripper, Industrial Hand...), which run while it's held */
         int wt = PlayerWeaponType();
-        if (wt >= -1 && wt <= 2) p->bRightTrigger = 0;
+        if (wt >= -1 && wt <= 2 && !PlayerWeaponAutomatic()) p->bRightTrigger = 0;
     }
     if (g_swingFrames > 0) p->bRightTrigger = 255;                               /* swing = attack */
     if (!menu && QpcMs() < g_weaponSettleUntil - 600.0) p->bRightTrigger = 0;     /* the new gun is still being drawn */
@@ -1437,6 +1524,11 @@ static void Controllers_Poll(bool menu)
     bool rGripRaw = rGrip, lGripRaw = lGrip;
     bool rA = Pressed(am, EVRButtonId_k_EButton_A), rB = Pressed(am, EVRButtonId_k_EButton_ApplicationMenu);
     bool lX = Pressed(mv, EVRButtonId_k_EButton_A), lY = Pressed(mv, EVRButtonId_k_EButton_ApplicationMenu);
+    {   /* a button still held from a menu or the Pip-Boy (A to fast travel, B to close) does nothing in the game until it's let go */
+        static bool aLatch = false, bLatch = false;
+        if (menu || g_pipOpen) { aLatch = rA; bLatch = rB; }
+        else { if (!rA) aLatch = false; if (!rB) bLatch = false; if (aLatch) rA = false; if (bLatch) rB = false; }
+    }
     bool rClick = Pressed(am, EVRButtonId_k_EButton_SteamVR_Touchpad);
     bool lClick = Pressed(mv, EVRButtonId_k_EButton_SteamVR_Touchpad);
     g_bothSticksClicked = rClick && lClick;
@@ -1451,6 +1543,7 @@ static void Controllers_Poll(bool menu)
         bool noWeapon = !PlayerWeaponOut() || PlayerWeaponType() == -1;
         for (int h = 0; h < 2; h++) {
             if (gripNow[h] && !gripPrev[h]) {
+                if (h == amH && !menu) g_lootDiag = true;
                 grabMode[h] = g_grabEnabled && !menu && g_inGameplay && noWeapon && g_grabCand[h] != NULL;
                 static int gripLogs = 0;
                 if (!menu && noWeapon && gripLogs < 40) {
@@ -1468,7 +1561,7 @@ static void Controllers_Poll(bool menu)
         {   /* weapon out: off-hand grip on the gun = two-handed aim, elsewhere = VATS */
             static bool twoMode = false;
             int wtNow = PlayerWeaponType();
-            bool gun = !noWeapon && wtNow >= 3;
+            bool gun = !noWeapon && (wtNow >= 3 || wtNow == 1 || wtNow == 2);   /* guns and melee weapons (not fists) */
             if (gripNow[mvH] && !gripPrevTwo) twoMode = gun && !menu && g_twoHandCand;
             if (!gripNow[mvH] || !gun) twoMode = false;
             gripPrevTwo = gripNow[mvH];
@@ -1538,7 +1631,8 @@ static void Controllers_Poll(bool menu)
         g_grapTrigH[g_leftHanded ? 0 : 1] = menu ? 0.0f : am->rAxis[1].x;
         bool ltDown = ltPrev ? lt > 0.40f : lt > 0.75f;
         bool fist = Pressed(mv, EVRButtonId_k_EButton_Grip) || mv->rAxis[2].x > 0.5f;   /* a fist (grip + trigger) isn't a bullet-time pull */
-        if (g_ltBullet && !g_adsEnabled && !menu && g_inGameplay && !g_pipOpen && !g_wristUp && !fist && ltDown && !ltPrev) BulletKey_Press();
+        static double fistAt = 0; if (fist) fistAt = QpcMs();   /* (not right after a grapple fist, nor while being pulled) */
+        if (g_ltBullet && !g_adsEnabled && !menu && g_inGameplay && !g_pipOpen && !g_wristUp && !fist && ltDown && !ltPrev && QpcMs() - fistAt > 300.0 && !g_grapPulling) BulletKey_Press();
         ltPrev = ltDown;
         BulletKey_Tick();
         Key_TapTick(); Key_RealTick();
@@ -1556,15 +1650,25 @@ static void Controllers_Poll(bool menu)
         if (rA || rGrip) b |= XB_A;
         if (rB)          b |= XB_B;
     } else if (g_lootShown && g_lootControls) {   /* quick-loot window up: its own controls */
-        static bool lgPrev = false, lbPrev = false;
-        if (rGripRaw && !lgPrev) { Key_Real(g_jlmKey2); static int l = 0; if (l++ < 20) Log("Loot: right grip - pressed the loot mod's key %d", g_jlmKey2); }
+        static bool laPrev = false, lbPrev = false;
+        if (rA && !laPrev) { Key_Real(g_jlmKey1); static int l = 0; if (l++ < 20) Log("Loot: right A - pressed the loot mod's take key %d", g_jlmKey1); }
         if (rB && !lbPrev) Key_Real(g_jlmKeyAll);
-        lgPrev = rGripRaw; lbPrev = rB;
-        /* (the mod ignored the pad buttons from the controllers, so its keyboard keys are pressed instead) */
-        if (lY)     b |= g_bindMask[BIND_ACTIVATE];      /* left Y: open the normal loot menu */
-        if (rA)     b |= g_bindMask[BIND_JUMP];          /* right A: still jump */
+        laPrev = rA; lbPrev = rB;
+        if (rGrip)  b |= g_bindMask[BIND_ACTIVATE];      /* right grip: open the full loot menu, as usual */
+        if (lY)     b |= g_bindMask[BIND_ACTIVATE];      /* left Y: the same */
         if (rClick) b |= g_bindMask[BIND_SNEAK];
-        p->sThumbRY = AxisToShort(am->rAxis[0].y);       /* right stick up/down scrolls the list */
+        {   /* right stick up/down scrolls the list: the loot mod scrolls with the mouse wheel, so turn the stick into wheel clicks */
+            static double nextWheel = 0; float y = am->rAxis[0].y;
+            if (fabsf(y) > 0.55f) {
+                double now = QpcMs();
+                if (now >= nextWheel) {
+                    INPUT in; memset(&in, 0, sizeof in); in.type = INPUT_MOUSE; in.mi.dwFlags = MOUSEEVENTF_WHEEL; in.mi.mouseData = (DWORD)(y > 0 ? WHEEL_DELTA : -WHEEL_DELTA);
+                    SendInput(1, &in, sizeof in);
+                    nextWheel = now + (nextWheel > 0 && now - nextWheel < 100.0 ? 140.0 : 320.0);   /* first step, then repeat while held */
+                }
+            } else nextWheel = 0;
+            p->sThumbRY = 0;
+        }
     } else {
         if (rA)     b |= g_bindMask[BIND_JUMP];
         if (rB)     b |= g_bindMask[BIND_RELOAD];
@@ -1572,13 +1676,55 @@ static void Controllers_Poll(bool menu)
         if (rClick) b |= g_bindMask[BIND_SNEAK];
         /* left grip no longer opens VATS (it grabs objects / steadies the gun) */
     }
-    if (menu && !(g_pipOpen && g_wristPip)) {   /* in menus, the aim stick also works as a d-pad for tabs (not in the Pip-Boy: there it is the real right stick) */
+    bool pipMap = g_pipOpen && g_wristPip && ((const volatile bool *)0x011F308F)[0x3FF];   /* Pip-Boy on its map page */
+    if (menu && !pipMap) {   /* in menus, the aim stick also works as a d-pad for tabs (not in the Pip-Boy: there it is the real right stick) */
         if (am->rAxis[0].y >  0.7f) b |= XB_DPAD_UP;
         if (am->rAxis[0].y < -0.7f) b |= XB_DPAD_DOWN;
     }
     p->wButtons = b;
-    if (g_pipOpen && g_wristPip) {   /* Pip-Boy up: the right stick is the game's right stick (moves the map cursor, scrolls) */
-        p->sThumbRX = AxisToShort(am->rAxis[0].x); p->sThumbRY = AxisToShort(am->rAxis[0].y); }
+    if (g_pipOpen && g_wristPip) {   /* Pip-Boy up: the right stick moves the map cursor on the map page; elsewhere it only flips
+                                        through lists (as the d-pad) - so it never turns you while the world is running */
+        if (pipMap) {   /* map page: the game's right stick moves the map cursor - it also turns the running world, so it's sent
+                           at a third of its strength (the cursor still moves, the turning is gentle) */
+            /* (just past the game's dead zone, then only a share of the rest - so a small push still moves the cursor) */
+            #define PIPSTK(v) (fabsf(v) < 0.12f ? 0.0f : copysignf(0.26f + 0.74f * g_pipStickScale * (fabsf(v) - 0.12f) / 0.88f, (v)))
+            p->sThumbRX = AxisToShort(PIPSTK(am->rAxis[0].x)); p->sThumbRY = AxisToShort(PIPSTK(am->rAxis[0].y));
+            #undef PIPSTK
+        }
+        else { p->sThumbRX = 0; p->sThumbRY = 0; } }
+    if (g_lootShown && g_lootControls && !menu) p->sThumbRX = 0;   /* quick-loot window up: the right stick never turns you */
+    g_headingLockWant = false;   /* (holding the facing still made the view snap back each frame - retired) */
+    PipControls_Hold(g_liveMenuNow ? 2 : 0);   /* (the Pip-Boy's own hold left activating switched off afterwards - removed) */
+    {   /* once: switch every player control back on, in case a save kept them off from the last version */
+        static bool done = false;
+        if (!done && g_inGameplay && !menu && !g_pipOpen && g_scriptIntf && g_scriptIntf->CompileScript && g_scriptIntf->CallFunctionAlt) {
+            done = true;
+            void *en = g_scriptIntf->CompileScript("Begin Function { }\nEnablePlayerControls\nEnd\n");
+            if (en) { g_scriptIntf->CallFunctionAlt(en, GetPlayer(), 0); Log("Controls: all player controls switched on (repair after 1.7.5-1.8.2)"); }
+        }
+    }
+    {   /* look well away from a live menu and it closes (as if you walked off) */
+        static bool was = false; static float yaw0 = 0; static double awaySince = 0, closedAt = 0;
+        float yaw = 0, pitch = 0; bool havePose = false;
+        if (g_haveWaitPose && g_waitPoses[0].bPoseIsValid) { ExtractYawPitch(&g_waitPoses[0].mDeviceToAbsoluteTracking, &yaw, &pitch); havePose = true; }
+        else if (g_vrSystem) { TrackedDevicePose_t hp; g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, &hp, 1);
+            if (hp.bPoseIsValid) { ExtractYawPitch(&hp.mDeviceToAbsoluteTracking, &yaw, &pitch); havePose = true; } }
+        { static double nl = 0; if (g_liveMenuNow && QpcMs() > nl) { nl = QpcMs() + 1000.0;
+            float dd = (yaw - yaw0) * RAD2DEG; while (dd > 180) dd -= 360; while (dd < -180) dd += 360;
+            Log("Live menus: head turned %.0f deg from where the menu opened (closes past %.0f; head %s)", was ? dd : 0.0f, g_lookAwayDeg, havePose ? "tracked" : "NOT tracked"); } }
+        if (g_liveMenuNow && havePose) {
+            if (!was) { was = true; yaw0 = yaw; awaySince = 0; }
+            float d = (yaw - yaw0) * RAD2DEG; while (d > 180) d -= 360; while (d < -180) d += 360;
+            if (g_lookAwayDeg > 1.0f && fabsf(d) > g_lookAwayDeg) {
+                if (!awaySince) awaySince = QpcMs();
+                if (QpcMs() - awaySince > 350.0 && QpcMs() - closedAt > 600.0) {
+                    closedAt = QpcMs();
+                    Key_Real(15);   /* Tab: the game's own "leave this menu" key - the pad's B doesn't reach live menus */
+                    Log("Live menus: you looked away (%.0f deg) - closing the menu", d);
+                }
+            } else awaySince = 0;
+        } else was = false;
+    }
     if (g_pipOpen) {   /* triggers work as the Pip-Boy's own trigger buttons */
         p->bLeftTrigger  = (BYTE)(fminf(fmaxf(mv->rAxis[1].x, 0.0f), 1.0f) * 255.0f);
         p->bRightTrigger = (BYTE)(fminf(fmaxf(am->rAxis[1].x, 0.0f), 1.0f) * 255.0f);
@@ -1652,7 +1798,7 @@ static uintptr_t g_renderCallsOther = 0;
 /* Pose handed to us by WaitGetPoses at the end of the previous frame (predicted for this frame). */
 static TrackedDevicePose_t g_waitPose;
 static TrackedDevicePose_t g_waitPoses[16];   /* all devices (controllers too) */
-static bool g_haveWaitPose = false;
+static bool g_haveWaitPose;
 
 /* What we pointed the camera at this frame - used to tell SteamVR how the frame was rendered. */
 static bool  g_frameHasSample = false;
@@ -1850,6 +1996,7 @@ static void VR_Tick(void)
         g_pipOpen = open;
     }
     if (g_pipOpen) menu = false;          /* the world, your head and your arms keep going while the Pip-Boy is up */
+    if (g_liveMenuNow) menu = false;      /* ...and while a live menu (talking, trading...) is up */
     g_menuCached = menu;
     void *player = GetPlayer();
 
@@ -2021,7 +2168,9 @@ static void VR_Tick(void)
                 g_twoHandCand = false;
                 if (both && dl > 0.01f) {
                     float along = V3Dot(d, fw), perp2 = dl * dl - along * along;
-                    g_twoHandCand = along > 0.05f && along < 0.75f && perp2 < 0.16f * 0.16f;
+                    int wtc = PlayerWeaponType();
+                    if (wtc == 1 || wtc == 2) g_twoHandCand = along > -0.60f && along < 0.75f && fabsf(along) > 0.04f && perp2 < 0.18f * 0.18f;   /* melee: anywhere along the handle, either side */
+                    else g_twoHandCand = along > 0.05f && along < 0.75f && perp2 < 0.16f * 0.16f;
                 }
                 bool was = g_twoHand;
                 g_twoHand = g_twoHandWant && both && dl > 0.05f;
@@ -2670,7 +2819,7 @@ static bool ScreenModeNow(void)
     }
     int pmNow = PipBoyMode();
     bool pipUp = g_wristPip && (g_pipOpen || QpcMs() < g_pipExpectUntil || pmNow == 2 || pmNow == 3 || pmNow == 5);
-    bool screen = !g_inGameplay || (IsMenuMode() && !pipUp);
+    bool screen = !g_inGameplay || (IsMenuMode() && !pipUp && !g_liveMenuNow);
     if (screen && !g_inScreenMode) {
         TrackedDevicePose_t p;
         float pos[3] = { 0.0f, 1.6f, 0.0f }, yaw = 0.0f, pitch = 0.0f;
@@ -3331,6 +3480,35 @@ static HRESULT STDMETHODCALLTYPE Hook_SetTex(IDirect3DDevice9 *dev, DWORD st, ID
     }
     return o_SetTex(dev, st, t);
 }
+/* The game clips menu lists (dialogue answers, trade lists...) with screen rectangles worked out for a
+   full-size interface; with the interface drawn smaller, those rectangles are moved and shrunk to match. */
+typedef HRESULT (STDMETHODCALLTYPE *DevSetScissor_t)(IDirect3DDevice9 *, const RECT *);
+static DevSetScissor_t o_SetScissor = NULL;
+static HRESULT STDMETHODCALLTYPE Hook_SetScissor(IDirect3DDevice9 *dev, const RECT *r)
+{
+    bool onScreen = false;
+    if (r && g_uiXfOn && g_bbW && g_bbH && !g_pipOpen && g_pmDepth == 0) {   /* (never the Pip-Boy's own menu picture) */
+        IDirect3DSurface9 *cur = NULL, *bb = NULL;
+        IDirect3DDevice9_GetRenderTarget(dev, 0, &cur); IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb);
+        onScreen = cur && cur == bb;
+        if (cur) IDirect3DSurface9_Release(cur); if (bb) IDirect3DSurface9_Release(bb);
+    }
+    if (onScreen) {
+        const float *B = g_uiXfBase, *C = g_uiXfCur;
+        if (B[1] > B[0] && C[1] > C[0] && B[2] != B[3] && C[2] != C[3]) {
+            float u[2] = { (float)r->left / g_bbW, (float)r->right / g_bbW }, v[2] = { (float)r->top / g_bbH, (float)r->bottom / g_bbH };
+            RECT o;
+            for (int i = 0; i < 2; i++) {
+                float X = B[0] + u[i] * (B[1] - B[0]); u[i] = (X - C[0]) / (C[1] - C[0]);
+                float Y = B[2] - v[i] * (B[2] - B[3]); v[i] = (C[2] - Y) / (C[2] - C[3]);
+            }
+            o.left = (LONG)floorf(u[0] * g_bbW); o.right = (LONG)ceilf(u[1] * g_bbW); o.top = (LONG)floorf(v[0] * g_bbH); o.bottom = (LONG)ceilf(v[1] * g_bbH);
+            static int nl = 0; if (nl++ < 3) Log("Interface: clip area %ld,%ld-%ld,%ld moved to %ld,%ld-%ld,%ld (smaller interface)", r->left, r->top, r->right, r->bottom, o.left, o.top, o.right, o.bottom);
+            return o_SetScissor(dev, &o);
+        }
+    }
+    return o_SetScissor(dev, r);
+}
 typedef HRESULT (STDMETHODCALLTYPE *DevDP_t)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, UINT, UINT);
 typedef HRESULT (STDMETHODCALLTYPE *DevDIP_t)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, INT, UINT, UINT, UINT, UINT);
 static DevDP_t o_DP = NULL; static DevDIP_t o_DIP = NULL;
@@ -3387,20 +3565,24 @@ static void UI_Present(IDirect3DDevice9 *dev)
     /* where: fixed in the room while a menu (or the main menu/loading) is up, with your head for the HUD */
     bool menuUp = !g_inGameplay || (IsMenuMode() && !g_pipOpen);
     static bool wasMenu = false; static HmdMatrix34_t fixedPose;
-    /* main menu & loading screens: a big, gently curved screen further away; in play: the close wrap-around panel */
-    int layout = g_inGameplay ? 1 : 2;
-    static int lastLayout = 0;
-    float dist = layout == 2 ? g_mmDist : g_uiDist;
+    /* main menu & loading screens: a big, gently curved screen further away; in play: the wrap-around HUD panel;
+       a menu up in play: the same panel further away and smaller, fixed where you were looking */
+    int layout = !g_inGameplay ? 2 : menuUp ? 3 : 1;
+    static int lastLayout = 0; static float lastSz[4];
+    float dist = layout == 2 ? g_mmDist : layout == 3 ? g_menuDist : g_uiDist;
+    if (layout != 2 && (lastSz[0] != g_uiDist || lastSz[1] != g_uiArcDeg || lastSz[2] != g_menuDist || lastSz[3] != g_menuArcDeg)) {
+        lastSz[0] = g_uiDist; lastSz[1] = g_uiArcDeg; lastSz[2] = g_menuDist; lastSz[3] = g_menuArcDeg; lastLayout = 0;   /* (changed in settings) */
+    }
     if (layout != lastLayout) {
         if (layout == 2) {
             g_vrOverlay->SetOverlayWidthInMeters(g_uiOverlay, g_mmWidth);
             g_vrOverlay->SetOverlayCurvature(g_uiOverlay, g_mmWidth / (2.0f * PI_F * g_mmCurveR));
         } else {
-            float arc = g_uiArcDeg / RAD2DEG;
-            g_vrOverlay->SetOverlayWidthInMeters(g_uiOverlay, g_uiDist * arc);
+            float arcD = layout == 3 ? g_menuArcDeg : g_uiArcDeg, arc = arcD / RAD2DEG;
+            g_vrOverlay->SetOverlayWidthInMeters(g_uiOverlay, dist * arc);
             g_vrOverlay->SetOverlayCurvature(g_uiOverlay, arc / (2.0f * PI_F));
         }
-        Log("Curved interface: %s layout (%.2f m away)", layout == 2 ? "main menu / loading screen" : "in-game", dist);
+        Log("Curved interface: %s layout (%.2f m away)", layout == 2 ? "main menu / loading screen" : layout == 3 ? "menu" : "HUD", dist);
         lastLayout = layout; wasMenu = false;   /* re-place it */
     }
     if (menuUp) {
@@ -3413,7 +3595,7 @@ static void UI_Present(IDirect3DDevice9 *dev)
         }
         g_vrOverlay->SetOverlayTransformAbsolute(g_uiOverlay, ETrackingUniverseOrigin_TrackingUniverseStanding, &fixedPose);
     } else {
-        HmdMatrix34_t m = { { { 1, 0, 0, 0 }, { 0, 1, 0, -0.02f }, { 0, 0, 1, -g_uiDist } } };
+        HmdMatrix34_t m = { { { 1, 0, 0, 0 }, { 0, 1, 0, -0.02f * g_uiDist / 0.45f }, { 0, 0, 1, -g_uiDist } } };
         g_vrOverlay->SetOverlayTransformTrackedDeviceRelative(g_uiOverlay, 0, &m);
     }
     wasMenu = menuUp;
@@ -4041,7 +4223,7 @@ static bool Far_Frame(IDirect3DDevice9 *dev)
 {
     int pmNow = PipBoyMode();
     bool pipUp = g_wristPip && (g_pipOpen || QpcMs() < g_pipExpectUntil || pmNow == 2 || pmNow == 3 || pmNow == 5 || PipMenusVisible());
-    bool menuScreen = !g_inGameplay || (g_farGameMenus && IsMenuMode() && !pipUp);
+    bool menuScreen = !g_inGameplay || (g_farGameMenus && IsMenuMode() && !pipUp && !g_liveMenuNow);
     bool want = g_farMenu && !g_flatMenus && menuScreen && g_vrSystem && g_vrCompositor && HeadsetDisplayActive();
     if (!want || !Room_Init()) {
         if (g_farActive2) { g_farActive2 = false; g_farActive = false; g_ptrOnScreen = false; Log("Menu screen: off (back in the world)"); }
@@ -4610,6 +4792,7 @@ static void Display_Frame(IDirect3DDevice9 *dev)
     Scope_Draw(dev);
     if (g_trOn) { Tr_Flush(); Log("TRACE ===== Present (end of frame) ====="); char nm[64]; snprintf(nm, sizeof nm, "FNVR_trace_%s_final.bmp", g_trMode); SaveBackbuffer(dev, nm); g_trOn = 0; }
     PipScr_Draw(dev);
+    if (g_dlgSnapWant) { g_dlgSnapWant = false; SaveBackbuffer(dev, "FNVR_dialogue.bmp"); Log("Dialogue: picture saved (FNVR_dialogue.bmp)"); }
     g_frameId++;
     Rope_Draw(dev);
     Pip_Snapshot(dev);   /* (after the menu is drawn, so the pictures show what you see) */
@@ -7510,7 +7693,8 @@ static void Arms_Restore(void)
    Real head movement moves the view (and the arms with it): crouch down to reach the floor, lean
    in over a table or into a shelf. Leaning further than fMaxLean drags the body's centre along. */
 static char *g_offCam = NULL, *g_offFirst = NULL;
-static float g_offCamT[3], g_offCamL[3], g_offFirstT[3], g_offFirstL[3];
+static float g_offCamT[3], g_offCamL[3], g_offFirstT[3], g_offFirstL[3], g_offBodyT[3], g_offBodyL[3];
+static char *g_offBody = NULL;
 
 static void HeadOffset_Reset(void) { g_standY = -1.0f; g_haveLeanAnchor = false; }
 
@@ -7555,7 +7739,42 @@ static void HeadOffset_Lag(char *player, char *cam, float *w)
     static int nl = 0; if (nl++ < 3 && cl > 5.0f) Log("Fast movement: view moved %.0f units to stay with your body (%.1f m/s)", cl, sp / g_unitsPerMeter);
 }
 
+/* Your body (the full body you see below you) is kept under your head at any speed: the game moves the body
+   and the view at slightly different moments in the frame, so at grapple / launch speeds the body ran ahead.
+   Where the view sits over the body is learned while walking; moving fast, the body is put back there. */
+static void Body_KeepUnder(char *player, char *cam)
+{
+    g_offBody = NULL;
+    char *rs = *(char **)(player + 0x64); char *root = rs && !IsBadReadPtr(rs, 0x18) ? *(char **)(rs + 0x14) : NULL;
+    if (!root || IsBadReadPtr(root, 0x90)) return;
+    NodeUpdate(root);   /* (its position as of this frame - it may still hold last frame's) */
+    const float *C = (const float *)(cam + NIAV_WORLD_TRANSLATE), *R = (const float *)(root + NIAV_WORLD_TRANSLATE), *P = (const float *)(player + 0x30);
+    static float off[2]; static bool have = false; static float prevP[3]; static double prevT = 0;
+    double now = QpcMs(); float dt = prevT > 0 ? (float)((now - prevT) / 1000.0) : 0.0f; prevT = now;
+    float sp = 0; if (dt > 0.001f && dt < 0.2f) { float d[3]; V3Sub(d, P, prevP); sp = V3Len(d) / dt; }
+    memcpy(prevP, P, 12);
+    float cur[2] = { C[0] - R[0], C[1] - R[1] };   /* (sideways only - height stays the game's) */
+    float still = 0.4f * g_unitsPerMeter, slow = 2.5f * g_unitsPerMeter, full = 5.0f * g_unitsPerMeter;
+    if (sp < still || !have) {   /* learned while (nearly) standing still */
+        if (!have) { off[0] = cur[0]; off[1] = cur[1]; have = true; }
+        else { off[0] += (cur[0] - off[0]) * 0.1f; off[1] += (cur[1] - off[1]) * 0.1f; }
+    }
+    if (sp < slow) return;   /* walking and running: the game's own body placement */
+    float k = fminf((sp - slow) / (full - slow), 1.0f);
+    float w[3] = { (cur[0] - off[0]) * k, (cur[1] - off[1]) * k, 0.0f };
+    float wl = sqrtf(w[0] * w[0] + w[1] * w[1]); if (wl < 0.5f) return;
+    float cap = 3.0f * g_unitsPerMeter; if (wl > cap) { w[0] *= cap / wl; w[1] *= cap / wl; }
+    MoveNode(root, w, g_offBodyT, g_offBodyL); NodeUpdate(root); g_offBody = root;
+    static int nl = 0; if (nl++ < 3) Log("Fast movement: your body moved %.0f units to stay under your head (%.1f m/s)", wl, sp / g_unitsPerMeter);
+}
+static void HeadOffset_ApplyInner(char *player, char *cam);
 static void HeadOffset_Apply(char *player, char *cam)
+{
+    HeadOffset_ApplyInner(player, cam);
+    /* (Body_KeepUnder retired: moving the body's skeleton while the physics thread reads it is a crash risk, and it made the body run ahead) */
+    (void)Body_KeepUnder;
+}
+static void HeadOffset_ApplyInner(char *player, char *cam)
 {
     g_offCam = g_offFirst = NULL;
     if (!g_bodyValid) return;
@@ -7599,6 +7818,10 @@ static void HeadOffset_Apply(char *player, char *cam)
 
 static void HeadOffset_Restore(void)
 {
+    if (g_offBody) {
+        memcpy(g_offBody + NIAV_WORLD_TRANSLATE, g_offBodyT, 12); memcpy(g_offBody + NIAV_LOCAL_TRANSLATE, g_offBodyL, 12);
+        NodeUpdate(g_offBody); g_offBody = NULL;
+    }
     if (g_offCam) {
         memcpy(g_offCam + NIAV_WORLD_TRANSLATE, g_offCamT, 12); memcpy(g_offCam + NIAV_LOCAL_TRANSLATE, g_offCamL, 12);
         g_offCam = NULL;
@@ -7761,6 +7984,148 @@ static void VecRot(const float *v, M3 R)
     R[0][0] = t * x * x + c;     R[0][1] = t * x * y - sn * z; R[0][2] = t * x * z + sn * y;
     R[1][0] = t * x * y + sn * z; R[1][1] = t * y * y + c;     R[1][2] = t * y * z - sn * x;
     R[2][0] = t * x * z - sn * y; R[2][1] = t * y * z + sn * x; R[2][2] = t * z * z + c;
+}
+
+/* ---- Holstered weapons you can see ---------------------------------------------------------------------
+   A weapon put away in a holster is shown there on your body: on your hip, or over your shoulder. Its model
+   is attached to your body with JIP LN's AttachModel, placed each frame at the holster spot (the same spots
+   your hand uses), turned by three angles per holster ([HolsterModel] in FNVR.ini / VR settings), and hidden
+   whenever that weapon is in your hand. */
+static bool g_holShow = true; static float g_holAng[3][3] = { { 0, 0, 0 }, { 0, -90, 0 }, { 0, 70, 180 } };
+static void *g_holAttScr = NULL; static bool g_holAttFailed = false;
+typedef struct { void *weap; char path[200]; char name[96]; char *node; double triedAt; } HolModel;
+static HolModel g_holM[3];
+static void Hol_Load(void)
+{
+    g_holShow = GetPrivateProfileIntA("HolsterModel", "bShow", 1, g_iniPath) != 0;
+    char b[64];
+    GetPrivateProfileStringA("HolsterModel", "sHip", "0 -90 0", b, sizeof b, g_iniPath); sscanf(b, "%f %f %f", &g_holAng[1][0], &g_holAng[1][1], &g_holAng[1][2]);
+    GetPrivateProfileStringA("HolsterModel", "sShoulder", "0 70 180", b, sizeof b, g_iniPath); sscanf(b, "%f %f %f", &g_holAng[2][0], &g_holAng[2][1], &g_holAng[2][2]);
+}
+static void Hol_Save(void)
+{
+    char b[64];
+    snprintf(b, sizeof b, "%.0f %.0f %.0f", g_holAng[1][0], g_holAng[1][1], g_holAng[1][2]); WritePrivateProfileStringA("HolsterModel", "sHip", b, g_iniPath);
+    snprintf(b, sizeof b, "%.0f %.0f %.0f", g_holAng[2][0], g_holAng[2][1], g_holAng[2][2]); WritePrivateProfileStringA("HolsterModel", "sShoulder", b, g_iniPath);
+}
+static char *Hol_ChildNamed(char *parent, const char *name)
+{
+    if (!parent || !AsNode(parent)) return NULL;
+    char **kids = *(char ***)(parent + 0xA0); unsigned n = *(uint16_t *)(parent + 0xA6);
+    for (unsigned i = 0; kids && i < n; i++) { char *k = kids[i]; const char *kn = k ? *(const char **)(k + 0x08) : NULL; if (kn && !_stricmp(kn, name)) return k; }
+    return NULL;
+}
+static void Holster_Models(char *player)
+{
+    char *rs = *(char **)(player + 0x64); char *root = rs && !IsBadReadPtr(rs, 0x18) ? *(char **)(rs + 0x14) : NULL;
+    if (!root || IsBadReadPtr(root, 0xB0)) return;
+    void *inHand = g_weaponOutThisFrame ? PlayerWeaponForm() : NULL;
+    for (int z = 1; z <= 2; z++) {
+        HolModel *m = &g_holM[z];
+        void *w = g_holster[z];
+        if (!w && g_holsterId[z]) w = g_holster[z] = LookupForm(g_holsterId[z]);
+        bool want = g_holShow && g_holstersOn && w && w != inHand;
+        const char *bone = z == 1 ? "Bip01 Pelvis" : "Bip01 Spine2";
+        char *parent = FindBone(root, bone, 0);
+        if (m->weap != w) {   /* a different weapon in this holster: hide the old one */
+            if (m->node && !IsBadReadPtr(m->node, 0x34)) *(uint32_t *)(m->node + 0x30) |= 1;
+            memset(m, 0, sizeof *m); m->weap = w;
+            const char *mp = w && !IsBadReadPtr((char *)w + 0x40, 4) ? *(const char **)((char *)w + 0x40) : NULL;
+            if (mp && !IsBadReadPtr(mp, 1)) snprintf(m->path, sizeof m->path, "%s", mp);
+        }
+        if (!want || !parent || !m->path[0]) { if (m->node && !IsBadReadPtr(m->node, 0x34)) *(uint32_t *)(m->node + 0x30) |= 1; continue; }
+        if (m->node && (IsBadReadPtr(m->node, 0xB0) || *(char **)(m->node + NIAV_PARENT) != parent)) m->node = NULL;
+        if (!m->node && m->name[0]) m->node = Hol_ChildNamed(parent, m->name);
+        if (!m->node) {   /* attach it (once in a while, until it's there) */
+            if (QpcMs() - m->triedAt < 3000.0 || g_holAttFailed || !g_scriptIntf || !g_scriptIntf->CompileScript || !g_scriptIntf->CallFunctionAlt) continue;
+            m->triedAt = QpcMs();
+            if (!g_holAttScr) {
+                g_holAttScr = g_scriptIntf->CompileScript("string_var sNode\nstring_var sPath\nBegin Function { sNode, sPath }\nplayer.AttachModel $sNode $sPath 0\nEnd\n");
+                if (!g_holAttScr) { g_holAttFailed = true; Log("Holsters: JIP LN's AttachModel isn't available - holstered weapons won't show"); continue; }
+            }
+            unsigned before = AsNode(parent) ? *(uint16_t *)(parent + 0xA6) : 0;
+            char **kidsB = AsNode(parent) ? *(char ***)(parent + 0xA0) : NULL; char *old[64]; unsigned nb = before < 64 ? before : 64;
+            for (unsigned i = 0; i < nb; i++) old[i] = kidsB ? kidsB[i] : NULL;
+            g_scriptIntf->CallFunctionAlt(g_holAttScr, player, 2, bone, m->path);
+            char **kids = AsNode(parent) ? *(char ***)(parent + 0xA0) : NULL; unsigned n = AsNode(parent) ? *(uint16_t *)(parent + 0xA6) : 0;
+            for (unsigned i = 0; kids && i < n && !m->node; i++) {
+                bool seen = false; for (unsigned j = 0; j < nb; j++) if (old[j] == kids[i]) seen = true;
+                if (!seen && kids[i]) { m->node = kids[i]; const char *kn = *(const char **)(kids[i] + 0x08); snprintf(m->name, sizeof m->name, "%s", kn ? kn : ""); }
+            }
+            { static int nl = 0; if (nl++ < 8) Log("Holsters: showing %s on your %s - %s", m->path, z == 1 ? "hip" : "shoulder", m->node ? "attached" : "not attached yet"); }
+            if (!m->node) continue;
+        }
+        /* place it: the holster spot on your body, turned by this holster's angles */
+        *(uint32_t *)(m->node + 0x30) &= ~1u;
+        float h = *PlayerRotZ(player), U = g_unitsPerMeter, side = g_leftHanded ? -1.0f : 1.0f;
+        const float *P = (const float *)(player + 0x30);
+        float eye = g_gameEyeUnits > 50.0f ? g_gameEyeUnits : 118.0f;
+        float f[3] = { sinf(h), cosf(h), 0 }, r[3] = { cosf(h), -sinf(h), 0 }, up[3] = { 0, 0, 1 };
+        float T[3];
+        if (z == 1) for (int i = 0; i < 3; i++) T[i] = P[i] + r[i] * g_hipSide * side * U;
+        else for (int i = 0; i < 3; i++) T[i] = P[i] + r[i] * g_shSide * side * U - f[i] * g_shBack * U;
+        T[2] = P[2] + eye - (z == 1 ? g_hipDown : g_shDown) * U;
+        M3 B = { { r[0], f[0], up[0] }, { r[1], f[1], up[1] }, { r[2], f[2], up[2] } }, Ry, Rx, Rz, T1, T2, W;
+        float vz[3] = { 0, 0, g_holAng[z][0] / RAD2DEG }, vx[3] = { g_holAng[z][1] / RAD2DEG, 0, 0 }, vy[3] = { 0, g_holAng[z][2] / RAD2DEG, 0 };
+        VecRot(vz, Rz); VecRot(vx, Rx); VecRot(vy, Ry);
+        M3Mul(T1, Rz, Rx); M3Mul(T2, T1, Ry); M3Mul(W, B, T2);
+        M3 PW, PT, L; memcpy(PW, parent + NIAV_WORLD_ROTATE, sizeof PW); M3T(PT, PW);
+        float sc = *(const float *)(parent + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
+        const float *Pt = (const float *)(parent + NIAV_WORLD_TRANSLATE);
+        float d[3]; V3Sub(d, T, Pt);
+        M3Mul(L, PT, W); memcpy(m->node + NIAV_LOCAL_ROTATE, L, sizeof L);
+        float *Lt = (float *)(m->node + NIAV_LOCAL_TRANSLATE);
+        for (int i = 0; i < 3; i++) Lt[i] = (PT[i][0] * d[0] + PT[i][1] * d[1] + PT[i][2] * d[2]) / sc;
+        *(float *)(m->node + NIAV_LOCAL_SCALE) = 1.0f / sc;
+        NodeUpdate(m->node);
+    }
+}
+
+/* ---- Melee weapon angle in the hand, per weapon ------------------------------------------------------
+   Melee weapons sit in the hand at the angle the flat game's animations give them, which can look tilted in
+   VR. Three angles (tilt, turn, roll - degrees, saved per weapon model in [MeleeAngle]) turn the weapon in
+   the hand; set them in the VR settings while holding the weapon - it changes as you adjust. */
+static float g_melA[3] = { 0, 0, 0 }; static char g_melKey[96] = "-";
+static char *g_melNode = NULL; static float g_melSaved[9];
+static void MeleeAngle_Load(char *w)
+{
+    const char *nm = (!IsBadReadPtr(w + 0x34, 4) && *(const char **)(w + 0x34) && !IsBadReadPtr(*(const char **)(w + 0x34), 1)) ? *(const char **)(w + 0x34) : "";
+    const char *mp = (!IsBadReadPtr(w + 0x40, 4) && *(const char **)(w + 0x40) && !IsBadReadPtr(*(const char **)(w + 0x40), 1)) ? *(const char **)(w + 0x40) : "";
+    const char *base = mp; for (const char *c = mp; *c; c++) if (*c == '\\' || *c == '/') base = c + 1;
+    snprintf(g_melKey, sizeof g_melKey, "%s", *base ? base : *nm ? nm : "unnamed");
+    for (char *c = g_melKey; *c; c++) if (*c == '=' || *c == '[' || *c == ']') *c = ' ';
+    char b[96], d[] = "0 0 0";
+    GetPrivateProfileStringA("MeleeAngle", g_melKey, d, b, sizeof b, g_iniPath);
+    g_melA[0] = g_melA[1] = g_melA[2] = 0; sscanf(b, "%f %f %f", &g_melA[0], &g_melA[1], &g_melA[2]);
+    Log("Melee: '%s' (model %s) angle in the hand %.0f / %.0f / %.0f deg", nm, g_melKey, g_melA[0], g_melA[1], g_melA[2]);
+}
+static void MeleeAngle_Save(void)
+{
+    char b[96]; snprintf(b, sizeof b, "%.0f %.0f %.0f", g_melA[0], g_melA[1], g_melA[2]);
+    WritePrivateProfileStringA("MeleeAngle", g_melKey, b, g_iniPath);
+}
+static void MeleeAngle_Apply(void)
+{
+    g_melNode = NULL;
+    int wt = PlayerWeaponType();
+    if (wt != 1 && wt != 2) return;
+    char *w = (char *)PlayerWeaponForm();
+    static char *forW = NULL; if (w != forW) { forW = w; if (w) MeleeAngle_Load(w); }
+    if (!g_weaponNode || !w || (g_melA[0] == 0 && g_melA[1] == 0 && g_melA[2] == 0)) return;
+    float *L = (float *)(g_weaponNode + NIAV_LOCAL_ROTATE);
+    memcpy(g_melSaved, L, sizeof g_melSaved);
+    M3 Rx, Ry, Rz, T1, T2, Lm, Out;
+    float vx[3] = { g_melA[0] / RAD2DEG, 0, 0 }, vy[3] = { 0, g_melA[1] / RAD2DEG, 0 }, vz[3] = { 0, 0, g_melA[2] / RAD2DEG };
+    VecRot(vx, Rx); VecRot(vy, Ry); VecRot(vz, Rz);
+    M3Mul(T1, Rx, Ry); M3Mul(T2, T1, Rz);
+    memcpy(Lm, L, sizeof Lm); M3Mul(Out, Lm, T2);   /* turned in the weapon's own frame */
+    memcpy(L, Out, sizeof Out);
+    NodeUpdate(g_weaponNode); g_melNode = g_weaponNode;
+}
+static void MeleeAngle_Restore(void)
+{
+    if (!g_melNode) return;
+    memcpy(g_melNode + NIAV_LOCAL_ROTATE, g_melSaved, sizeof g_melSaved); NodeUpdate(g_melNode); g_melNode = NULL;
 }
 
 /* Box dimensions of a body (game units) from its mass and inertia. */
@@ -8503,6 +8868,59 @@ static void Scope_LensRender(char *player, const float *E, const float *f, const
     if (logs++ < 4) Log("Scope camera: %dpx view at %.1f deg into \"%s\" (%s)", px, fov, g_lensGeomName, ok ? "ran" : "FAILED");
 }
 
+/* The highest drawn part of the gun model (seen along the gun's "up"): on a scoped rifle that's the scope.
+   Gives the rear end of it along the barrel - where the eyepiece is. */
+static void TopPart_Walk(char *node, const float *up, const float *W, int depth, float *bestH, const float **best)
+{
+    if (!node || depth > 10 || IsBadReadPtr(node, 0xB0)) return;
+    const float *b = *(const float **)(node + 0x20);
+    char **kids = AsNode(node) ? *(char ***)(node + 0xA0) : NULL;
+    unsigned count = kids ? *(uint16_t *)(node + 0xA6) : 0;
+    if (!kids || !count) {   /* a drawn piece */
+        if (b && !IsBadReadPtr(b, 16) && b[3] > 0.3f && b[3] < 25.0f) {
+            float d[3] = { b[0] - W[0], b[1] - W[1], b[2] - W[2] };
+            float h = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
+            if (h > *bestH) { *bestH = h; *best = b; }
+        }
+        return;
+    }
+    for (unsigned i = 0; i < count && i < 64; i++) TopPart_Walk(kids[i], up, W, depth + 1, bestH, best);
+}
+static bool ScopeTopPart(char *weapNode, const float *up, const float *f, float *E, float *tubeR)
+{
+    if (!weapNode) return false;
+    const float *W = (const float *)(weapNode + NIAV_WORLD_TRANSLATE);
+    float bestH = 1.0f; const float *best = NULL;
+    TopPart_Walk(weapNode, up, W, 0, &bestH, &best);
+    if (!best) return false;
+    float R = best[3];
+    for (int i = 0; i < 3; i++) E[i] = best[i] - f[i] * R * 0.80f;
+    *tubeR = fminf(fmaxf(R * 0.16f, 1.0f), 2.6f);
+    static int nl = 0; if (nl++ < 6) Log("Scope: no lens part in the model - using its highest part (%.1f units above the grip, %.1f across)", bestH, R);
+    return true;
+}
+/* Scope picture placement, per gun (saved by the gun's name): height in cm along the gun's "up" ([ScopeHeightCm],
+   + = higher) and size ([ScopeSize], 1 = the lens as the model has it). */
+static float g_scopeOffY = 0.0f, g_scopeSize = 1.0f; static char g_scopeKey[96] = "-";
+static void ScopeHeight_Load(char *weap)
+{
+    const char *nm = (!IsBadReadPtr(weap + 0x34, 4) && *(const char **)(weap + 0x34) && !IsBadReadPtr(*(const char **)(weap + 0x34), 1)) ? *(const char **)(weap + 0x34) : "";
+    /* keyed by the gun's model file, so guns that are the same model (Gobi Campaign Scout Rifle = Sniper Rifle) share it */
+    const char *mp = (!IsBadReadPtr(weap + 0x40, 4) && *(const char **)(weap + 0x40) && !IsBadReadPtr(*(const char **)(weap + 0x40), 1)) ? *(const char **)(weap + 0x40) : "";
+    const char *base = mp; for (const char *c = mp; *c; c++) if (*c == '\\' || *c == '/') base = c + 1;
+    if (*base && strlen(base) > 4) snprintf(g_scopeKey, sizeof g_scopeKey, "%s", base);
+    else snprintf(g_scopeKey, sizeof g_scopeKey, "%s", *nm ? nm : "unnamed");
+    for (char *c = g_scopeKey; *c; c++) if (*c == '=' || *c == '[' || *c == ']') *c = ' ';
+    float def = 0.0f;
+    char low[96]; snprintf(low, sizeof low, "%s", g_scopeKey); for (char *c = low; *c; c++) *c = (char)tolower((unsigned char)*c);
+    char lowN[96]; snprintf(lowN, sizeof lowN, "%s", nm); for (char *c = lowN; *c; c++) *c = (char)tolower((unsigned char)*c);
+    if (strstr(lowN, "marksman") || strstr(lowN, "bozar") || strstr(lowN, "anti-materi") || strstr(lowN, "anti materi") || strstr(low, "amr") || strstr(low, "marksman") || strstr(low, "bozar")) def = 11.0f;
+    char d[32], b[48]; snprintf(d, sizeof d, "%.2f", def);
+    GetPrivateProfileStringA("ScopeHeightCm", g_scopeKey, d, b, sizeof b, g_iniPath); g_scopeOffY = (float)atof(b);
+    GetPrivateProfileStringA("ScopeSize", g_scopeKey, "1.0", b, sizeof b, g_iniPath); g_scopeSize = (float)atof(b);
+    if (!(g_scopeSize >= 0.2f && g_scopeSize <= 5.0f)) g_scopeSize = 1.0f;
+    Log("Scope: '%s' (model %s) picture %+.1f cm high, size %.2f", nm, g_scopeKey, g_scopeOffY, g_scopeSize);
+}
 static void Scope_Prepare(char *player, char *cam)
 {
     g_scope.active = false; g_capWant = false; g_scopeSighting = false;
@@ -8549,6 +8967,7 @@ static void Scope_Prepare(char *player, char *cam)
     if (bnd && isLens && bnd[3] > 0.2f && bnd[3] < 6.0f) {   /* the model's own scope lens */
         memcpy(E, bnd, 12);
         tubeR = bnd[3];
+    } else if (ScopeTopPart(g_weaponNode, up, f, E, &tubeR)) {   /* no lens in the model: the gun's highest part (where a scope sits) */
     } else if (bnd && bnd[3] > 1.0f && bnd[3] < 40.0f) {   /* rear end of the scope part along the barrel */
         float R = bnd[3];
         for (int i = 0; i < 3; i++) E[i] = bnd[i] - f[i] * R * 0.80f;
@@ -8593,7 +9012,9 @@ static void Scope_Prepare(char *player, char *cam)
         if (OK) { OX = (V3Dot(q, R) / z - l) / (r - l) * g_bbW; OY = (t - V3Dot(q, U) / z) / (t - b) * g_bbH; } } while (0)
     bool ok1, ok2;
     float cx = 0, cy = 0, sx = 0, sy = 0;
-    PROJ(E, cx, cy, ok1);
+    {   static char *forW = NULL; if (forW != weap) { forW = weap; ScopeHeight_Load(weap); } }
+    float Eo[3]; { float k = g_scopeOffY * g_unitsPerMeter / 100.0f; for (int i = 0; i < 3; i++) Eo[i] = E[i] + up[i] * k; }   /* this gun's picture height */
+    PROJ(Eo, cx, cy, ok1);
     float aimPt[3]; for (int i = 0; i < 3; i++) aimPt[i] = C[i] + f[i] * 20000.0f;
     PROJ(aimPt, sx, sy, ok2);
     #undef PROJ
@@ -8601,11 +9022,12 @@ static void Scope_Prepare(char *player, char *cam)
     float z = V3Dot(d, F);
     float pxPerTan = g_bbW / (r - l);
     float rad = tubeR / fmaxf(z, 1.0f) * pxPerTan;           /* the scope tube's opening */
-    rad = fminf(rad, g_bbH * 0.30f);
+    rad = fminf(rad, g_bbH * 0.30f * fmaxf(g_scopeSize, 1.0f));
     if (rad < 12.0f) return;
     float sfov = *(const float *)(weap + 0x110);
     float zoom = (sfov > 1.0f && sfov < 80.0f) ? tanf(37.5f / RAD2DEG) / tanf(sfov * 0.5f / RAD2DEG) : 4.0f;
     zoom = fminf(fmaxf(zoom * 0.6f, 1.5f), g_scopeMaxZoom);
+    rad *= g_scopeSize;   /* this gun's picture size */
     g_scope = (ScopeView){ true, cx, cy, rad, sx, sy, zoom };
     g_capSX = sx; g_capSY = sy; g_capWant = true;   /* grab the clean world picture while the frame is drawn */
 }
@@ -8995,10 +9417,17 @@ static void Grapple_Update(char *player, char *cam, float dt)
     char *proc = *(char **)(player + 0x68);
     char *ctrl = (proc && *(uint8_t *)(proc + 0x28) <= 1) ? *(char **)(proc + 0x138) : NULL;
     float *P = (float *)(player + 0x30);
+    g_grapPulling = g_grap.pull;
     bool ok = g_grapOn && g_inGameplay && ctrl && !g_pipOpen && !g_setOpen && !g_climbing;
     bool combo[2], edge[2];
+    static bool gripFirst[2], gripWas[2];
+    for (int k = 0; k < 2; k++) {   /* the grapple fist counts only grip first, then trigger (a trigger pulled first stays bullet time) */
+        if (g_gripHeld[k] && !gripWas[k]) gripFirst[k] = g_grapTrigH[k] < 0.35f;
+        if (!g_gripHeld[k]) gripFirst[k] = false;
+        gripWas[k] = g_gripHeld[k];
+    }
     for (int k = 0; k < 2; k++) {
-        combo[k] = g_gripHeld[k] && g_grapTrigH[k] > (g_grap.combo[k] ? 0.35f : 0.70f);
+        combo[k] = g_gripHeld[k] && (gripFirst[k] || g_grap.combo[k]) && g_grapTrigH[k] > (g_grap.combo[k] ? 0.35f : 0.70f);
         edge[k] = combo[k] && !g_grap.combo[k];
         g_grap.combo[k] = combo[k];
     }
@@ -9174,13 +9603,40 @@ static void UI_Viewport(void)
                 Log("Interface camera %d: viewport l%.2f r%.2f t%.2f b%.2f, frustum l%.1f r%.1f t%.1f b%.1f ortho %d", k, v[0], v[1], v[2], v[3], f[0], f[1], f[2], f[3], *(uint8_t *)(c + 0xF4)); }
         }
     }
-    char *sg = *(char **)(im + 4);
-    char *c = sg ? *(char **)(sg + 0xAC) : NULL;
-    if (!c) return;
-    float *v = (float *)(c + 0x100);
-    float h = g_flatMenus ? 0.5f : g_curvedActive ? 0.4995f : g_uiScale * 0.5f;   /* (curved: a hair inside full - marks the interface pass) */
-    float want[4] = { 0.5f - h, 0.5f + h, 0.5f + h, 0.5f - h };
-    if (memcmp(v, want, sizeof want)) memcpy(v, want, sizeof want);
+    /* The interface is drawn as a flat picture over the whole frame, so in the headset the HUD sits out at the
+       edges of your view and menus fill it. Both interface cameras' views are widened instead (the flat one
+       draws most of it, the other draws parts like the dialogue topics), which draws the whole interface
+       smaller, towards the middle (HUD size / Menu size). Their viewports are left full. */
+    bool room = !g_inGameplay || g_farActive2 || (g_farGameMenus && IsMenuMode() && !g_pipOpen && !g_liveMenuNow);
+    bool menuUp = g_liveMenuNow || (IsMenuMode() && !g_pipOpen);
+    bool talking = ((const volatile bool *)0x011F308F)[1009];
+    float sc = room || g_flatMenus ? 1.0f : talking ? g_dlgScale : menuUp ? g_menuScale : g_uiScale;
+    if (!(sc > 0.1f && sc <= 1.0f)) sc = 1.0f;
+    {   /* one picture of the first conversation (to check how its parts are drawn) */
+        static double tAt = 0; static bool snapped = false;
+        if (talking && !snapped) { if (!tAt) tAt = QpcMs(); else if (QpcMs() - tAt > 2500.0 && g_hookedDevice) { snapped = true; g_dlgSnapWant = true; } } else if (!talking) tAt = 0;
+    }
+    static float base[2][4], lastSet[2][4]; static bool haveBase[2];
+    for (int k = 0; k < 2; k++) {
+        char *sgk = *(char **)(im + 4 + 4 * k);
+        char *c = sgk ? *(char **)(sgk + 0xAC) : NULL;
+        if (!c || IsBadReadPtr(c, 0x110)) continue;
+        float *v = (float *)(c + 0x100);
+        static const float full[4] = { 0.0f, 1.0f, 1.0f, 0.0f };
+        if (memcmp(v, full, sizeof full)) memcpy(v, full, sizeof full);
+        float *f = (float *)(c + NICAMERA_FRUSTUM);
+        if (!haveBase[k] || memcmp(f, lastSet[k], sizeof lastSet[k])) {   /* (the game's own values - first time, or it changed them) */
+            if (f[1] > f[0] && f[2] > f[3]) { memcpy(base[k], f, sizeof base[k]); haveBase[k] = true; }
+        }
+        if (!haveBase[k]) continue;
+        float cx = (base[k][0] + base[k][1]) * 0.5f, cy = (base[k][2] + base[k][3]) * 0.5f;
+        float hw = (base[k][1] - base[k][0]) * 0.5f / sc, hh = (base[k][2] - base[k][3]) * 0.5f / sc;
+        if (menuUp && !room && !talking) cy -= g_menuYOff * 2.0f * hh;   /* pop-up menus raised or lowered to where you look */
+        float want[4] = { cx - hw, cx + hw, cy + hh, cy - hh };
+        memcpy(f, want, sizeof want); memcpy(lastSet[k], want, sizeof want);
+        if (k == 0) { memcpy(g_uiXfBase, base[0], sizeof g_uiXfBase); memcpy(g_uiXfCur, want, sizeof g_uiXfCur); g_uiXfOn = memcmp(base[0], want, sizeof want) != 0; }
+    }
+    static float lastSc = -1; if (sc != lastSc) { lastSc = sc; Log("Interface: drawn at %.0f%% size (%s; both interface cameras)", sc * 100.0f, room ? "menu screen / full" : menuUp ? "menu" : "HUD"); }
 }
 
 /* ---- Pip-Boy recorder: a short picture sequence of every Pip-Boy open (first 3 opens per session) ---- */
@@ -9310,6 +9766,7 @@ static void Grab_Record(IDirect3DDevice9 *dev)
 }
 static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *unusedEdx, void *renderer, uint32_t a, uint32_t b)
 {
+    HeadingLock_Apply();   /* (again right before drawing, after the game has moved things this frame) */
     (void)unusedEdx;
     IDirect3DDevice9 *dev = GetGameDevice();
     char *sg = *(char **)SCENEGRAPH_PTR_ADDR;
@@ -9357,6 +9814,17 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                the target instead of the inside of the scope (the scope view takes its place) */
 
             Grab_Visual();
+            if (armsDone) MeleeAngle_Apply();
+            Holster_Models((char *)player);
+            {   /* grappling: the body below you is hidden (it can't keep up at grapple speed); back a moment after */
+                static double pullEnd = 0;
+                if (g_grapPulling) pullEnd = QpcMs();
+                g_bodyHidden = NULL;
+                if (g_hideBodyGrap && pullEnd > 0 && QpcMs() - pullEnd < 1200.0) {
+                    char *rs = *(char **)((char *)player + 0x64); char *root = rs && !IsBadReadPtr(rs, 0x18) ? *(char **)(rs + 0x14) : NULL;
+                    if (root && !IsBadReadPtr(root, 0x34) && !(*(uint32_t *)(root + 0x30) & 1)) { *(uint32_t *)(root + 0x30) |= 1; g_bodyHidden = root; }
+                }
+            }
             grabVis = true;
         }
         t3 = QpcMs(); g_tVis += t3 - t2;
@@ -9366,6 +9834,8 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         o_DoRenderFrame(osGlobals, renderer, a, b);
         g_inRenderFrame = false;
         t4 = QpcMs(); g_tGame += t4 - t3;
+        MeleeAngle_Restore();
+        if (g_bodyHidden) { *(uint32_t *)(g_bodyHidden + 0x30) &= ~1u; g_bodyHidden = NULL; }
         if (grabVis) Grab_VisualRestore();
         if (armsDone) Arms_Restore();
         HeadOffset_Restore();
@@ -9523,7 +9993,15 @@ static uint8_t __cdecl Hook_AfterMenuFlag(void)
     g_menuFlagCleared = false;
     static double open3 = 0;
     if (PipBoyMode() == 3) { if (!open3) open3 = QpcMs(); } else open3 = 0;
-    bool want = g_pipRealTime && g_wristPip && open3 != 0;
+    bool pipWant = g_pipRealTime && g_wristPip && open3 != 0;
+    bool liveMenu = !pipWant && PipBoyMode() == 0 && g_inGameplay && LiveMenu_Check();
+    {   /* a live menu fading out: stay live a moment longer, so leaving a conversation doesn't flash the flat menu screen */
+        static double lastLive = 0;
+        if (liveMenu) lastLive = QpcMs();
+        else if (g_liveMenuNow && !g_liveBlocked && !pipWant && QpcMs() - lastLive < 800.0 && IsMenuMode()) liveMenu = true;   /* (only while the game is still in its menu state) */
+    }
+    if (liveMenu != g_liveMenuNow) { g_liveMenuNow = liveMenu; Log("Live menus: %s", liveMenu ? "a menu is up - the world keeps running, you stay in it" : "menu closed"); }
+    bool want = pipWant || liveMenu;
     if (want) {
         if (g_hwThreadsSaved < 0 && idle) { g_hwThreadsSaved = *hw; *hw = 1; Log("Real-time Pip-Boy: world running (single-thread AI while open, was %d threads)", g_hwThreadsSaved); }
         if (g_hwThreadsSaved >= 0) { *(volatile uint8_t *)0x011DEA2B = 0; g_menuFlagCleared = true; }
@@ -9539,7 +10017,7 @@ typedef void (__attribute__((thiscall)) *RenderDispatch_t)(void *self);
 static RenderDispatch_t o_RenderDispatch = (RenderDispatch_t)0x0086F450;
 static void __attribute__((thiscall)) Hook_RenderDispatch(void *self)
 {
-    bool restore = g_menuFlagCleared && *(volatile uint8_t *)0x011DEA2B == 0;
+    bool restore = g_menuFlagCleared && !g_liveMenuNow && *(volatile uint8_t *)0x011DEA2B == 0;   /* (live menus: the normal frame, the menu is part of the interface it draws) */
     if (restore) *(volatile uint8_t *)0x011DEA2B = 1;
     /* the game re-places its Pip-Boy menu shape (and its blending) during its own update: put ours back
        right before the frame is drawn, so the menu stays exactly where you set it */
@@ -9632,10 +10110,163 @@ static char *Tile_FindName(char *t, int depth, int maxDepth)
     }
     return NULL;
 }
+/* What you're looking at: the game's crosshair target. Container = the quick-loot window is for it. */
+static int Loot_CrossKind(char **refOut)
+{
+    char *im = *(char **)0x011D8A80; *refOut = NULL;
+    char *ref = Rd(im, 0xD4) ? *(char **)(im + 0xD0) : NULL;
+    if (!Rd(ref, 0x28)) return 0;
+    uint8_t rt = *(uint8_t *)(ref + 4); if (rt < 0x3A || rt > 0x3C) return 0;
+    char *base = *(char **)(ref + 0x20); if (!Rd(base, 8)) return 0;
+    *refOut = ref;
+    uint8_t bt = *(uint8_t *)(base + 4);
+    if (bt == 0x1B) return 1;                    /* container */
+    if (rt == 0x3B || rt == 0x3C) return 2;      /* person / creature */
+    return 3;
+}
+/* ---- HUD parts on/off ----------------------------------------------------------------------------
+   The game's HUD in the headset: each part can be hidden ([HUD] in FNVR.ini, or the VR settings). The parts
+   are found by name on the HUD, so HUD mods that rename them may need a look at the log (HUD parts are listed). */
+static bool g_hudShow = true, g_hudHealth = true, g_hudAP = true, g_hudSneak = true, g_hudCompass = true, g_hudAmmo = true, g_hudCross = true;
+/* Each HUD part is a list of the game's HUD pieces by exact name ("Group/piece" = a piece inside a group;
+   "Group/*-skip" = every piece of a group except one - the vanilla health group also holds the compass). */
+#define HUD_MAXT 12
+typedef struct { const char *names[6]; bool *on; char *tile[HUD_MAXT]; float saved[HUD_MAXT]; int n; bool hidden; } HudPart;
+static HudPart g_hudParts[] = {
+    { { "HitPoints/*-compass_window", NULL }, &g_hudHealth },
+    { { "ActionPoints/meter", "ActionPoints/MeterBackground", "ActionPoints/right_bracket", NULL }, &g_hudAP },
+    { { "SneakMeter", NULL }, &g_hudSneak },
+    { { "HitPoints/compass_window", NULL }, &g_hudCompass },
+    { { "ActionPoints/justify_right_text", "AmmoTypeLabel", "CNDArrows", NULL }, &g_hudAmmo },
+    { { "ReticleCenter", "JDC", NULL }, &g_hudCross },
+};
+static const char *g_hudPartName[] = { "health", "AP", "sneak", "compass", "ammo", "crosshair" };
+/* ---- Fire rate (all guns) and the Ranger Sequoia's cylinder ----------------------------------------
+   [Controls] iFireRatePercent: 100 = the game's own. The gun in your hand gets its fire rate (automatic guns)
+   and attack animation speed (everything else) scaled; its own values come back when you put it away.
+   The Ranger Sequoia is set back to its 5-round cylinder ([Controls] bSequoiaFiveRounds). */
+static int g_fireRatePct = 100; static bool g_seqFive = true; static bool g_revFast = true;   /* [Controls] bRevolverFastFire */
+/* A revolver (by its name or its model file): fires as fast as you pull the trigger. */
+static bool Weap_IsRevolver(char *w)
+{
+    if (!w) return false;
+    char t[200] = "";
+    const char *nm = (!IsBadReadPtr(w + 0x34, 4) && *(const char **)(w + 0x34) && !IsBadReadPtr(*(const char **)(w + 0x34), 1)) ? *(const char **)(w + 0x34) : "";
+    const char *mp = (!IsBadReadPtr(w + 0x40, 4) && *(const char **)(w + 0x40) && !IsBadReadPtr(*(const char **)(w + 0x40), 1)) ? *(const char **)(w + 0x40) : "";
+    snprintf(t, sizeof t, "%s|%s", nm, mp); for (char *c = t; *c; c++) *c = (char)tolower((unsigned char)*c);
+    static const char *keys[] = { "revolver", "sequoia", "magnum", "police pistol", ".357", "357", ".44", "lucky", "that gun", "thatgun", "5.56mm pistol", "556pistol", "mysterious", "colt", "schofield", "scofield", "peacemaker", "single action", "six-shooter", "sixshooter", "s&w", "smith & wesson", "smith and wesson", "smith&wesson", "smithwesson", ".500", "500 magnum", "500magnum", "model 500", "m500", "stranger", "wesson" };
+    for (unsigned i = 0; i < sizeof keys / sizeof keys[0]; i++) if (strstr(t, keys[i])) return true;
+    return false;
+}
+static uint32_t FBits(float f) { uint32_t u; memcpy(&u, &f, 4); return u; }   /* (script float arguments go in as their raw 4 bytes) */
+static bool Scr_Num(void *scr, void *arg, double *out)
+{   /* run a little function and get the number it returns */
+    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+    if (!g_scriptIntf || !g_scriptIntf->CallFunction || !scr) return false;
+    struct { double num; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+    bool ok = ((CallFn_t)g_scriptIntf->CallFunction)(scr, GetPlayer(), NULL, &res, 1, arg);
+    if (!ok || res.type != 1) return false;
+    *out = res.num; return true;
+}
+static void FireRate_Tick(void)
+{
+    if (!g_inGameplay || !g_scriptIntf || !g_scriptIntf->CompileScript || !g_scriptIntf->CallFunctionAlt) return;
+    static void *getFR, *getAM, *setBoth, *seq; static bool failed = false, seqDone = false, tried = false;
+    if (!tried) {   /* (each one on its own, so one that doesn't compile doesn't take the others with it) */
+        tried = true;
+        getFR = g_scriptIntf->CompileScript("ref rWeap\nfloat fVal\nBegin Function { rWeap }\nset fVal to GetWeaponFireRate rWeap\nSetFunctionValue fVal\nEnd\n");
+        getAM = g_scriptIntf->CompileScript("ref rWeap\nfloat fVal\nBegin Function { rWeap }\nset fVal to GetWeaponAnimMult rWeap\nSetFunctionValue fVal\nEnd\n");
+        setBoth = g_scriptIntf->CompileScript("ref rWeap\nfloat fRate\nfloat fMult\nBegin Function { rWeap, fRate, fMult }\nSetWeaponFireRate fRate rWeap\nSetWeaponAnimMult fMult rWeap\nEnd\n");
+        if (!setBoth) setBoth = g_scriptIntf->CompileScript("ref rWeap\nfloat fRate\nfloat fMult\nBegin Function { rWeap, fRate, fMult }\nSetWeaponFireRate fRate rWeap\nEnd\n");
+        seq = g_scriptIntf->CompileScript("ref rWeap\nBegin Function { }\nset rWeap to WeapNVRangerSequoia\nSetWeaponClipRounds 5 rWeap\nEnd\n");
+        Log("Fire rate: scripts - read rate %s, read attack speed %s, set %s; Sequoia %s", getFR ? "ok" : "FAILED", getAM ? "ok" : "FAILED", setBoth ? "ok" : "FAILED", seq ? "ok" : "FAILED");
+        if (!setBoth || (!getFR && !getAM)) failed = true;
+    }
+    if (!seqDone && g_seqFive && seq) { seqDone = true; g_scriptIntf->CallFunctionAlt(seq, GetPlayer(), 0); Log("Ranger Sequoia: cylinder set to 5 rounds"); }
+    if (failed) return;
+    static void *cur = NULL; static float fr0 = 0, am0 = 0; static int curPct = 100;
+    void *w = g_weaponOutThisFrame ? PlayerWeaponForm() : NULL;
+    static bool curRev = false, curRevOn = false;
+    if (w != cur || (w && (curPct != g_fireRatePct || curRevOn != g_revFast))) {
+        if (cur && (fr0 > 0 || am0 > 0) && (curPct != 100 || (curRev && curRevOn))) g_scriptIntf->CallFunctionAlt(setBoth, GetPlayer(), 3, cur, FBits(fr0), FBits(am0));   /* the old gun's own values back */
+        if (w != cur) { cur = w; double a = 0, b = 0; fr0 = getFR && Scr_Num(getFR, w, &a) ? (float)a : 0.0f; am0 = getAM && Scr_Num(getAM, w, &b) ? (float)b : 0.0f;
+            if (w && fr0 <= 0 && am0 <= 0) { static int nl = 0; if (nl++ < 5) Log("Fire rate: couldn't read this gun's own rate"); } curPct = 100; curRev = Weap_IsRevolver((char *)w);
+            if (curRev) Log("Fire rate: revolver in your hand - it fires as fast as you pull the trigger%s", g_revFast ? "" : " (off in settings)"); }
+        curRevOn = g_revFast;
+        float k = g_fireRatePct / 100.0f;
+        if (curRev && g_revFast) k = fmaxf(k, 4.0f);   /* revolvers: the hammer cycle sped up so every pull fires */
+        if (cur && k != 1.0f && (fr0 > 0 || am0 > 0)) {
+            g_scriptIntf->CallFunctionAlt(setBoth, GetPlayer(), 3, cur, FBits(fr0 > 0 ? fr0 * k : fr0), FBits(am0 > 0 ? am0 * k : 1.0f * k));
+            static int nl = 0; if (nl++ < 10) Log("Fire rate: %d%% on the gun in your hand (rate %.2f -> %.2f, attack speed %.2f -> %.2f)", g_fireRatePct, fr0, fr0 * k, am0, am0 * k);
+        }
+        curPct = g_fireRatePct;
+    }
+}
+static void Hud_Load(void)
+{
+    g_hudShow = GetPrivateProfileIntA("HUD", "bShowHUD", 1, g_iniPath) != 0;
+    g_fireRatePct = GetPrivateProfileIntA("Controls", "iFireRatePercent", 100, g_iniPath); if (g_fireRatePct < 25 || g_fireRatePct > 400) g_fireRatePct = 100;
+    g_seqFive = GetPrivateProfileIntA("Controls", "bSequoiaFiveRounds", 1, g_iniPath) != 0;
+    g_revFast = GetPrivateProfileIntA("Controls", "bRevolverFastFire", 1, g_iniPath) != 0;
+    g_hudHealth = GetPrivateProfileIntA("HUD", "bHealth", 1, g_iniPath) != 0;
+    g_hudAP = GetPrivateProfileIntA("HUD", "bActionPoints", 1, g_iniPath) != 0;
+    g_hudSneak = GetPrivateProfileIntA("HUD", "bSneak", 1, g_iniPath) != 0;
+    g_hudCompass = GetPrivateProfileIntA("HUD", "bCompass", 1, g_iniPath) != 0;
+    g_hudAmmo = GetPrivateProfileIntA("HUD", "bAmmo", 1, g_iniPath) != 0;
+    g_hudCross = GetPrivateProfileIntA("HUD", "bCrosshair", 1, g_iniPath) != 0;
+}
+static char *Hud_Child(char *t, const char *name, int idx, int *count)
+{   /* the idx-th child named 'name' (or any child but 'name' when name starts with '*-') */
+    char *node = Rd(t, 0x30) ? *(char **)(t + 0x04) : NULL; int seen = 0;
+    bool except = name[0] == '*' && name[1] == '-'; const char *nm = except ? name + 2 : name;
+    for (int m = 0; node && m < 60 && Rd(node, 12); m++, node = *(char **)node) {
+        char *c = *(char **)(node + 8);
+        bool eq = !_stricmp(Tile_Name(c), nm);
+        if (except ? !eq : eq) { if (seen == idx) { if (count) *count = seen + 1; return c; } seen++; }
+    }
+    if (count) *count = seen; return NULL;
+}
+static void Hud_Tick(void)
+{
+    if (!g_inGameplay) return;
+    char *hud = *(char **)0x011D96C0; char *root = Rd(hud, 8) ? *(char **)(hud + 4) : NULL;
+    if (!Rd(root, 0x30)) return;
+    static char *forRoot = NULL;
+    if (forRoot != root) {   /* (new HUD: find its parts by name) */
+        forRoot = root;
+        for (unsigned k = 0; k < sizeof g_hudParts / sizeof g_hudParts[0]; k++) {
+            HudPart *hp = &g_hudParts[k]; hp->n = 0; hp->hidden = false;
+            for (int q = 0; q < 6 && hp->names[q]; q++) {
+                char grp[48]; snprintf(grp, sizeof grp, "%s", hp->names[q]); char *slash = strchr(grp, '/'); if (slash) *slash = 0;
+                for (int gi = 0; gi < 4; gi++) {
+                    char *g = Hud_Child(root, grp, gi, NULL); if (!g) break;
+                    if (!slash) { if (hp->n < HUD_MAXT) hp->tile[hp->n++] = g; continue; }
+                    for (int ci = 0; ci < HUD_MAXT; ci++) { char *c = Hud_Child(g, slash + 1, ci, NULL); if (!c) break; if (hp->n < HUD_MAXT) hp->tile[hp->n++] = c; }
+                }
+            }
+            Log("HUD: %s - %d piece(s) found", g_hudPartName[k], hp->n);
+        }
+    }
+    for (unsigned k = 0; k < sizeof g_hudParts / sizeof g_hudParts[0]; k++) {
+        HudPart *hp = &g_hudParts[k];
+        bool hide = !g_hudShow || !*hp->on;
+        for (int q = 0; q < hp->n; q++) {
+            char *t = hp->tile[q]; if (!Rd(t, 0x30)) continue;
+            float *vis = Tile_Val(t, 0xFA3);
+            if (hide) {
+                if (!hp->hidden) hp->saved[q] = vis ? *vis : 1.0f;
+                if (!vis || *vis != 0.0f) ((TileSetFloat_t)0x00A012D0)(t, 0xFA3, 0.0f, true);
+            } else if (hp->hidden) ((TileSetFloat_t)0x00A012D0)(t, 0xFA3, hp->saved[q] != 0.0f ? hp->saved[q] : 1.0f, true);
+        }
+        hp->hidden = hide;
+    }
+}
 static void LootMenu_Tick(void)
 {
     g_lootShown = false;
+    bool diag = g_lootDiag; g_lootDiag = false;
     if (!g_inGameplay) return;
+    char *xref = NULL; int xk = Loot_CrossKind(&xref);
     char *hud = *(char **)0x011D96C0; char *root = Rd(hud, 8) ? *(char **)(hud + 4) : NULL;
     if (!Rd(root, 0x30)) return;
     static char *tile = NULL, *forRoot = NULL; static double nextFind = 0; static bool listed = false;
@@ -9654,13 +10285,21 @@ static void LootMenu_Tick(void)
             Log("Loot menu: not on the HUD yet (HUD parts: %s)", buf);
         }
     }
-    if (!tile || !Rd(tile, 0x30)) { tile = NULL; return; }
+    if (!tile || !Rd(tile, 0x30)) { tile = NULL; if (xk == 1) g_lootShown = true; return; }
     float *vis = Tile_Val(tile, 0xFA3), *x = Tile_Val(tile, 0xFA1), *w = Tile_Val(tile, 0xFB1);
+    float *al = Tile_Val(tile, 0xFA9);
+    bool tileUp = x && !(vis && *vis == 0.0f) && (!al || *al > 1.0f);
+    /* shown: the window says so, or you're looking at a container (the window is up for those) */
+    g_lootShown = tileUp || xk == 1;
+    if (diag) { static int nd = 0; if (nd++ < 40) {
+        int kids = 0; char *node = *(char **)(tile + 0x04); for (; node && kids < 99 && Rd(node, 12); node = *(char **)node) kids++;
+        Log("Loot check on right grip: window visible %.0f alpha %.0f x %.0f width %.0f parts %d | looking at %s | -> %s",
+            vis ? *vis : -1.0f, al ? *al : -1.0f, x ? *x : -1.0f, w ? *w : -1.0f, kids,
+            xk == 1 ? "a container" : xk == 2 ? "a person/creature" : xk == 3 ? "something else" : "nothing",
+            g_lootShown ? "loot window UP (grip takes)" : "no loot window (grip activates)"); } }
     if (!x || (vis && *vis == 0.0f)) return;
-    {   float *al = Tile_Val(tile, 0xFA9);   /* (shown = visible and not faded out) */
-        g_lootShown = !al || *al > 1.0f; }
     {   static bool was = false; if (g_lootShown && !was && g_lootControls && g_motionControls) {
-            static int hl = 0; if (hl++ < 3) UIMessage("Loot: right grip take, right stick scroll, B take all, left Y open"); }
+            static int hl = 0; if (hl++ < 3) UIMessage("Loot: A take, right stick scroll, B take all, grip open"); }
         was = g_lootShown; }
     if (!g_lootCenter) return;
     /* where its parent starts, and how wide the screen is (in menu units) */
@@ -9957,11 +10596,11 @@ static float Body_ArmScale(int side, float gameLen)
 #define SET_ROW_Y0 150
 #define SET_ROW_H 62
 #define SET_ROWS 14
-enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_COUNT };
+enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_HUD, SP_COUNT };
 static const char *const g_setPageName[SP_COUNT] = { "FNVR SETTINGS", "BODY & PROFILES", "PIP-BOY", "CONTROLS", "HOLSTERS & GESTURES", "HANDS & OBJECTS",
-                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF" };
+                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS" };
 enum { ST_BOOL, ST_FLOAT, ST_INT, ST_PAGE, ST_ACTION, ST_SIGN, ST_PROFILE, ST_INFO };
-enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16 };
+enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16, SF_MELEE = 32, SF_HOLM = 64 };
 enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET };
 typedef struct {
     int page, type; const char *label; const char *sec, *key; void *var;
@@ -9973,6 +10612,7 @@ static const SetOpt g_setOpts[] = {
     { SP_MAIN, ST_PAGE, "Controls", 0, 0, 0, 0, 0, 0, 0, 0, SP_CONTROLS, "Motion controls, aiming, melee swings, buttons and fingers." },
     { SP_MAIN, ST_PAGE, "Holsters & gestures", 0, 0, 0, 0, 0, 0, 0, 0, SP_SPOTS, "Where the hip and shoulder holsters and the chest (pause menu) grab are on your body." },
     { SP_MAIN, ST_PAGE, "Hands & objects", 0, 0, 0, 0, 0, 0, 0, 0, SP_HANDS, "Picking things up, throwing, pushing, climbing." },
+    { SP_MAIN, ST_PAGE, "HUD & menus", 0, 0, 0, 0, 0, 0, 0, 0, SP_HUD, "The HUD's size and which parts show; pop-up menus (talking, trading, looting) and the quick-loot window." },
     { SP_MAIN, ST_PAGE, "Display & menus", 0, 0, 0, 0, 0, 0, 0, 0, SP_DISPLAY, "How the game is shown in the headset and where menus appear." },
     { SP_MAIN, ST_PAGE, "Weapons & scopes", 0, 0, 0, 0, 0, 0, 0, 0, SP_WEAPONS, "See-through scopes and their zoom and brightness." },
     { SP_MAIN, ST_PAGE, "Movement & comfort", 0, 0, 0, 0, 0, 0, 0, 0, SP_MOVE, "Real crouching and leaning, sprinting and jumping." },
@@ -10000,9 +10640,9 @@ static const SetOpt g_setOpts[] = {
     { SP_PIP, ST_ACTION, "Reset screen position", 0, 0, 0, 0, 0, 0, 0, 0, SA_PIP_RESET, "Forget your adjusted spot and put the menu back on the 2000's glass automatically." },
     { SP_PIP, ST_BOOL, "World keeps running", "Controls", "bPipBoyRealTime", &g_pipRealTime, 0, 0, 0, 0, 0, 0, "ON: the world doesn't pause while you look at your Pip-Boy (like Fallout 4 VR)." },
     { SP_PIP, ST_BOOL, "Live world behind the Pip-Boy", "Controls", "bPipBoyLiveWorld", &g_pipWorldDraw, 0, 0, 0, 0, 0, 0, "ON: the world keeps being drawn while the Pip-Boy is open (needs 'World keeps running'). Turn OFF if it stutters or the menu stops updating." },
-    { SP_CONTROLS, ST_BOOL, "Quick-loot window controls", "Controls", "bLootMenuControls", &g_lootControls, 0, 0, 0, 0, 0, 0, "While the quick-loot window is up: right grip takes the item, right stick scrolls, right B takes all, left Y opens the normal loot menu." },
-    { SP_DISPLAY, ST_BOOL, "Quick-loot window in the middle", "Display", "bCenterLootMenu", &g_lootCenter, 0, 0, 0, 0, 0, 0, "The quick-loot window (for boxes and bodies) is moved from the right edge to the middle of your view." },
-    { SP_DISPLAY, ST_FLOAT, "Quick-loot window sideways", "Display", "fLootMenuOffset", &g_lootOffX, -600.0f, 600.0f, 20.0f, "%.0f", 0, 0, "Nudge the quick-loot window left (-) or right (+) from the middle." },
+    { SP_HUD, ST_BOOL, "Quick-loot window controls", "Controls", "bLootMenuControls", &g_lootControls, 0, 0, 0, 0, 0, 0, "While the quick-loot window is up: right A takes the item, right stick scrolls, right B takes all, right grip opens the full loot menu." },
+    { SP_HUD, ST_BOOL, "Quick-loot window in the middle", "Display", "bCenterLootMenu", &g_lootCenter, 0, 0, 0, 0, 0, 0, "The quick-loot window (for boxes and bodies) is moved from the right edge to the middle of your view." },
+    { SP_HUD, ST_FLOAT, "Quick-loot window sideways", "Display", "fLootMenuOffset", &g_lootOffX, -600.0f, 600.0f, 20.0f, "%.0f", 0, 0, "Nudge the quick-loot window left (-) or right (+) from the middle." },
     { SP_PIP, ST_BOOL, "Live world: Pip-Boy drawn last", "Controls", "bPipBoyWorldFirst", &g_pipWorldFirst, 0, 0, 0, 0, 0, 0, "ON: the moving world is drawn first and the Pip-Boy with its menu on top (keeps the menu visible). OFF: the old order." },
     { SP_PIP, ST_BOOL, "Opens instantly", "Controls", "bInstantPipBoy", &g_pipInstant, 0, 0, 0, 0, SF_RESTART, 0, "Skip the game's slow raise/lower animation. Takes effect after restarting the game." },
     { SP_PIP, ST_BOOL, "Arm stays where your hand is", "Controls", "bPipBoyNoAnimation", &g_pipNoAnim, 0, 0, 0, 0, 0, 0, "ON: no Pip-Boy body animation; your arm follows your real hand while the Pip-Boy is open." },
@@ -10017,6 +10657,7 @@ static const SetOpt g_setOpts[] = {
     { SP_CONTROLS, ST_FLOAT, "Shot left/right correction", "Controls", "fShotYawTrim", &g_shotYawTrimDeg, -10.0f, 10.0f, 0.25f, "%.2f deg", 0, 0, "Fine correction if shots land left or right of where you point." },
     { SP_CONTROLS, ST_FLOAT, "Shot up/down correction", "Controls", "fShotPitchTrim", &g_shotPitchTrimDeg, -10.0f, 10.0f, 0.25f, "%.2f deg", 0, 0, "Fine correction if shots land high or low." },
     { SP_CONTROLS, ST_BOOL, "Melee swings", "Controls", "bMeleeSwings", &g_meleeSwings, 0, 0, 0, 0, 0, 0, "Swing a melee weapon or punch with a real swing of your hand." },
+    { SP_CONTROLS, ST_BOOL, "Right trigger attacks with melee", "Controls", "bMeleeTrigger", &g_meleeTrigger, 0, 0, 0, 0, 0, 0, "ON: the right trigger attacks with melee weapons and fists too (as well as swinging). Automatic melee weapons like the chainsaw always use the trigger." },
     { SP_CONTROLS, ST_FLOAT, "Swing speed needed", "Controls", "fSwingSpeed", &g_swingSpeed, 0.5f, 6.0f, 0.1f, "%.1f m/s", 0, 0, "How fast your hand must move to count as a swing. Lower = easier." },
     { SP_CONTROLS, ST_BOOL, "Left trigger = bullet time", "Controls", "bLeftTriggerBulletTime", &g_ltBullet, 0, 0, 0, 0, 0, 0, "The left trigger presses the bullet-time key (needs a bullet-time mod)." },
     { SP_CONTROLS, ST_BOOL, "Left trigger aims down sights", "Controls", "bAimDownSights", &g_adsEnabled, 0, 0, 0, 0, 0, 0, "Use the game's own aim-down-sights view with the left trigger (aimed with your head)." },
@@ -10032,6 +10673,13 @@ static const SetOpt g_setOpts[] = {
     { SP_SPOTS, ST_FLOAT, "Shoulder holster: below eyes", "Controls", "fShoulderHolsterDown", &g_shDown, -0.2f, 0.6f, 0.02f, "%.2f m", 0, 0, "How far below your eyes the shoulder holster is." },
     { SP_SPOTS, ST_FLOAT, "Shoulder holster: to the side", "Controls", "fShoulderHolsterSide", &g_shSide, 0.0f, 0.5f, 0.02f, "%.2f m", 0, 0, "How far to your right the shoulder holster is." },
     { SP_SPOTS, ST_FLOAT, "Shoulder holster: behind", "Controls", "fShoulderHolsterBack", &g_shBack, -0.2f, 0.5f, 0.02f, "%.2f m", 0, 0, "How far behind your head the shoulder holster is." },
+    { SP_SPOTS, ST_BOOL, "Show holstered weapons", "HolsterModel", "bShow", &g_holShow, 0, 0, 0, 0, 0, 0, "A weapon put away in a holster is shown there - on your hip or over your shoulder." },
+    { SP_SPOTS, ST_FLOAT, "Hip weapon: turn", 0, 0, &g_holAng[1][0], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_HOLM, 0, "Turns the weapon shown on your hip around the up axis." },
+    { SP_SPOTS, ST_FLOAT, "Hip weapon: tilt", 0, 0, &g_holAng[1][1], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_HOLM, 0, "Tilts the weapon shown on your hip forward/back." },
+    { SP_SPOTS, ST_FLOAT, "Hip weapon: roll", 0, 0, &g_holAng[1][2], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_HOLM, 0, "Rolls the weapon shown on your hip." },
+    { SP_SPOTS, ST_FLOAT, "Shoulder weapon: turn", 0, 0, &g_holAng[2][0], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_HOLM, 0, "Turns the weapon shown over your shoulder around the up axis." },
+    { SP_SPOTS, ST_FLOAT, "Shoulder weapon: tilt", 0, 0, &g_holAng[2][1], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_HOLM, 0, "Tilts the weapon shown over your shoulder." },
+    { SP_SPOTS, ST_FLOAT, "Shoulder weapon: roll", 0, 0, &g_holAng[2][2], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_HOLM, 0, "Rolls the weapon shown over your shoulder." },
     { SP_SPOTS, ST_FLOAT, "Holster size", "Controls", "fHolsterRadius", &g_holsterR, 0.05f, 0.4f, 0.01f, "%.2f m", 0, 0, "How close your hand must be to a holster spot." },
     { SP_SPOTS, ST_BOOL, "Grab chest = pause menu", "Controls", "bChestPause", &g_chestPause, 0, 0, 0, 0, 0, 0, "Squeeze a grip with your hand at the middle of your chest to open (and close) the pause menu." },
     { SP_SPOTS, ST_FLOAT, "Chest spot: below eyes", "Controls", "fChestDown", &g_chestDown, 0.1f, 0.8f, 0.02f, "%.2f m", 0, 0, "How far below your eyes the chest grab spot is." },
@@ -10060,8 +10708,20 @@ static const SetOpt g_setOpts[] = {
     { SP_DISPLAY, ST_BOOL, "Copy frames in background", "Display", "bAsyncCapture", &g_asyncCapture, 0, 0, 0, 0, SF_RESTART, 0, "Faster frame copying to the headset. Restart to apply." },
     { SP_DISPLAY, ST_BOOL, "Curved menus and HUD", "Display", "bCurvedUI", &g_curvedUI, 0, 0, 0, 0, SF_RESTART, 0, "Menus and the HUD on a curved panel in front of you. Restart to apply." },
     { SP_DISPLAY, ST_BOOL, "Main menu on a big screen", "Display", "bMainMenuScreen", &g_farMenu, 0, 0, 0, 0, 0, 0, "The main menu and loading screens on a big curved screen a few feet away." },
+    { SP_HUD, ST_BOOL, "Live menus (talking, trading, looting)", "Display", "bLiveMenus", &g_liveMenus, 0, 0, 0, 0, 0, 0, "ON: talking, trading, containers and pop-up messages don't freeze the game - the world keeps running and you stay in it, the menu in front of you." },
+    { SP_HUD, ST_FLOAT, "Look away to close menus", "Display", "fLookAwayClose", &g_lookAwayDeg, 0.0f, 180.0f, 5.0f, "%.0f deg", 0, 0, "With live menus: turn your head this far away from a menu and it closes. 0 = never." },
     { SP_DISPLAY, ST_BOOL, "Game menus on the big screen", "Display", "bMenusOnScreen", &g_farGameMenus, 0, 0, 0, 0, 0, 0, "Pause menu, messages, containers and other in-game menus on the same screen." },
-    { SP_DISPLAY, ST_FLOAT, "HUD size", "Display", "fUIScale", &g_uiScale, 0.15f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view the HUD and menus take up." },
+    { SP_HUD, ST_FLOAT, "HUD size", "Display", "fUIScale", &g_uiScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view the HUD covers. Smaller = health, AP and compass come in from the edges where you can see them." },
+    { SP_HUD, ST_FLOAT, "Dialogue size", "Display", "fDialogueScale2", &g_dlgScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view talking to people takes up - the box and its text shrink together." },
+    { SP_HUD, ST_FLOAT, "Menu height", "Display", "fMenuHeight", &g_menuYOff, -0.5f, 0.5f, 0.02f, "%+.2f", 0, 0, "Moves pop-up menus (trading, companions, containers, messages) up (+) or down (-) to where you look straight ahead." },
+    { SP_HUD, ST_FLOAT, "Menu size", "Display", "fMenuScale", &g_menuScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view pop-up menus (talking, trading, containers, messages) cover. Smaller = further away." },
+    { SP_HUD, ST_BOOL, "Show the HUD", "HUD", "bShowHUD", &g_hudShow, 0, 0, 0, 0, 0, 0, "OFF: no health, AP, sneak, compass, ammo or crosshair on screen (pop-up messages and menus still show)." },
+    { SP_HUD, ST_BOOL, "HUD: health bar", "HUD", "bHealth", &g_hudHealth, 0, 0, 0, 0, 0, 0, "The health bar." },
+    { SP_HUD, ST_BOOL, "HUD: action points bar", "HUD", "bActionPoints", &g_hudAP, 0, 0, 0, 0, 0, 0, "The AP bar." },
+    { SP_HUD, ST_BOOL, "HUD: sneak indicator", "HUD", "bSneak", &g_hudSneak, 0, 0, 0, 0, 0, 0, "The [HIDDEN] / [CAUTION] / [DANGER] sneak indicator." },
+    { SP_HUD, ST_BOOL, "HUD: compass", "HUD", "bCompass", &g_hudCompass, 0, 0, 0, 0, 0, 0, "The compass along the bottom." },
+    { SP_HUD, ST_BOOL, "HUD: ammo and condition", "HUD", "bAmmo", &g_hudAmmo, 0, 0, 0, 0, 0, 0, "Ammo count and weapon condition." },
+    { SP_HUD, ST_BOOL, "HUD: crosshair", "HUD", "bCrosshair", &g_hudCross, 0, 0, 0, 0, 0, 0, "The crosshair in the middle (you aim with your hand anyway)." },
     { SP_DISPLAY, ST_FLOAT, "Big screen distance", "Display", "fMainMenuDistance", &g_mmDist, 0.5f, 6.0f, 0.1f, "%.1f m", 0, 0, "How far away the main menu / loading screen is (applies the next time it opens)." },
     { SP_DISPLAY, ST_FLOAT, "Big screen width", "Display", "fMainMenuWidth", &g_mmWidth, 0.5f, 8.0f, 0.1f, "%.1f m", 0, 0, "How wide the main menu / loading screen is." },
     { SP_DISPLAY, ST_FLOAT, "Big screen curve", "Display", "fMainMenuCurveRadius", &g_mmCurveR, 0.5f, 20.0f, 0.5f, "%.1f m", 0, 0, "How much the big screen curves around you (bigger = flatter)." },
@@ -10073,6 +10733,15 @@ static const SetOpt g_setOpts[] = {
 
     { SP_WEAPONS, ST_BOOL, "See-through scopes", "Controls", "bSeeThroughScopes", &g_scopesEnabled, 0, 0, 0, 0, SF_RESTART, 0, "Look through a scope on your gun to see a magnified view. Turning it ON needs a restart." },
     { SP_WEAPONS, ST_BOOL, "Raise to eye to aim scopes", "Controls", "bRaiseToEyeScopes", &g_autoScope, 0, 0, 0, 0, 0, 0, "Bring a scoped gun up to your eye and the game's own scope view comes up." },
+    { SP_WEAPONS, ST_INT, "Fire rate", "Controls", "iFireRatePercent", &g_fireRatePct, 25, 400, 5, "%.0f%%", 0, 0, "How fast guns fire, for the gun in your hand. 100% = the game's own; higher = faster, lower = slower. (Automatic guns fire faster; others' attack is quicker.)" },
+    { SP_WEAPONS, ST_BOOL, "Revolvers fire as fast as you pull", "Controls", "bRevolverFastFire", &g_revFast, 0, 0, 0, 0, 0, 0, "Revolvers (Ranger Sequoia, Lucky, .357, .44, Police Pistol...) fire every time you pull the trigger, as fast as you can pull it." },
+    { SP_WEAPONS, ST_FLOAT, "Melee weapon tilt (this weapon)", 0, 0, &g_melA[0], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (first axis). Hold the weapon out and adjust until it sits straight. Saved for that weapon." },
+    { SP_WEAPONS, ST_FLOAT, "Melee weapon turn (this weapon)", 0, 0, &g_melA[1], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (second axis). Saved for that weapon." },
+    { SP_WEAPONS, ST_FLOAT, "Melee weapon roll (this weapon)", 0, 0, &g_melA[2], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (third axis). Saved for that weapon." },
+    { SP_WEAPONS, ST_BOOL, "Melee swings", "Controls", "bMeleeSwings", &g_meleeSwings, 0, 0, 0, 0, 0, 0, "Swing a melee weapon or punch with a real swing of your hand." },
+    { SP_WEAPONS, ST_BOOL, "Right trigger attacks with melee", "Controls", "bMeleeTrigger", &g_meleeTrigger, 0, 0, 0, 0, 0, 0, "ON: the right trigger attacks with melee weapons and fists too (as well as swinging). Automatic melee weapons like the chainsaw always use the trigger." },
+    { SP_WEAPONS, ST_FLOAT, "Scope picture height (this gun)", "ScopeHeightCm", g_scopeKey, &g_scopeOffY, -30.0f, 30.0f, 0.5f, "%+.1f cm", 0, 0, "Moves the picture in the scope up (+) or down (-) for the gun in your hand. Saved for that gun only. Hold the gun out once so it's known." },
+    { SP_WEAPONS, ST_FLOAT, "Scope picture size (this gun)", "ScopeSize", g_scopeKey, &g_scopeSize, 0.2f, 4.0f, 0.05f, "%.2fx", 0, 0, "Makes the picture in the scope bigger or smaller for the gun in your hand, to fill its lens. Saved for that gun only." },
     { SP_WEAPONS, ST_FLOAT, "Scope brightness", "Controls", "fScopeBrightness", &g_scopeBright, 0.1f, 4.0f, 0.1f, "%.1f", 0, 0, "How bright the view through the scope is." },
     { SP_WEAPONS, ST_FLOAT, "Scope zoom limit", "Controls", "fScopeMaxZoom", &g_scopeMaxZoom, 1.0f, 10.0f, 0.5f, "%.1fx", 0, 0, "The most a scope magnifies." },
 
@@ -10096,6 +10765,7 @@ static const SetOpt g_setOpts[] = {
     { SP_MOVE, ST_FLOAT, "Grapple hop at the end", "Grapple", "fEndHop", &g_grapHop, 0.0f, 10.0f, 0.5f, "%.1f m/s", 0, 0, "The little upward hop when you reach the hook point (helps you up onto ledges)." },
     { SP_MOVE, ST_FLOAT, "Grapple air slowdown", "Grapple", "fAirDrag", &g_grapDrag, 0.0f, 3.0f, 0.05f, "%.2f", 0, 0, "How quickly a launch loses its sideways speed in the air (0 = never slows)." },
     { SP_MOVE, ST_BOOL, "Grapple onto people & creatures", "Grapple", "bHookActors", &g_grapActors, 0, 0, 0, 0, 0, 0, "The line can hook onto people and creatures and pull you to them." },
+    { SP_MOVE, ST_BOOL, "Hide your body while grappling", "Grapple", "bHideBody", &g_hideBodyGrap, 0, 0, 0, 0, 0, 0, "Your body below you disappears while the line pulls you (and a moment after), so it can't get in front of you." },
     { SP_MOVE, ST_BOOL, "Show the grapple rope", "Grapple", "bShowRope", &g_grapRope, 0, 0, 0, 0, 0, 0, "Draw the rope from your hand to the hook point." },
     { SP_MOVE, ST_BOOL, "Grapple rumble", "Grapple", "bRumble", &g_grapRumble, 0, 0, 0, 0, 0, 0, "Controller buzz while the line is pulling you." },
     { SP_KIDS, ST_BOOL, "Bloody Mess bursts bodies", "KidFriendly", "bBloodyMessExplodes", &g_kidMess, 0, 0, 0, 0, SF_KIDS, 0, "OFF: with the Bloody Mess perk, bodies no longer burst into pieces (you still get its extra damage)." },
@@ -10165,6 +10835,8 @@ static void Set_Changed(const SetOpt *o)
     if (o->flags & SF_PROFILE) Profile_Save();
     if (o->flags & SF_FOV) ApplyHeadsetFov();
     if (o->flags & SF_KIDS) Kids_Apply();
+    if (o->flags & SF_MELEE) MeleeAngle_Save();
+    if (o->flags & SF_HOLM) Hol_Save();
     if (o->var == &g_wristPip || o->var == &g_pipScrOn) g_pipScrDrawing = false;
     if (o->flags & SF_RESTART) Set_Toast("Saved - restart the game for this one to take effect");
     char v[64]; Set_ValueText(o, v, sizeof v);
@@ -10625,6 +11297,7 @@ static void InstallD3D9Hooks(void)
     o_SetTex = (DevSetTex_t)PatchVtable(vtbl, 65, (void *)Hook_SetTex);
     o_DP = (DevDP_t)PatchVtable(vtbl, 81, (void *)Hook_DP);
     o_DIP = (DevDIP_t)PatchVtable(vtbl, 82, (void *)Hook_DIP);
+    o_SetScissor = (DevSetScissor_t)PatchVtable(vtbl, 75, (void *)Hook_SetScissor);
     if (g_curvedUI && !g_flatMenus) {
         o_SetDS = (DevSetDS_t)PatchVtable(vtbl, 39, (void *)Hook_SetDS);
         o_SetVP = (DevSetVP_t)PatchVtable(vtbl, 47, (void *)Hook_SetVP);
@@ -10781,7 +11454,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         { double t0 = QpcMs(); VR_Tick(); g_tTick += QpcMs() - t0; }
         Far_UiTick();
         Holster_Tick();
-        LootMenu_Tick();
+        LootMenu_Tick(); Hud_Tick(); FireRate_Tick();
         if (g_seqWantAt > 0 && !g_seqTried && QpcMs() > g_seqWantAt) { Log("Menu Sequoia: loading the model"); Room_LoadSequoia(); }
         InterlockedExchange(&g_inMainLoopWork, 0);
         return;
