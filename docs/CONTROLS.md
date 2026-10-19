@@ -99,6 +99,8 @@ Once saved, the menu stays in that spot every time.
 | Right trigger | Select what you point at |
 | Right A or right grip | Select |
 | Right B | Back |
+| Left X | The pad's X: accept a trade, take all |
+| Left Y | The pad's Y |
 | Right stick up/down | Move up/down (d-pad) |
 
 ## Pop-up menus (talking, trading, containers, messages)
@@ -108,6 +110,7 @@ The world keeps running while these are open, and your character holds still.
 | Control | What it does |
 |---|---|
 | Right A | Select |
+| Left X | Accept the trade (vendor menu) / take all (containers) |
 | Turn your head well away (75° by default) | Close the menu |
 
 Size, height and the look-away angle are on the **HUD & menus** settings page.

@@ -366,7 +366,8 @@ static float g_armFollowHand = 0.8f, g_forearmRollLimit = 90.0f;   /* INI [Contr
 static bool  g_pipLock = false;           /* INI [Controls] bPipBoyLockPose: while open, the game holds the Pip-Boy in front of your face */
 static bool  g_pipLockNow = false;          /* left wrist raised toward your face (Pip-Boy pose) */
 static double g_recStart; static int g_recOpen, g_recFrame;
-static double g_grecStart; static int g_grecN, g_grecFrame, g_grecHand;   /* after a weapon change: no scope work until the new gun is out */       /* scoped gun raised to the eye (aims automatically) */
+static double g_grecStart; static int g_grecN, g_grecFrame, g_grecHand;
+static double g_gpStart; static int g_gpN, g_gpFrame;   /* grapple photo burst */   /* after a weapon change: no scope work until the new gun is out */       /* scoped gun raised to the eye (aims automatically) */
 static bool  g_autoScope = false;
 static float g_scopeMaxZoom = 4.0f;
 static int   g_capPick = -1;          /* INI iScopeCaptureIndex: which grab to use (-1 = the last one) */
@@ -1637,7 +1638,7 @@ static void Controllers_Poll(bool menu)
         BulletKey_Tick();
         Key_TapTick(); Key_RealTick();
     }
-    if (lX && !g_pipOpen) b |= XB_START;
+    if (lX && !g_pipOpen && !menu) b |= XB_START;   /* (in menus left X is the pad's X: accept a trade, take all) */
     if (g_pipOpen) {   /* Pip-Boy: the full pad - A select, B back, X action, grips = bumpers, triggers, sticks */
         if (rA) b |= XB_A;
         if (rB) b |= XB_B;
@@ -1649,6 +1650,12 @@ static void Controllers_Poll(bool menu)
     } else if (menu) {
         if (rA || rGrip) b |= XB_A;
         if (rB)          b |= XB_B;
+        if (lX)          b |= XB_X;   /* trading: accept the deal / containers: take all */
+        if (lY)          b |= XB_Y;
+        {   static bool xyPrev = false; static int nl = 0;
+            if ((lX || lY) && !xyPrev && nl++ < 20) Log("Menus: left %s pressed (the pad's %s)", lX ? "X" : "Y", lX ? "X - accept the trade / take all" : "Y");
+            xyPrev = lX || lY;
+        }
     } else if (g_lootShown && g_lootControls) {   /* quick-loot window up: its own controls */
         static bool laPrev = false, lbPrev = false;
         if (rA && !laPrev) { Key_Real(g_jlmKey1); static int l = 0; if (l++ < 20) Log("Loot: right A - pressed the loot mod's take key %d", g_jlmKey1); }
@@ -4643,6 +4650,7 @@ static void SaveBackbuffer(IDirect3DDevice9 *dev, const char *name)
 
 static void Pip_Record(IDirect3DDevice9 *dev);
 static void Grab_Record(IDirect3DDevice9 *dev);
+static void Grap_Record(IDirect3DDevice9 *dev);
 static void Rec_Release9(void);
 /* ---- Find the part that shows the Pip-Boy's glowing menu text ----
    Hide each part near the Pip-Boy for one frame and count the amber menu-coloured pixels on screen;
@@ -4787,6 +4795,7 @@ static void Display_Frame(IDirect3DDevice9 *dev)
     PipOv_Frame(dev);
     PipText_Find(dev);
     Grab_Record(dev);
+    Grap_Record(dev);
     if (g_headSnapAt > 0 && QpcMs() > g_headSnapAt) { g_headSnapAt = 0; SaveBackbuffer(dev, "FNVR_monitor.bmp"); g_headSnapPending = true; }
     bool scopeShown = g_scope.active;
     Scope_Draw(dev);
@@ -9539,6 +9548,7 @@ static void Grapple_Update(char *player, char *cam, float dt)
     Grap_Buzz(h, 3000);
     Log("Grapple: %s hand hooked %.1f m away (%s)%s", h ? "right" : "left", hitD / g_unitsPerMeter,
         isActor ? "someone" : hitRef ? "an object" : "the ground/terrain", wasPulling ? " - switched hands mid-pull" : "");
+    if (g_gpN < 3 && !g_gpStart) { g_gpN++; g_gpFrame = 0; g_gpStart = QpcMs(); }
 }
 
 /* Wearing power armor: falls never hurt (the fall height is counted from where you are every frame). */
@@ -9763,6 +9773,29 @@ static void Grab_Record(IDirect3DDevice9 *dev)
         g_grecN, g_grecFrame, t / 1000.0, (int)g_holding[h], hx, hy, hz, ox, oy, oz, rel[0], rel[1], rel[2],
         pm->n[0], pm->n[1], pm->n[2], pm->kn[0], pm->kn[1], pm->kn[2], g->gripR, g->curl);
     g_grecFrame++;
+}
+/* ---- Grapple recorder: a photo burst of the first 3 grapples per session ---- */
+static void Grap_Record(IDirect3DDevice9 *dev)
+{
+    if (!g_gpStart) return;
+    double t = QpcMs() - g_gpStart;
+    if (g_gpFrame >= 12) { g_gpStart = 0; return; }
+    if (t < g_gpFrame * 200.0) return;
+    if (!g_recRT) IDirect3DDevice9_CreateRenderTarget(dev, REC_W, REC_H, D3DFMT_X8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &g_recRT, NULL);
+    if (!g_recSys) IDirect3DDevice9_CreateOffscreenPlainSurface(dev, REC_W, REC_H, D3DFMT_X8R8G8B8, D3DPOOL_SYSTEMMEM, &g_recSys, NULL);
+    IDirect3DSurface9 *bb = NULL;
+    if (!g_recRT || !g_recSys || FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb))) { g_gpStart = 0; return; }
+    bool ok = SUCCEEDED(IDirect3DDevice9_StretchRect(dev, bb, NULL, g_recRT, NULL, D3DTEXF_LINEAR)) && SUCCEEDED(IDirect3DDevice9_GetRenderTargetData(dev, g_recRT, g_recSys));
+    IDirect3DSurface9_Release(bb);
+    if (ok) {
+        D3DLOCKED_RECT lr;
+        if (SUCCEEDED(IDirect3DSurface9_LockRect(g_recSys, &lr, NULL, D3DLOCK_READONLY))) {
+            char name[64]; snprintf(name, sizeof name, "FNVR_grapple_%d_%02d.bmp", g_gpN, g_gpFrame);
+            SaveBMP(name, (const BYTE *)lr.pBits, lr.Pitch, REC_W, REC_H);
+            IDirect3DSurface9_UnlockRect(g_recSys);
+        }
+    }
+    g_gpFrame++;
 }
 static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *unusedEdx, void *renderer, uint32_t a, uint32_t b)
 {
