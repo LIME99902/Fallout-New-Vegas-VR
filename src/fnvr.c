@@ -28,9 +28,9 @@
 #include "nvse_api.h"
 #include "openvr_capi.h"
 
-#define FNVR_VERSION        201
-#define FNVR_VERSION_STR    "2.0.1 (message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
-#define FNVR_VERSION_SHORT  "2.0.1"
+#define FNVR_VERSION        202
+#define FNVR_VERSION_STR    "2.0.2 (new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_SHORT  "2.0.2"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -369,6 +369,8 @@ static bool  g_pipLockNow = false;          /* left wrist raised toward your fac
 static double g_recStart; static int g_recOpen, g_recFrame;
 static double g_grecStart; static int g_grecN, g_grecFrame, g_grecHand;
 static double g_gpStart; static int g_gpN, g_gpFrame;   /* grapple photo burst */
+static bool g_newGameWait = false; static double g_newGameReadyAt = 0;   /* new game: VR features wait for the world */
+static volatile float g_skipProg = 0.0f; static volatile double g_skipDoneAt = 0;   /* intro skip: hold progress 0-1, when it fired */
 static bool g_savePhotos = false;   /* [Debug] bSavePhotos: test photo bursts (Pip-Boy, pick-ups, grapple) */   /* after a weapon change: no scope work until the new gun is out */       /* scoped gun raised to the eye (aims automatically) */
 static bool  g_autoScope = false;
 static float g_scopeMaxZoom = 4.0f;
@@ -413,6 +415,7 @@ static float Body_ArmScale(int side, float gameLen);
 static void  Profile_Save(void);
 static void  Profiles_Init(void);
 static bool  Settings_Update(const VRControllerState_t *mv, const VRControllerState_t *am, bool okMv, bool okAm);
+static void IntroSkip_Frame(void);
 static void  Settings_Frame(void);
 static void  Settings_Toggle(void);
 
@@ -1527,6 +1530,27 @@ static void Controllers_Poll(bool menu)
     bool rGrip = Pressed(am, EVRButtonId_k_EButton_Grip) || am->rAxis[2].x > 0.7f;
     bool lGrip = Pressed(mv, EVRButtonId_k_EButton_Grip) || mv->rAxis[2].x > 0.7f;
     bool rGripRaw = rGrip, lGripRaw = lGrip;
+    {   /* new game intro movie: hold the right grip 6 s to skip it (a ring fills up in front of you) */
+        static double since = 0; static bool fired = false;
+        char *pl = *(char **)PLAYER_PTR_ADDR;
+        char *rd = (pl && !IsBadReadPtr(pl, 0x70)) ? *(char **)(pl + 0x64) : NULL;
+        bool has3D = rd && !IsBadReadPtr(rd, 0x18) && *(char **)(rd + 0x14);
+        bool intro = g_newGameWait && !has3D;
+        if (intro) rGrip = false;   /* (the grip isn't A while the intro plays - only the 6 s hold skips) */
+        if (!intro || !rGripRaw) { since = 0; fired = false; g_skipProg = 0.0f; }
+        else if (!fired) {
+            if (!since) { since = QpcMs(); Log("Intro skip: right grip held - keep holding for 6 s"); }
+            float pr = (float)((QpcMs() - since) / 6000.0);
+            g_skipProg = pr > 1.0f ? 1.0f : pr;
+            if (pr >= 1.0f) {
+                fired = true; g_skipProg = 0.0f; g_skipDoneAt = QpcMs();
+                Key_Real(1); Key_Real(57);                      /* Esc + Space: the movie's own skip keys */
+                g_pipPressMask = XB_A | XB_B; g_pipPressUntil = QpcMs() + 200.0;   /* and the pad's A/B */
+                if (g_vrSystem && g_handIdx[g_leftHanded ? 0 : 1] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[g_leftHanded ? 0 : 1], 0, 3500);
+                Log("Intro skip: held 6 s - skipping the intro movie");
+            }
+        }
+    }
     bool rA = Pressed(am, EVRButtonId_k_EButton_A), rB = Pressed(am, EVRButtonId_k_EButton_ApplicationMenu);
     bool lX = Pressed(mv, EVRButtonId_k_EButton_A), lY = Pressed(mv, EVRButtonId_k_EButton_ApplicationMenu);
     {   /* a button still held from a menu or the Pip-Boy (A to fast travel, B to close) does nothing in the game until it's let go */
@@ -4798,6 +4822,7 @@ static void Display_Frame(IDirect3DDevice9 *dev)
 {
     UI_Present(dev);
     Settings_Frame();
+    IntroSkip_Frame();
     PipOv_Frame(dev);
     PipText_Find(dev);
     Grab_Record(dev);
@@ -11210,6 +11235,79 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
 }
 
 /* Present: redraw the panel picture when something changed, and keep it shown. */
+/* ---- intro skip ring: a small ring in front of you that fills while the right grip is held ---- */
+#define SK_W 512
+#define SK_H 320
+static VROverlayHandle_t g_skOv = 0; static ID3D11Texture2D *g_skTex11 = NULL; static bool g_skFailed = false, g_skShown = false;
+static HDC g_skDC = NULL; static HBITMAP g_skBmp = NULL; static uint32_t *g_skBits = NULL; static HFONT g_skFont = NULL, g_skFontBig = NULL;
+static uint32_t g_skOut[SK_W * SK_H];
+static void IntroSkip_Draw(float prog, bool done)
+{
+    memset(g_skBits, 0, SK_W * SK_H * 4);
+    SetBkMode(g_skDC, TRANSPARENT); SetTextColor(g_skDC, RGB(255, 255, 255));
+    RECT r1 = { 0, 228, SK_W, 290 };
+    SelectObject(g_skDC, g_skFont);
+    DrawTextA(g_skDC, done ? "Skipping the intro..." : "Hold right grip to skip the intro", -1, &r1, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    if (!done) {
+        char sec[8]; snprintf(sec, sizeof sec, "%d", (int)ceilf(6.0f * (1.0f - prog)));
+        RECT r2 = { 156, 15, 356, 215 }; SelectObject(g_skDC, g_skFontBig);
+        DrawTextA(g_skDC, sec, -1, &r2, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    }
+    GdiFlush();
+    const float cx = 256.0f, cy = 115.0f, rOut = 96.0f, rIn = 78.0f;
+    for (int y = 0; y < SK_H; y++) for (int x = 0; x < SK_W; x++) {
+        float dx = x + 0.5f - cx, dy = y + 0.5f - cy, rr = sqrtf(dx * dx + dy * dy);
+        float ring = fminf(fminf(rr - rIn, rOut - rr) + 0.5f, 1.0f); if (ring < 0) ring = 0;
+        float ang = atan2f(dx, -dy); if (ang < 0) ang += 6.2831853f;   /* 0 at the top, clockwise */
+        bool filled = done || ang <= prog * 6.2831853f;
+        float bg = rr < rIn ? 0.55f : 0.0f;   /* dark disc behind the number */
+        float t = (float)(g_skBits[y * SK_W + x] & 0xFF) / 255.0f;   /* text coverage */
+        float ra = ring * (filled ? 1.0f : 0.35f);
+        float a = fmaxf(fmaxf(ra, t), bg);
+        float lum = a > 0 ? fmaxf(ra, t) / a : 0;   /* amber where ring/text, black where only the disc */
+        uint32_t R = (uint32_t)(255 * lum), G = (uint32_t)(182 * lum), B = (uint32_t)(64 * lum);
+        if (t > ra) { R = 255; G = (uint32_t)(182 + 60 * t); if (G > 255) G = 255; B = 120; }
+        g_skOut[y * SK_W + x] = (uint32_t)(a * 255.0f) << 24 | R << 16 | G << 8 | B;
+    }
+}
+static void IntroSkip_Frame(void)
+{
+    float prog = g_skipProg; bool done = g_skipDoneAt > 0 && QpcMs() - g_skipDoneAt < 2500.0;
+    bool want = prog > 0.0f || done;
+    if (!want) { if (g_skShown && g_skOv) { g_vrOverlay->HideOverlay(g_skOv); g_skShown = false; } return; }
+    if (g_skFailed || !g_vrOverlay || !g_d11 || !g_d11ctx) return;
+    if (!g_skOv) {
+        if (g_vrOverlay->CreateOverlay("fnvr.introskip", "FNVR Intro Skip", &g_skOv) != EVROverlayError_VROverlayError_None) { g_skFailed = true; Log("Intro skip: no overlay"); return; }
+        g_vrOverlay->SetOverlaySortOrder(g_skOv, 30);
+        g_vrOverlay->SetOverlayWidthInMeters(g_skOv, 0.34f);
+        HmdMatrix34_t m; memset(&m, 0, sizeof m);
+        m.m[0][0] = m.m[1][1] = m.m[2][2] = 1.0f; m.m[1][3] = -0.10f; m.m[2][3] = -0.75f;   /* in front of your eyes, a little low */
+        g_vrOverlay->SetOverlayTransformTrackedDeviceRelative(g_skOv, 0, &m);
+        D3D11_TEXTURE2D_DESC td = { SK_W, SK_H, 1, 1, DXGI_FORMAT_B8G8R8A8_UNORM, { 1, 0 }, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
+        if (FAILED(ID3D11Device_CreateTexture2D(g_d11, &td, NULL, &g_skTex11))) { g_skTex11 = NULL; g_skFailed = true; Log("Intro skip: no texture"); return; }
+        BITMAPINFO bi; memset(&bi, 0, sizeof bi);
+        bi.bmiHeader.biSize = sizeof bi.bmiHeader; bi.bmiHeader.biWidth = SK_W; bi.bmiHeader.biHeight = -SK_H;
+        bi.bmiHeader.biPlanes = 1; bi.bmiHeader.biBitCount = 32; bi.bmiHeader.biCompression = BI_RGB;
+        g_skDC = CreateCompatibleDC(NULL);
+        g_skBmp = g_skDC ? CreateDIBSection(g_skDC, &bi, DIB_RGB_COLORS, (void **)&g_skBits, NULL, 0) : NULL;
+        if (!g_skBmp || !g_skBits) { g_skFailed = true; Log("Intro skip: no drawing surface"); return; }
+        SelectObject(g_skDC, g_skBmp);
+        g_skFont = CreateFontA(29, 0, 0, 0, FW_BOLD, 0, 0, 0, ANSI_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, "Arial");
+        g_skFontBig = CreateFontA(96, 0, 0, 0, FW_BOLD, 0, 0, 0, ANSI_CHARSET, 0, 0, ANTIALIASED_QUALITY, 0, "Arial");
+    }
+    static double drawn = 0; static int lastKey = -1;
+    int key = done ? 1000 : (int)(prog * 200.0f);
+    if (key != lastKey || QpcMs() - drawn > 500.0) {
+        lastKey = key; drawn = QpcMs();
+        IntroSkip_Draw(prog, done);
+        ID3D11DeviceContext_UpdateSubresource(g_d11ctx, (ID3D11Resource *)g_skTex11, 0, NULL, g_skOut, SK_W * 4, 0);
+        ID3D11DeviceContext_Flush(g_d11ctx);
+        Texture_t t = { g_skTex11, ETextureType_TextureType_DirectX, EColorSpace_ColorSpace_Auto };
+        g_vrOverlay->SetOverlayTexture(g_skOv, &t);
+    }
+    if (!g_skShown) { g_vrOverlay->ShowOverlay(g_skOv); g_skShown = true; }
+}
+
 static void Settings_Frame(void)
 {
     static double lastBody = 0;
@@ -11484,7 +11582,6 @@ static const char *MsgName(uint32_t t)
 }
 
 /* New game: switch gameplay on only once the player is really in the world (loaded body, in a cell, no loading screen) for 2 s. */
-static bool g_newGameWait = false; static double g_newGameReadyAt = 0;
 static void NewGame_Tick(void)
 {
     if (!g_newGameWait) return;

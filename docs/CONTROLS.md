@@ -130,6 +130,12 @@ Needs Just Assorted Mods' quick-loot menu.
 
 The take keys are sent as keyboard presses, so the game window must be the active window on your PC.
 
+## New game intro movie
+
+| Control | What it does |
+|---|---|
+| Hold right grip for 6 seconds | Skip the intro movie (a ring in front of you fills up and counts down) |
+
 ## Setup and calibration
 
 | Control | What it does |
