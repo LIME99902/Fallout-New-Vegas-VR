@@ -28,9 +28,9 @@
 #include "nvse_api.h"
 #include "openvr_capi.h"
 
-#define FNVR_VERSION        199
-#define FNVR_VERSION_STR    "1.9.9 (vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
-#define FNVR_VERSION_SHORT  "1.9.9"
+#define FNVR_VERSION        200
+#define FNVR_VERSION_STR    "2.0.0 (new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_SHORT  "2.0.0"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -249,6 +249,7 @@ static float g_mmWidth = 2.8f;           /* INI [Display] fMainMenuWidth (metres
 static bool  g_farMenu = true;           /* INI [Display] bMainMenuScreen: main menu/loading on a far curved screen */
 static bool  g_mmPointer = true;         /* INI [Controls] bMenuPointer: point with the right hand, trigger selects */
 static bool  g_mmShot = true;            /* INI [Controls] bMenuPointerShot: Ranger Sequoia shot on each select */
+static float g_mmShotVol = 0.25f;        /* INI [Controls] fMenuShotVolume: how loud that shot is (0-1) */
 static bool  g_farActive = false;
 static bool  g_farGameMenus = true;
 static float g_pipFitIni = 1.0f;
@@ -468,7 +469,8 @@ static void LoadSettings(void)
     g_pipOnBoxIni = GetPrivateProfileIntA("Controls", "bPipMenuOnScreenBox", 0, g_iniPath) != 0;
     { char bb[32]; GetPrivateProfileStringA("Controls", "fPipMenuBoxFit", "1.0", bb, sizeof bb, g_iniPath); float v = (float)atof(bb); if (v > 0.2f && v < 4.0f) g_pipBoxFitIni = v;
       GetPrivateProfileStringA("Controls", "fPipMenuBoxLift", "0.3", bb, sizeof bb, g_iniPath); g_pipBoxLiftIni = (float)atof(bb); }
-    g_seqFlip = GetPrivateProfileIntA("Controls", "bMenuGunFlip", 0, g_iniPath) != 0;
+{ char vb[32]; GetPrivateProfileStringA("Controls", "fMenuShotVolume", "0.25", vb, sizeof vb, g_iniPath); g_mmShotVol = (float)atof(vb); if (g_mmShotVol < 0) g_mmShotVol = 0; if (g_mmShotVol > 1) g_mmShotVol = 1; }
+        g_seqFlip = GetPrivateProfileIntA("Controls", "bMenuGunFlip", 1, g_iniPath) != 0;   /* (the model faces backwards unturned - turned is right) */
     { char rb[32]; GetPrivateProfileStringA("Controls", "fMenuGunRoll", "0", rb, sizeof rb, g_iniPath); g_seqRoll = (float)atof(rb); }
     g_holstersOn = GetPrivateProfileIntA("Controls", "bHolsters", 1, g_iniPath) != 0;
     { char gb2[32]; GetPrivateProfileStringA("Grab", "fHoldPalmAlong", "0.62", gb2, sizeof gb2, g_iniPath); g_holdAlong = (float)atof(gb2);
@@ -4175,7 +4177,8 @@ static void Far_PlayShot(void)
     if (!g_mmShot) return;
     struct { uint32_t key; uint8_t b4, pad[3]; uint32_t u8; } snd = { 0xFFFFFFFF, 0, { 0, 0, 0 }, 0 };
     ((InitSoundEDID_t)0x00AE5680)((void *)0x011F6EF0, &snd, "WPNPistol44MagnumFire2D", 0x121);
-    if (snd.key != 0xFFFFFFFF) ((SoundPlay_t)0x00AD8830)(&snd, 0);
+    typedef bool (__attribute__((thiscall)) *SoundSetVol_t)(void *sound, float vol);
+    if (snd.key != 0xFFFFFFFF) { ((SoundSetVol_t)0x00AD89E0)(&snd, g_mmShotVol); ((SoundPlay_t)0x00AD8830)(&snd, 0); }
     static int logs = 0; if (logs++ < 3) Log("Menu pointer: Sequoia shot %s", snd.key != 0xFFFFFFFF ? "played" : "sound not found");
 }
 /* Textures the game hadn't prepared: load them through the game, from the main loop, once you're in the world. */
@@ -10702,6 +10705,7 @@ static const SetOpt g_setOpts[] = {
     { SP_CONTROLS, ST_INT, "Finger bend axis", "Controls", "iFingerBendAxis", &g_fingerAxis, 0, 2, 1, "%.0f", 0, 0, "If fingers bend sideways, try another axis (0, 1 or 2)." },
     { SP_CONTROLS, ST_BOOL, "Menu pointer revolver", "Controls", "bMenuPointer", &g_mmPointer, 0, 0, 0, 0, 0, 0, "In menus, a revolver in your right hand points at the menu; the trigger selects." },
     { SP_CONTROLS, ST_BOOL, "Menu pointer shot", "Controls", "bMenuPointerShot", &g_mmShot, 0, 0, 0, 0, 0, 0, "Each menu click fires a Ranger Sequoia shot (sound, recoil, flash)." },
+    { SP_CONTROLS, ST_FLOAT, "Menu shot volume", "Controls", "fMenuShotVolume", &g_mmShotVol, 0.0f, 1.0f, 0.05f, "%.2f", 0, 0, "How loud the menu revolver's shot is (1 = a real gunshot)." },
 
     { SP_SPOTS, ST_BOOL, "Holsters", "Controls", "bHolsters", &g_holstersOn, 0, 0, 0, 0, 0, 0, "Right grip at your right hip (pistols, one-hand melee) or over your right shoulder (long guns) holsters or draws." },
     { SP_SPOTS, ST_FLOAT, "Hip holster: below eyes", "Controls", "fHipHolsterDown", &g_hipDown, 0.2f, 1.2f, 0.02f, "%.2f m", 0, 0, "How far below your eyes the hip holster is." },
@@ -10763,7 +10767,7 @@ static const SetOpt g_setOpts[] = {
     { SP_DISPLAY, ST_FLOAT, "Big screen curve", "Display", "fMainMenuCurveRadius", &g_mmCurveR, 0.5f, 20.0f, 0.5f, "%.1f m", 0, 0, "How much the big screen curves around you (bigger = flatter)." },
     { SP_DISPLAY, ST_FLOAT, "Menu revolver: up/down", "Controls", "fMenuGunUp", &g_mmGunUpIni, -0.1f, 0.15f, 0.005f, "%.3f m", 0, 0, "Where the menu revolver sits in your hand: raise or lower it." },
     { SP_DISPLAY, ST_FLOAT, "Menu revolver: forward/back", "Controls", "fMenuGunForward", &g_mmGunFwdIni, -0.1f, 0.15f, 0.005f, "%.3f m", 0, 0, "Where the menu revolver sits in your hand: forward or back." },
-    { SP_DISPLAY, ST_BOOL, "Menu revolver turned around", "Controls", "bMenuGunFlip", &g_seqFlip, 0, 0, 0, 0, 0, 0, "Turn on if the menu revolver points backwards." },
+    { SP_DISPLAY, ST_BOOL, "Menu revolver turned around", "Controls", "bMenuGunFlip", &g_seqFlip, 0, 0, 0, 0, 0, 0, "On by default. Switch it if the menu revolver points backwards." },
     { SP_DISPLAY, ST_FLOAT, "Menu revolver roll", "Controls", "fMenuGunRoll", &g_seqRoll, -180.0f, 180.0f, 5.0f, "%.0f deg", 0, 0, "Turn the menu revolver around its barrel if it sits tilted in your hand." },
     { SP_DISPLAY, ST_FLOAT, "Flat menu width", "Display", "fMenuScreenFOV", &g_menuScreenFov, 30.0f, 110.0f, 5.0f, "%.0f deg", 0, 0, "Width of the flat screen used for some menus and loading screens." },
 
@@ -11479,6 +11483,28 @@ static const char *MsgName(uint32_t t)
     return t < sizeof(names) / sizeof(names[0]) ? names[t] : "Other";
 }
 
+/* New game: switch gameplay on only once the player is really in the world (loaded body, in a cell, no loading screen) for 2 s. */
+static bool g_newGameWait = false; static double g_newGameReadyAt = 0;
+static void NewGame_Tick(void)
+{
+    if (!g_newGameWait) return;
+    char *pl = *(char **)PLAYER_PTR_ADDR;
+    char *rd = (pl && !IsBadReadPtr(pl, 0x70)) ? *(char **)(pl + 0x64) : NULL;
+    char *node = (rd && !IsBadReadPtr(rd, 0x18)) ? *(char **)(rd + 0x14) : NULL;
+    char *cell = pl ? *(char **)(pl + 0x40) : NULL;
+    bool loading = ((const volatile bool *)0x011F308F)[1007];
+    if (!node || !cell || loading) { g_newGameReadyAt = 0; return; }
+    if (!g_newGameReadyAt) { g_newGameReadyAt = QpcMs(); return; }
+    if (QpcMs() - g_newGameReadyAt < 2000.0) return;
+    g_newGameWait = false;
+    g_inGameplay = true;
+    Kids_Apply();
+    g_reequipAt = QpcMs() + 2000.0;
+    g_headSnapAt = QpcMs() + 5000.0;
+    UIMessage(HeadsetDisplayActive() ? "FNVR loaded - headset display active" : "FNVR loaded");
+    Log("New game: you're in the world - VR features on");
+}
+
 static void OnNVSEMessage(NVSEMessage *msg)
 {
     if (!msg) return;
@@ -11488,6 +11514,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         g_lastLoopTick = GetTickCount();
         InterlockedExchange(&g_inMainLoopWork, 1);
         { double t0 = QpcMs(); VR_Tick(); g_tTick += QpcMs() - t0; }
+        NewGame_Tick();
         Far_UiTick();
         Holster_Tick();
         LootMenu_Tick(); Hud_Tick(); FireRate_Tick();
@@ -11516,8 +11543,15 @@ static void OnNVSEMessage(NVSEMessage *msg)
         InstallPipMenuCapture();
         InstallInstantPipBoy();
         break;
+    case kMessage_NewGame:   /* sent when "New" is clicked - before the intro and before the world exists: wait for it */
+        Grab_ClearAll();
+        HeadOffset_Reset();
+        g_inGameplay = false;
+        g_newGameWait = true; g_newGameReadyAt = 0;
+        Log("New game: waiting until you're in the world before switching the VR features on");
+        break;
     case kMessage_PostLoadGame:
-    case kMessage_NewGame:
+        g_newGameWait = false;
         g_inGameplay = true;
         Kids_Apply();
         g_reequipAt = QpcMs() + 2000.0;
@@ -11525,12 +11559,14 @@ static void OnNVSEMessage(NVSEMessage *msg)
         UIMessage(HeadsetDisplayActive() ? "FNVR loaded - headset display active" : "FNVR loaded");
         break;
     case kMessage_ExitToMainMenu:
+        g_newGameWait = false;
         Grab_ClearAll();
         HeadOffset_Reset();
         RestoreGameFov("exit to main menu");
         g_inGameplay = false;
         break;
     case kMessage_PreLoadGame:
+        g_newGameWait = false;
         Grab_ClearAll();
         HeadOffset_Reset();
         RestoreGameFov("loading");

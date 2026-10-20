@@ -1,7 +1,7 @@
 # Mod list
 
 This is the exact setup FNVR is developed and played on: Fallout: New Vegas (Steam) with all DLC, mods managed with Vortex, on a Meta Quest 3 through SteamVR.
-Only **xNVSE** is strictly required by FNVR; everything else is the author's personal list. Mods marked ★ are used by an FNVR feature.
+**xNVSE** and **JIP LN NVSE** are required by FNVR; everything else is the author's personal list. Mods marked ★ are used by an FNVR feature.
 
 ## Engine and patches
 
@@ -15,9 +15,9 @@ Only **xNVSE** is strictly required by FNVR; everything else is the author's per
 
 | Plugin | Version | Notes |
 |---|---|---|
-| **FNVR** | 1.9.9 | This mod |
-| xNVSE ★ | 6.4.4 | Script extender - required by FNVR |
-| JIP LN NVSE ★ | 57.30 | Needed for the quick-loot window |
+| **FNVR** | 2.0.0 | This mod |
+| xNVSE ★ | 6.4.4 | Script extender - required |
+| JIP LN NVSE ★ | 57.30 | Required: scopes, climbing, holstered weapons, quick-loot window |
 | JohnnyGuitar NVSE | 5.20 |  |
 | kNVSE | 37 | Animation framework |
 | ShowOff NVSE | 1.71 |  |
