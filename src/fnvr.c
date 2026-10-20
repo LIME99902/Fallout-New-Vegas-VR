@@ -9368,6 +9368,17 @@ static void Momentum_Update(char *player, float dt)
         cv[0] = pv[0]; cv[1] = pv[1];
     }
 }
+static bool Scr_Num(void *scr, void *arg, double *out);
+/* Sitting (a chair, the vigor tester in Doc Mitchell's house): the grip must stay the "use" button that stands you up -
+   never a climb on the chair or the wall beside it. */
+static bool Player_Sitting(char *player)
+{
+    static void *scr = NULL; static bool failed = false;
+    if (failed || !g_scriptIntf || !g_scriptIntf->CompileScript) return false;
+    if (!scr) { scr = g_scriptIntf->CompileScript("ref rWho\nfloat fVal\nBegin Function { rWho }\nset fVal to rWho.GetSitting\nSetFunctionValue fVal\nEnd\n");
+        if (!scr) { failed = true; Log("Climbing: couldn't set up the sitting check"); return false; } }
+    double v = 0; return Scr_Num(scr, player, &v) && v != 0.0;
+}
 static void Climb_Update(char *player, char *cam, float dt, bool noWeapon)
 {
     int amH = g_leftHanded ? 0 : 1, mvH = 1 - amH;
@@ -9378,7 +9389,9 @@ static void Climb_Update(char *player, char *cam, float dt, bool noWeapon)
         if (g_climb[h] && (!g_gripHeld[h] || !canUse)) { g_climb[h] = false; Log("Climbing: %s hand lets go", h ? "right" : "left"); }
         if (g_gripEdge[h]) {
             g_gripEdge[h] = false;
-            if (!g_climb[h] && g_gripHeld[h] && canUse && cam && ctrl && Climb_Touch(cam, h)) {
+            bool sitting = !g_climb[h] && g_gripHeld[h] && canUse && Player_Sitting(player);
+            if (sitting) { static int sl = 0; if (sl++ < 5) Log("Climbing: you're sitting - the grip stands you up instead"); }
+            if (!g_climb[h] && g_gripHeld[h] && canUse && !sitting && cam && ctrl && Climb_Touch(cam, h)) {
                 g_climb[h] = true;
                 memcpy(g_climbAnchor[h], g_handW[h], 12);
                 static int cl = 0;
