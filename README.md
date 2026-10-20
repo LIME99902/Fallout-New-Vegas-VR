@@ -4,7 +4,7 @@ FNVVRMC (the plugin file is `FNVR.dll`, and its settings are in `FNVR.ini`) is a
 
 You aim with your hand. You swing melee weapons and punches for real. You pick things up, throw them and climb. Guns go in holsters on your body, and you read the Pip-Boy on your actual wrist while the world keeps moving. On top of all that there is a Dying Light-style grappling hook.
 
-> Current version: **2.0.2**, **[download it from the Releases page](https://github.com/LIME99902/Fallout-New-Vegas-VR/releases/latest)** (`FNVVRMC-2.0.2-full.zip`). This is a one-person hobby project made for the author's own setup (see the [mod list](docs/MODLIST.md)). It works well there, but other setups are untested.
+> Current version: **2.0.4**, **[download it from the Releases page](https://github.com/LIME99902/Fallout-New-Vegas-VR/releases/latest)** (`FNVVRMC-2.0.4-full.zip`). This is a one-person hobby project made for the author's own setup (see the [mod list](docs/MODLIST.md)). It works well there, but other setups are untested.
 
 - **[Motion controls guide](docs/CONTROLS.md)**: every button, gesture and keyboard key.
 - **[Mod list](docs/MODLIST.md)**: the full load order and plugins FNVR is played with.
@@ -27,7 +27,7 @@ You aim with your hand. You swing melee weapons and punches for real. You pick t
 ## Install
 
 1. Install xNVSE and JIP LN NVSE, and make sure the game starts through it.
-2. Download **`FNVVRMC-2.0.2-full.zip`** from the **[Releases page](https://github.com/LIME99902/Fallout-New-Vegas-VR/releases/latest)** and unzip it into your `Fallout New Vegas` folder. It puts `FNVR.dll` in `Data\NVSE\Plugins\`.
+2. Download **`FNVVRMC-2.0.4-full.zip`** from the **[Releases page](https://github.com/LIME99902/Fallout-New-Vegas-VR/releases/latest)** and unzip it into your `Fallout New Vegas` folder. It puts `FNVR.dll` in `Data\NVSE\Plugins\`.
 3. The zip also includes a starter `Data\NVSE\Plugins\FNVR\FNVR.ini`. FNVR fills in everything else with defaults.
 4. Start SteamVR, put the headset on and launch the game through xNVSE.
 5. In game:
@@ -67,7 +67,7 @@ FNVR writes a log to `Fallout New Vegas\FNVR.log`. That's the first thing to loo
 - **Pick things up:** with no weapon out, squeeze a grip next to a loose object to hold it in that hand. Fingers wrap around it.
 - **Throwing:** let go while your hand is moving to throw. Thrown objects hurt what they hit, scaled by speed, weight and your Melee/Unarmed skills. An option protects your companions.
 - **Physical hands:** your hands and weapons knock loose objects around and stop at walls and tables. Held objects can't lift you off the ground.
-- **Climbing:** grab ledges and walls with the grips.
+- **Climbing:** grab ledges and walls with the grips. Your body below you is hidden while you climb, and climbing is off while you're sitting, so the grip stands you up.
 
 ### Holsters and gestures
 - **Holsters:** right grip at your right hip draws or holsters pistols and one-handed melee weapons. Right grip over your right shoulder does the same for long guns and two-handed melee weapons.
