@@ -363,6 +363,7 @@ static bool  g_scopeAtEye = false;
 static double g_weaponSettleUntil = 0;
 static bool  g_wristUp = false;
 static float g_fingerDirW[2][3]; static bool g_fingerDirOk[2];   /* wrist-to-knuckles direction in the world (from the palm data) */
+static float g_handRefIni[2][9]; static bool g_handRefIniOk[2] = { false, false };   /* INI [Arms] sHandRefL/R: how the hand turns with the controller (learned from the weapon pose) */
 static float g_armFollowHand = 0.8f, g_forearmRollLimit = 90.0f;   /* INI [Controls] fArmFollowHand, fForearmRollLimit */
 static bool  g_pipLock = false;           /* INI [Controls] bPipBoyLockPose: while open, the game holds the Pip-Boy in front of your face */
 static bool  g_pipLockNow = false;          /* left wrist raised toward your face (Pip-Boy pose) */
@@ -466,6 +467,11 @@ static void LoadSettings(void)
     g_farGameMenus = GetPrivateProfileIntA("Display", "bMenusOnScreen", 1, g_iniPath) != 0;
     g_pipNoAnim = GetPrivateProfileIntA("Controls", "bPipBoyNoAnimation", 1, g_iniPath) != 0;
     g_pipLock = GetPrivateProfileIntA("Controls", "bPipBoyLockPose", 0, g_iniPath) != 0;
+    for (int s_ = 0; s_ < 2; s_++) {
+        char hb[256]; GetPrivateProfileStringA("Arms", s_ ? "sHandRefR" : "sHandRefL", "", hb, sizeof hb, g_iniPath);
+        float *m = g_handRefIni[s_];
+        g_handRefIniOk[s_] = sscanf(hb, "%f %f %f %f %f %f %f %f %f", &m[0], &m[1], &m[2], &m[3], &m[4], &m[5], &m[6], &m[7], &m[8]) == 9;
+    }
     { char ab[32]; GetPrivateProfileStringA("Controls", "fArmFollowHand", "0.8", ab, sizeof ab, g_iniPath); g_armFollowHand = fminf(fmaxf((float)atof(ab), 0.0f), 1.0f);
       GetPrivateProfileStringA("Controls", "fForearmRollLimit", "90", ab, sizeof ab, g_iniPath); g_forearmRollLimit = fminf(fmaxf((float)atof(ab), 20.0f), 180.0f); }
     g_pipOvEnabledIni = GetPrivateProfileIntA("Controls", "bPipScreenOnWrist", 0, g_iniPath) != 0;
@@ -5760,7 +5766,20 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
     {
         M3 BhT; M3T(BhT, Bh);
         bool pipAnim = g_pipOpen || g_pipModeRaw != 0;   /* the Pip-Boy animation poses the hand: ignore it */
-        if (g_weaponOutThisFrame && !pipAnim) { M3Mul(g_handRef[side], BhT, handWorld0); g_haveHandRef[side] = true; }
+        if (!g_haveHandRef[side] && g_handRefIniOk[side]) { memcpy(g_handRef[side], g_handRefIni[side], 36); g_haveHandRef[side] = true; }   /* (saved from an earlier game) */
+        if (g_weaponOutThisFrame && !pipAnim) {
+            M3Mul(g_handRef[side], BhT, handWorld0); g_haveHandRef[side] = true;
+            static double seenAt[2] = { 0, 0 }; static bool saved[2] = { false, false };
+            if (!seenAt[side]) seenAt[side] = QpcMs();
+            if (!saved[side] && QpcMs() - seenAt[side] > 1500.0) {   /* remember it for next time (and for a new game, before any weapon is drawn) */
+                saved[side] = true;
+                const float *m = &g_handRef[side][0][0]; char hb[256];
+                snprintf(hb, sizeof hb, "%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]);
+                WritePrivateProfileStringA("Arms", side ? "sHandRefR" : "sHandRefL", hb, g_iniPath);
+                memcpy(g_handRefIni[side], m, 36); g_handRefIniOk[side] = true;
+                Log("Arms: %s hand's turn saved (%s)", side ? "right" : "left", hb);
+            }
+        }
         else if (g_haveHandRef[side]) M3Mul(handWorld0, Bh, g_handRef[side]);
         static int pl = 0;
         if (pipAnim && side == 0 && pl++ < 3) Log("Pip-Boy arm: weapon-out flag %d, hand reference %s", (int)g_weaponOutThisFrame, g_haveHandRef[side] ? "kept" : "MISSING");
