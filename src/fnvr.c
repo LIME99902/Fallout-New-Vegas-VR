@@ -1530,29 +1530,6 @@ static void Controllers_Poll(bool menu)
     bool rGrip = Pressed(am, EVRButtonId_k_EButton_Grip) || am->rAxis[2].x > 0.7f;
     bool lGrip = Pressed(mv, EVRButtonId_k_EButton_Grip) || mv->rAxis[2].x > 0.7f;
     bool rGripRaw = rGrip, lGripRaw = lGrip;
-    {   /* new game intro movie: hold the right grip 6 s to skip it (a ring fills up in front of you) */
-        static double since = 0; static bool fired = false;
-        char *pl = *(char **)PLAYER_PTR_ADDR;
-        char *rd = (pl && !IsBadReadPtr(pl, 0x70)) ? *(char **)(pl + 0x64) : NULL;
-        bool has3D = rd && !IsBadReadPtr(rd, 0x18) && *(char **)(rd + 0x14);
-        char *cell = (pl && !IsBadReadPtr(pl, 0x44)) ? *(char **)(pl + 0x40) : NULL;
-        bool intro = g_newGameWait && g_newGameReadyAt == 0;   /* (not yet standing in the world: the movie or its loading screen) */
-        { static bool lg = false; if (g_newGameWait && rGripRaw && !lg) { lg = true; Log("Intro skip: grip during new game start - body %s, location %s -> %s", has3D ? "loaded" : "none", cell ? "set" : "none", intro ? "intro (skip available)" : "already in the world"); } }
-        if (intro) rGrip = false;   /* (the grip isn't A while the intro plays - only the 6 s hold skips) */
-        if (!intro || !rGripRaw) { since = 0; fired = false; g_skipProg = 0.0f; }
-        else if (!fired) {
-            if (!since) { since = QpcMs(); Log("Intro skip: right grip held - keep holding for 6 s"); }
-            float pr = (float)((QpcMs() - since) / 6000.0);
-            g_skipProg = pr > 1.0f ? 1.0f : pr;
-            if (pr >= 1.0f) {
-                fired = true; g_skipProg = 0.0f; g_skipDoneAt = QpcMs();
-                Key_Real(1); Key_Real(57);                      /* Esc + Space: the movie's own skip keys */
-                g_pipPressMask = XB_A | XB_B; g_pipPressUntil = QpcMs() + 200.0;   /* and the pad's A/B */
-                if (g_vrSystem && g_handIdx[g_leftHanded ? 0 : 1] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[g_leftHanded ? 0 : 1], 0, 3500);
-                Log("Intro skip: held 6 s - skipping the intro movie");
-            }
-        }
-    }
     bool rA = Pressed(am, EVRButtonId_k_EButton_A), rB = Pressed(am, EVRButtonId_k_EButton_ApplicationMenu);
     bool lX = Pressed(mv, EVRButtonId_k_EButton_A), lY = Pressed(mv, EVRButtonId_k_EButton_ApplicationMenu);
     {   /* a button still held from a menu or the Pip-Boy (A to fast travel, B to close) does nothing in the game until it's let go */
@@ -3926,6 +3903,7 @@ static ID3D11ShaderResourceView *Seq_FromD3D9(IDirect3DTexture9 *t9)
 {
     D3DSURFACE_DESC sd;
     if (!t9 || FAILED(IDirect3DTexture9_GetLevelDesc(t9, 0, &sd))) return NULL;
+    static int dl = 0; if (dl++ < 4) Log("Menu Sequoia: copying texture %ux%u format %d pool %d levels %lu", sd.Width, sd.Height, (int)sd.Format, (int)sd.Pool, (unsigned long)IDirect3DTexture9_GetLevelCount(t9));
     DXGI_FORMAT f; bool block = true;
     if (sd.Format == D3DFMT_DXT1) f = DXGI_FORMAT_BC1_UNORM;
     else if (sd.Format == D3DFMT_DXT3) f = DXGI_FORMAT_BC2_UNORM;
@@ -3944,8 +3922,10 @@ static ID3D11ShaderResourceView *Seq_FromD3D9(IDirect3DTexture9 *t9)
     if (got) {
         D3D11_TEXTURE2D_DESC d = { sd.Width, sd.Height, got, 1, f, { 1, 0 }, D3D11_USAGE_IMMUTABLE, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
         ID3D11Texture2D *t11 = NULL;
-        if (SUCCEEDED(ID3D11Device_CreateTexture2D(g_rDev, &d, init, &t11))) { ID3D11Device_CreateShaderResourceView(g_rDev, (ID3D11Resource *)t11, NULL, &srv); ID3D11Texture2D_Release(t11); }
-    }
+        HRESULT hr = ID3D11Device_CreateTexture2D(g_rDev, &d, init, &t11);
+        if (SUCCEEDED(hr)) { ID3D11Device_CreateShaderResourceView(g_rDev, (ID3D11Resource *)t11, NULL, &srv); ID3D11Texture2D_Release(t11); }
+        else { static int el = 0; if (el++ < 4) Log("Menu Sequoia: headset copy of the texture failed (%08lX, %u levels)", (unsigned long)hr, got); }
+    } else { static int nl = 0; if (nl++ < 4) Log("Menu Sequoia: couldn't read the texture's pixels (locked or video-memory only)"); }
     for (UINT l = 0; l < got; l++) IDirect3DTexture9_UnlockRect(t9, l);
     return srv;
 }
@@ -3974,6 +3954,7 @@ static char *Seq_ShaderProp(char *geom)
 static ID3D11ShaderResourceView *Seq_CopyTexture(char *geom, bool allowLoad)
 {
     char *prop = Seq_ShaderProp(geom);
+    { static int ml = 0; if (allowLoad && ml++ < 2) { char **src0 = prop && !IsBadReadPtr(prop, 0xB0) ? *(char ***)(prop + 0xAC) : NULL; Log("Menu Sequoia: part material %p (type %08X), prepared texture %p", (void *)prop, prop && !IsBadReadPtr(prop, 4) ? (unsigned)*(uintptr_t *)prop : 0u, src0 && !IsBadReadPtr(src0, 4) ? (void *)src0[0] : NULL); } }
     if (!prop || IsBadReadPtr(prop, 0xC4) || *(uintptr_t *)prop != 0x010AE0D0) {   /* BSShaderPPLightingProperty */
         static int pl = 0; if (allowLoad && pl++ < 3) Log("Menu Sequoia: part material is type %08X (not the usual lit-texture kind)", prop && !IsBadReadPtr(prop, 4) ? (unsigned)*(uintptr_t *)prop : 0u);
         return NULL;
@@ -11310,8 +11291,35 @@ static void IntroSkip_Draw(float prog, bool done)
         g_skOut[y * SK_W + x] = (uint32_t)(a * 255.0f) << 24 | R << 16 | G << 8 | B;
     }
 }
+/* The intro movie stops the game's main loop (where the controllers are normally read), so the hold is read here,
+   on the drawing side, which keeps running while the movie plays. */
+static void IntroSkip_Poll(void)
+{
+    static double since = 0; static bool fired = false, lg = false;
+    Key_RealTick();   /* (release keys pressed below - the main loop that normally does this isn't running) */
+    bool intro = g_newGameWait && g_newGameReadyAt == 0;
+    bool grip = false;
+    uint32_t ri = g_handIdx[g_leftHanded ? 0 : 1];
+    if (intro && g_vrSystem && ri != 0xFFFFFFFF) {
+        VRControllerState_t cs;
+        if (g_vrSystem->GetControllerState(ri, &cs, sizeof cs)) grip = Pressed(&cs, EVRButtonId_k_EButton_Grip) || cs.rAxis[2].x > 0.7f;
+    }
+    if (intro && grip && !lg) { lg = true; Log("Intro skip: right grip held during the intro - keep holding for 6 s"); }
+    if (!intro || !grip) { since = 0; fired = false; g_skipProg = 0.0f; return; }
+    if (fired) return;
+    if (!since) since = QpcMs();
+    float pr = (float)((QpcMs() - since) / 6000.0);
+    g_skipProg = pr > 1.0f ? 1.0f : pr;
+    if (pr >= 1.0f) {
+        fired = true; g_skipProg = 0.0f; g_skipDoneAt = QpcMs();
+        Key_Real(1); Key_Real(57);   /* Esc + Space: the movie's own skip keys */
+        g_vrSystem->TriggerHapticPulse(ri, 0, 3500);
+        Log("Intro skip: held 6 s - pressed Esc and Space to skip the intro movie");
+    }
+}
 static void IntroSkip_Frame(void)
 {
+    IntroSkip_Poll();
     float prog = g_skipProg; bool done = g_skipDoneAt > 0 && QpcMs() - g_skipDoneAt < 2500.0;
     bool want = prog > 0.0f || done;
     if (!want) { if (g_skShown && g_skOv) { g_vrOverlay->HideOverlay(g_skOv); g_skShown = false; } return; }
