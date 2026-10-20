@@ -103,7 +103,7 @@ Once saved, the menu stays in that spot every time.
 | Left Y | The pad's Y |
 | Right stick up/down | Move up/down (d-pad) |
 
-## Pop-up menus (talking, trading, containers, messages)
+## Pop-up menus (talking, trading, containers)
 
 The world keeps running while these are open, and your character holds still.
 
@@ -112,6 +112,8 @@ The world keeps running while these are open, and your character holds still.
 | Right A | Select |
 | Left X | Accept the trade (vendor menu) / take all (containers) |
 | Turn your head well away (75° by default) | Close the menu |
+
+Message boxes with an OK button (tutorial prompts, quest messages) are normal menus: they pause the game and A or the trigger presses OK.
 
 Size, height and the look-away angle are on the **HUD & menus** settings page.
 

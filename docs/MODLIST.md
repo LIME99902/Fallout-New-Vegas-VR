@@ -15,7 +15,7 @@ This is the exact setup FNVR is developed and played on: Fallout: New Vegas (Ste
 
 | Plugin | Version | Notes |
 |---|---|---|
-| **FNVR** | 2.0.0 | This mod |
+| **FNVR** | 2.0.1 | This mod |
 | xNVSE ★ | 6.4.4 | Script extender - required |
 | JIP LN NVSE ★ | 57.30 | Required: scopes, climbing, holstered weapons, quick-loot window |
 | JohnnyGuitar NVSE | 5.20 |  |
