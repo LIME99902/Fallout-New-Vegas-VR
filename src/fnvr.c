@@ -3900,6 +3900,80 @@ typedef void *(__attribute__((thiscall)) *LoadModel_t)(void *loader, const char 
 typedef void (__attribute__((thiscall)) *CreateTexImage_t)(void *tes, const char *path, void **out, bool mustFind, bool archiveOnly);
 typedef void (__attribute__((thiscall)) *RendCreateSrc_t)(void *renderer, void *tex);
 
+/* A texture the game keeps in video memory only can't be read directly: draw it once onto a plain readable picture
+   with the game's own renderer (all of the renderer's settings are put back afterwards), then read that. */
+static ID3D11ShaderResourceView *Seq_FromD3D9Draw(IDirect3DTexture9 *t9, UINT w, UINT h)
+{
+    IDirect3DDevice9 *dev = NULL;
+    if (FAILED(IDirect3DTexture9_GetDevice(t9, &dev)) || !dev) return NULL;
+    IDirect3DSurface9 *rt = NULL, *sys = NULL, *oldRT = NULL, *oldDS = NULL; IDirect3DStateBlock9 *sb = NULL;
+    ID3D11ShaderResourceView *srv = NULL; bool drew = false;
+    if (SUCCEEDED(IDirect3DDevice9_CreateRenderTarget(dev, w, h, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &rt, NULL)) &&
+        SUCCEEDED(IDirect3DDevice9_CreateOffscreenPlainSurface(dev, w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &sys, NULL)) &&
+        SUCCEEDED(IDirect3DDevice9_CreateStateBlock(dev, D3DSBT_ALL, &sb))) {
+        IDirect3DDevice9_GetRenderTarget(dev, 0, &oldRT);
+        IDirect3DDevice9_GetDepthStencilSurface(dev, &oldDS);
+        IDirect3DDevice9_SetRenderTarget(dev, 0, rt);
+        IDirect3DDevice9_SetDepthStencilSurface(dev, NULL);
+        D3DVIEWPORT9 vp = { 0, 0, w, h, 0.0f, 1.0f }; IDirect3DDevice9_SetViewport(dev, &vp);
+        IDirect3DDevice9_SetVertexShader(dev, NULL); IDirect3DDevice9_SetPixelShader(dev, NULL);
+        IDirect3DDevice9_SetFVF(dev, D3DFVF_XYZRHW | D3DFVF_TEX1);
+        IDirect3DDevice9_SetTexture(dev, 0, (IDirect3DBaseTexture9 *)t9);
+        IDirect3DDevice9_SetTexture(dev, 1, NULL);
+        IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+        IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+        IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+        IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+        IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_TEXCOORDINDEX, 0);
+        IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_TEXTURETRANSFORMFLAGS, D3DTTFF_DISABLE);
+        IDirect3DDevice9_SetTextureStageState(dev, 1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+        IDirect3DDevice9_SetTextureStageState(dev, 1, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+        IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+        IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+        IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
+        IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP);
+        IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+        IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_SRGBTEXTURE, 0);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_ZENABLE, FALSE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_ZWRITEENABLE, FALSE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_ALPHABLENDENABLE, FALSE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_ALPHATESTENABLE, FALSE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_CULLMODE, D3DCULL_NONE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_LIGHTING, FALSE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_FOGENABLE, FALSE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_STENCILENABLE, FALSE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_SCISSORTESTENABLE, FALSE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_SRGBWRITEENABLE, FALSE);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_COLORWRITEENABLE, 0xF);
+        IDirect3DDevice9_SetRenderState(dev, D3DRS_CLIPPING, FALSE);
+        struct { float x, y, z, rhw, u, v; } q[4] = {
+            { -0.5f, -0.5f, 0, 1, 0, 0 }, { w - 0.5f, -0.5f, 0, 1, 1, 0 }, { -0.5f, h - 0.5f, 0, 1, 0, 1 }, { w - 0.5f, h - 0.5f, 0, 1, 1, 1 } };
+        bool began = SUCCEEDED(IDirect3DDevice9_BeginScene(dev));
+        drew = SUCCEEDED(IDirect3DDevice9_DrawPrimitiveUP(dev, D3DPT_TRIANGLESTRIP, 2, q, sizeof q[0]));
+        if (began) IDirect3DDevice9_EndScene(dev);
+        IDirect3DDevice9_SetRenderTarget(dev, 0, oldRT);
+        IDirect3DDevice9_SetDepthStencilSurface(dev, oldDS);
+        IDirect3DStateBlock9_Apply(sb);
+        if (drew && SUCCEEDED(IDirect3DDevice9_GetRenderTargetData(dev, rt, sys))) {
+            D3DLOCKED_RECT lr;
+            if (SUCCEEDED(IDirect3DSurface9_LockRect(sys, &lr, NULL, D3DLOCK_READONLY))) {
+                D3D11_TEXTURE2D_DESC d = { w, h, 1, 1, DXGI_FORMAT_B8G8R8A8_UNORM, { 1, 0 }, D3D11_USAGE_IMMUTABLE, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
+                D3D11_SUBRESOURCE_DATA init = { lr.pBits, (UINT)lr.Pitch, 0 };
+                ID3D11Texture2D *t11 = NULL;
+                if (SUCCEEDED(ID3D11Device_CreateTexture2D(g_rDev, &d, &init, &t11))) { ID3D11Device_CreateShaderResourceView(g_rDev, (ID3D11Resource *)t11, NULL, &srv); ID3D11Texture2D_Release(t11); }
+                IDirect3DSurface9_UnlockRect(sys);
+            }
+        }
+    }
+    if (oldRT) IDirect3DSurface9_Release(oldRT);
+    if (oldDS) IDirect3DSurface9_Release(oldDS);
+    if (sb) IDirect3DStateBlock9_Release(sb);
+    if (sys) IDirect3DSurface9_Release(sys);
+    if (rt) IDirect3DSurface9_Release(rt);
+    IDirect3DDevice9_Release(dev);
+    static int l = 0; if (l++ < 4) Log("Menu Sequoia: texture drawn into a readable copy - %s", srv ? "ok" : drew ? "read back failed" : "draw failed");
+    return srv;
+}
 static ID3D11ShaderResourceView *Seq_FromD3D9(IDirect3DTexture9 *t9)
 {
     D3DSURFACE_DESC sd;
@@ -3926,8 +4000,9 @@ static ID3D11ShaderResourceView *Seq_FromD3D9(IDirect3DTexture9 *t9)
         HRESULT hr = ID3D11Device_CreateTexture2D(g_rDev, &d, init, &t11);
         if (SUCCEEDED(hr)) { ID3D11Device_CreateShaderResourceView(g_rDev, (ID3D11Resource *)t11, NULL, &srv); ID3D11Texture2D_Release(t11); }
         else { static int el = 0; if (el++ < 4) Log("Menu Sequoia: headset copy of the texture failed (%08lX, %u levels)", (unsigned long)hr, got); }
-    } else { static int nl = 0; if (nl++ < 4) Log("Menu Sequoia: couldn't read the texture's pixels (locked or video-memory only)"); }
+    }
     for (UINT l = 0; l < got; l++) IDirect3DTexture9_UnlockRect(t9, l);
+    if (!got) srv = Seq_FromD3D9Draw(t9, sd.Width, sd.Height);   /* video memory only: draw it into a readable copy */
     return srv;
 }
 static IDirect3DTexture9 *Seq_D3DOf(char *tex)
