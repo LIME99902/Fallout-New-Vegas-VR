@@ -11055,7 +11055,8 @@ static HSTRING Vc_HStr(const WCHAR *w) { HSTRING h = NULL; WindowsCreateString(w
 static AsyncStatus Vc_Wait(IUnknown *op, int maxMs, bool (*cancelIf)(void))
 {
     IAsyncInfo *ai = NULL; AsyncStatus st = Error;
-    if (FAILED(op->lpVtbl->QueryInterface(op, &IID_IAsyncInfo, (void **)&ai)) || !ai) return Error;
+    HRESULT qh = op->lpVtbl->QueryInterface(op, &IID_IAsyncInfo, (void **)&ai);
+    if (FAILED(qh) || !ai) { static int ql = 0; if (ql++ < 5) Log("Voice: Windows speech: no progress info (0x%08lX)", (unsigned long)qh); return Error; }
     bool cancelled = false;
     for (int t = 0; ; t += 30) {
         if (FAILED(IAsyncInfo_get_Status(ai, &st))) { st = Error; break; }
@@ -11125,10 +11126,16 @@ static bool Vc_RunWinRT(void)
             }
             if (np > 0) {
                 CompOp *op = NULL;
-                if (SUCCEEDED(rec->lpVtbl->CompileConstraintsAsync(rec, &op)) && op) {
-                    if (Vc_Wait((IUnknown *)op, 10000, NULL) == Completed) {
+                HRESULT ch = rec->lpVtbl->CompileConstraintsAsync(rec, &op);
+                if (FAILED(ch) || !op) Log("Voice: Windows speech wouldn't take the phrases (0x%08lX)", (unsigned long)ch);
+                if (SUCCEEDED(ch) && op) {
+                    AsyncStatus cs = Vc_Wait((IUnknown *)op, 10000, NULL);
+                    if (cs != Completed) Log("Voice: Windows speech: getting the phrases ready ended with %d", (int)cs);
+                    if (cs == Completed) {
                         CompRes *cr = NULL;
-                        if (SUCCEEDED(op->lpVtbl->GetResults(op, &cr)) && cr) {
+                        HRESULT gh = op->lpVtbl->GetResults(op, &cr);
+                        if (FAILED(gh) || !cr) Log("Voice: Windows speech: phrase result unreadable (0x%08lX)", (unsigned long)gh);
+                        if (SUCCEEDED(gh) && cr) {
                             __x_ABI_CWindows_CMedia_CSpeechRecognition_CSpeechRecognitionResultStatus s = 6;
                             cr->lpVtbl->get_Status(cr, &s); compiled = s == 0;
                             if (!compiled) Log("Voice: Windows speech couldn't use the phrases (status %d)", (int)s);
@@ -11304,13 +11311,23 @@ static void Dialogue_Tick(void)
     const volatile bool *vis = (const volatile bool *)0x011F308F;
     bool talking = vis[1009] && g_liveMenuNow && g_menuFlagCleared && g_inGameplay && !vis[1007];   /* (only when the world keeps running while you talk) */
     static int tries = 0;
-    if (!failed && !find && g_inGameplay && !vis[1007] && g_scriptIntf && g_scriptIntf->CompileScript) {
-        find = g_scriptIntf->CompileScript("ref r\nref rFound\nBegin Function { }\nset r to GetFirstRef 200 1\nwhile r != 0\nif r.IsInDialogueWithPlayer\nset rFound to r\nendif\nset r to GetNextRef\nloop\nSetFunctionValue rFound\nEnd\n");
-        hold = g_scriptIntf->CompileScript("ref r\nint iWas\nBegin Function { r }\nset iWas to r.GetRestrained\nif iWas == 0\nr.SetRestrained 1\nendif\nr.Look player\nSetFunctionValue iWas\nEnd\n");
-        undo = g_scriptIntf->CompileScript("ref r\nint iUn\nBegin Function { r, iUn }\nif iUn\nr.SetRestrained 0\nendif\nr.StopLook\nr.EvaluatePackage\nEnd\n");
-        if (!find || !hold || !undo) { if (++tries >= 3) failed = true; find = NULL; Log("Talking: couldn't set up holding the person still (try %d)", tries); }
+    if (!failed && (!find || !hold || !undo) && g_inGameplay && !vis[1007] && g_scriptIntf && g_scriptIntf->CompileScript) {
+        static bool findTried = false;
+        if (!findTried) {   /* who you're talking to: anyone near in a conversation with you (crosshair if this can't be made) */
+            findTried = true;
+            find = g_scriptIntf->CompileScript("ref r\nref rFound\nBegin Function { }\nset r to GetFirstRef 200 1\nwhile r != 0\nif r.IsInDialogueWithPlayer\nset rFound to r\nendif\nset r to GetNextRef\nloop\nSetFunctionValue rFound\nEnd\n");
+            if (!find) find = g_scriptIntf->CompileScript("ref r\nref rFound\nBegin Function { }\nset r to GetFirstRef 200 1\nLabel 1\nif r\nif r.IsInDialogueWithPlayer\nset rFound to r\nendif\nset r to GetNextRef\nGoto 1\nendif\nSetFunctionValue rFound\nEnd\n");
+            Log("Talking: who-you're-talking-to search %s", find ? "ready" : "not available - using what you're looking at");
+            if (!find) find = (void *)1;
+        }
+        if (!hold) { hold = g_scriptIntf->CompileScript("ref r\nint iWas\nBegin Function { r }\nset iWas to r.GetRestrained\nif iWas == 0\nr.SetRestrained 1\nendif\nr.Look player\nSetFunctionValue iWas\nEnd\n");
+                     if (!hold) hold = g_scriptIntf->CompileScript("ref r\nint iWas\nBegin Function { r }\nset iWas to r.GetRestrained\nif iWas == 0\nr.SetRestrained 1\nendif\nSetFunctionValue iWas\nEnd\n"); }
+        if (!undo) { undo = g_scriptIntf->CompileScript("ref r\nint iUn\nBegin Function { r, iUn }\nif iUn\nr.SetRestrained 0\nendif\nr.StopLook\nr.EvaluatePackage\nEnd\n");
+                     if (!undo) undo = g_scriptIntf->CompileScript("ref r\nint iUn\nBegin Function { r, iUn }\nif iUn\nr.SetRestrained 0\nendif\nr.EvaluatePackage\nEnd\n"); }
+        if (!hold || !undo) { if (++tries >= 3) failed = true; Log("Talking: couldn't set up holding the person still (hold %d, release %d, try %d)", hold != NULL, undo != NULL, tries); }
+        else if (!failed) { static bool said = false; if (!said) { said = true; Log("Talking: holding the person still is ready"); } }
     }
-    if (failed || !find) return;
+    if (failed || !find || !hold || !undo) return;
     if (talking && !active && g_dlgHold) {
         if (!openAt) openAt = QpcMs();
         if (QpcMs() - openAt < 150.0) return;   /* (a moment for the conversation to be set up) */
@@ -11318,7 +11335,7 @@ static void Dialogue_Tick(void)
         char *who = NULL;
         {   typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
             struct { union { double num; void *form; } u; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
-            if (g_scriptIntf->CallFunction && ((CallFn_t)g_scriptIntf->CallFunction)(find, GetPlayer(), NULL, &res, 0) && res.type == 2) who = (char *)res.u.form; }
+            if (find != (void *)1 && g_scriptIntf->CallFunction && ((CallFn_t)g_scriptIntf->CallFunction)(find, GetPlayer(), NULL, &res, 0) && res.type == 2) who = (char *)res.u.form; }
         if (!Rd(who, 0x40)) { char *c = NULL; if (Loot_CrossKind(&c) == 2) who = c; }
         if (Rd(who, 0x40)) {
             double was = 1; Scr_Num(hold, who, &was);
