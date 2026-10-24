@@ -1122,6 +1122,7 @@ static void *PlayerWeaponForm(void);
 static bool Scr_Num(void *scr, void *arg, double *out);
 static volatile int g_animAction = -1;   /* the player's current action (game's GetAnimAction): -1 none, 0 equip, 1 unequip, 2-4 attack, 9 reload */
 static double g_animIdleSince = 0;      /* when the action last became "none" */
+static bool g_animLastBusy = false;     /* the action before "none" was drawing or holstering */
 /* An automatic weapon (the game's own "automatic" flag): for melee that's the chainsaw-type weapons. */
 static bool PlayerWeaponAutomatic(void) { char *w = (char *)PlayerWeaponForm(); return w && !IsBadReadPtr(w + 0x100, 1) && (*(BYTE *)(w + 0x100) & 2); }
 static void *PlayerWeaponForm(void)
@@ -1993,14 +1994,15 @@ static void VR_Tick(void)
     StartSetup_Tick();
     {   /* what the character is doing (reloading, equipping...) - read 10 times a second */
         static double next = 0; static void *scr = NULL; static bool failed = false;
-        if (g_inGameplay && !failed && QpcMs() > next && g_scriptIntf && g_scriptIntf->CompileScript) {
-            next = QpcMs() + 100.0;
+        if (!g_inGameplay || !PlayerWeaponOut()) { if (g_animAction != -1) { g_animLastBusy = g_animAction == 0 || g_animAction == 1; g_animAction = -1; g_animIdleSince = QpcMs(); } }
+        else if (!failed && QpcMs() > next && g_scriptIntf && g_scriptIntf->CompileScript) {
+            next = QpcMs() + 200.0;
             if (!scr) { scr = g_scriptIntf->CompileScript("ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to rWho.GetAnimAction\nSetFunctionValue iVal\nEnd\n");
                 if (!scr) { failed = true; Log("Arms: couldn't set up reading the reload state"); } }
             double v = -1;
             if (scr && Scr_Num(scr, GetPlayer(), &v)) {
                 int a = (int)v;
-                if (a != g_animAction) { if (a == -1) g_animIdleSince = QpcMs(); static int al = 0; if (al++ < 30) Log("Action: %d -> %d", g_animAction, a); g_animAction = a; }
+                if (a != g_animAction) { if (a == -1) { g_animIdleSince = QpcMs(); g_animLastBusy = g_animAction == 0 || g_animAction == 1; } static int al = 0; if (al++ < 30) Log("Action: %d -> %d", g_animAction, a); g_animAction = a; }
             }
         }
     }
@@ -2164,7 +2166,8 @@ static void VR_Tick(void)
             bool otherMenu = IsMenuMode() && !g_pipOpen;
             if (!g_pipOpen) {
                 lostSince = 0;
-                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen) {
+                bool weapBusy = g_animAction == 0 || g_animAction == 1 || (g_animIdleSince && now - g_animIdleSince < 400.0 && g_animAction == -1 && g_animLastBusy);   /* (drawing or holstering a weapon: wait for it) */
+                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen && !weapBusy) {
                     if (!since) since = now;
                     if (now - since > 180.0) {
                         g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = now + 250.0; since = 0; g_pipExpectUntil = now + 1000.0;
@@ -7694,36 +7697,33 @@ static bool Arms_Apply(char *player, char *cam)
     {   /* Reloads (the Caravan Shotgun's shell-by-shell one above all) can leave the arms frozen in their last reload
            pose - nothing poses them again afterwards. Keep each gun's normal pose while idle; put it back when a reload
            ends; if the arms still look stuck a moment later, refresh them like holstering does. */
-        static float snap[2][B_COUNT][12]; static bool snapHave = false; static void *snapW = NULL; static int lastAct = -1, fixFrames = 0; static double checkAt = 0;
+        static float snap[2][B_COUNT][12]; static bool snapHave = false, reloaded = false; static void *snapW = NULL; static int lastAct = -1;
         void *w = PlayerWeaponForm();
         bool out = PlayerWeaponOut();
-        if (w != snapW || !out) { snapW = w; snapHave = false; }
+        if (w != snapW || !out) { snapW = w; snapHave = false; reloaded = false; }
         bool pipNow2 = g_pipOpen || g_pipModeRaw != 0;
-        if (out && !pipNow2 && g_animAction == -1 && g_animIdleSince && QpcMs() - g_animIdleSince > 1000.0 && !fixFrames && !checkAt) {
+        /* the normal pose: taken while idle, only before this gun's first reload (so a stuck pose is never taken as normal) */
+        if (out && !pipNow2 && !reloaded && g_animAction == -1 && g_animIdleSince && QpcMs() - g_animIdleSince > 1000.0) {
             for (int s2 = 0; s2 < 2; s2++) for (int b = 0; b < B_COUNT; b++) {
                 memcpy(snap[s2][b], g_bones[s2][b] + NIAV_LOCAL_ROTATE, 36); memcpy(snap[s2][b] + 9, g_bones[s2][b] + NIAV_LOCAL_TRANSLATE, 12); }
             snapHave = true;
         }
-        if (lastAct == 9 && g_animAction != 9 && snapHave && out) { fixFrames = 3; checkAt = QpcMs() + 600.0; }
+        if (lastAct == 9 && g_animAction != 9) reloaded = true;
         lastAct = g_animAction;
-        if (fixFrames > 0) {
-            fixFrames--;
+        /* after a reload, while idle: if the arms sit well away from the normal pose, put the normal pose back (every frame) */
+        if (reloaded && snapHave && out && !pipNow2 && g_animAction == -1) {
+            float worst = 0;
             for (int s2 = 0; s2 < 2; s2++) for (int b = 0; b < B_COUNT; b++) {
-                memcpy(g_bones[s2][b] + NIAV_LOCAL_ROTATE, snap[s2][b], 36); memcpy(g_bones[s2][b] + NIAV_LOCAL_TRANSLATE, snap[s2][b] + 9, 12); }
-            NodeUpdate(node);
-            static int fl = 0; if (fl++ < 6 && fixFrames == 2) Log("Arms: reload finished - normal arm pose put back");
-        }
-        if (checkAt && QpcMs() > checkAt) {
-            checkAt = 0;
-            if (snapHave && out && g_animAction == -1) {   /* still far from the normal pose on its own: stuck */
-                float worst = 0;
+                const float *A = (const float *)(g_bones[s2][b] + NIAV_LOCAL_ROTATE), *B = snap[s2][b];
+                float tr = 0; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) tr += A[i * 3 + j] * B[i * 3 + j];
+                float c = fminf(fmaxf((tr - 1.0f) * 0.5f, -1.0f), 1.0f), ang = acosf(c) * RAD2DEG;
+                if (ang > worst) worst = ang;
+            }
+            if (worst > 20.0f) {
                 for (int s2 = 0; s2 < 2; s2++) for (int b = 0; b < B_COUNT; b++) {
-                    const float *A = (const float *)(g_bones[s2][b] + NIAV_LOCAL_ROTATE), *B = snap[s2][b];
-                    float tr = 0; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) tr += A[i * 3 + j] * B[i * 3 + j];
-                    float c = fminf(fmaxf((tr - 1.0f) * 0.5f, -1.0f), 1.0f), ang = acosf(c) * RAD2DEG;
-                    if (ang > worst) worst = ang;
-                }
-                if (worst > 30.0f) { char why[80]; snprintf(why, sizeof why, "arms stuck %.0f deg off after a reload", worst); Arms_Heal(why); }
+                    memcpy(g_bones[s2][b] + NIAV_LOCAL_ROTATE, snap[s2][b], 36); memcpy(g_bones[s2][b] + NIAV_LOCAL_TRANSLATE, snap[s2][b] + 9, 12); }
+                NodeUpdate(node);
+                static double ll = 0; if (QpcMs() - ll > 5000.0) { ll = QpcMs(); Log("Arms: holding the normal pose after a reload (the reload left them %.0f deg off)", worst); }
             }
         }
     }
