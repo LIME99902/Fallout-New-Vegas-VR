@@ -300,6 +300,7 @@ static bool  g_chestPause = true; static float g_chestDown = 0.32f, g_chestFwd =
    forearm or your chest to use it. Let go without stabbing and it goes back. */
 static bool  g_stimOn = true;                   /* INI [Stimpak] bChestStimpak */
 static bool  g_voiceOn = true;          /* INI [Voice] bVoiceControl */
+static int g_dlgProc = -1; static bool g_dlgProcWas4 = false;   /* the talking person's AI procedure (4 = dialogue) */
 static char * volatile g_dlgKeepActor = NULL;   /* the person you're talking to: their AI stays on the conversation until it's over */
 static volatile LONG g_dlgBlocked = 0;
 typedef void (__attribute__((thiscall)) *EvalPkg_t)(void *actor, int a, int b);
@@ -386,6 +387,7 @@ static bool  g_dlgHold = true;          /* INI [Display] bDialogueHoldStill: the
 static float g_voiceConf = 0.30f;       /* INI [Voice] fMinConfidence: how sure the recognizer must be (0-1) */
 static bool  g_voiceGreet = true;       /* INI [Voice] bGreetToTalk */
 static int   g_voiceEngine = 0;         /* INI [Voice] iEngine: 0 automatic, 1 SAPI only, 2 Windows speech only */
+static bool  g_vcDictation = true;     /* INI [Voice] bDictation: understand any words (Windows dictation); off = fixed phrase lists */
 static char  g_voiceMic[128] = "";      /* INI [Voice] sMicName: part of the microphone's name (empty: the headset's, else Windows' default) */
 static int   g_stimHand = -1, g_stimType = 0; static char *g_stimRef = NULL; static uint32_t g_stimRefID = 0;
 static double g_stimAt = 0; static bool g_stimHeld = false;
@@ -567,6 +569,7 @@ static void LoadSettings(void)
     { char vb[32]; GetPrivateProfileStringA("Voice", "fMinConfidence", "0.30", vb, sizeof vb, g_iniPath); g_voiceConf = fminf(fmaxf((float)atof(vb), 0.0f), 0.95f);
       GetPrivateProfileStringA("Voice", "sMicName", "", g_voiceMic, sizeof g_voiceMic, g_iniPath); }
     g_voiceEngine = (int)GetPrivateProfileIntA("Voice", "iEngine", 0, g_iniPath);
+    g_vcDictation = GetPrivateProfileIntA("Voice", "bDictation", 1, g_iniPath) != 0;
     { char lb[32];
       GetPrivateProfileStringA("LeftHanded", "fGunForward", "0", lb, sizeof lb, g_iniPath); g_lhGunFwd = (float)atof(lb);
       GetPrivateProfileStringA("LeftHanded", "fGunUp", "0", lb, sizeof lb, g_iniPath); g_lhGunUp = (float)atof(lb);
@@ -11131,8 +11134,33 @@ static AsyncStatus Vc_Wait(IUnknown *op, int maxMs, bool (*cancelIf)(void))
     IAsyncInfo_Release(ai);
     return st;
 }
-static LONG g_vcRtBuilt = -1;
+static LONG g_vcRtBuilt = -1; static char g_vcRtOpt[VC_MAXOPT][VC_TXT]; static int g_vcRtN = 0, g_vcRtMode = 0;
 static bool Vc_PhrasesChanged(void) { return g_vcVer != g_vcRtBuilt; }
+/* Free speech (Windows dictation) matched to what's listened for: a greeting word, "option N" / "number N",
+   or the answer whose words best cover what you said. */
+static int Vc_FuzzyRule(int mode, const char *heard, char opt[][VC_TXT], int n)
+{
+    char hw[24][32]; int nh = Vc_Words(heard, hw, 24);
+    if (nh == 0) return -1;
+    if (mode == 1) {
+        static const char *g[] = { "hey", "hello", "hi", "howdy", "greetings", "excuse", "talk", "morning", "evening", "yo", "hiya", NULL };
+        for (int i = 0; i < nh; i++) for (int k = 0; g[k]; k++) if (!strcmp(hw[i], g[k])) return 1;
+        return -1;
+    }
+    if (mode != 2 || n == 0) return -1;
+    for (int i = 0; i + 1 < nh; i++)
+        if (!strcmp(hw[i], "option") || !strcmp(hw[i], "number") || !strcmp(hw[i], "choice") || !strcmp(hw[i], "answer"))
+            for (int k = 0; k < 12 && k < n; k++) if (!strcmp(hw[i + 1], g_vcNum[k]) || (k == 0 && !strcmp(hw[i + 1], "won")) || (k == 1 && (!strcmp(hw[i + 1], "to") || !strcmp(hw[i + 1], "too"))) || (k == 3 && !strcmp(hw[i + 1], "for"))) return 100 + k;
+    int best = -1; float bestS = 0;
+    for (int k = 0; k < n; k++) {
+        char ow[24][32]; int no = Vc_Words(opt[k], ow, 24); if (no == 0) continue;
+        int hit = 0;
+        for (int i = 0; i < nh; i++) for (int j = 0; j < no; j++) if (!strcmp(hw[i], ow[j])) { hit++; break; }
+        float sc = (float)hit / (float)(nh < no ? nh : no);
+        if (hit >= (no == 1 ? 1 : 2) && sc > bestS) { bestS = sc; best = k; }
+    }
+    return bestS >= 0.5f ? 100 + best : -1;
+}
 static bool Vc_RunWinRT(void)
 {
     typedef __x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognizer Rec;
@@ -11165,6 +11193,8 @@ static bool Vc_RunWinRT(void)
             int mode, n; LONG v; static char opt[VC_MAXOPT][VC_TXT];
             Vc_Snapshot(&mode, &n, opt, &v);
             np = Vc_MakePhrases(mode, opt, n, ph, rule);
+            memcpy(g_vcRtOpt, opt, sizeof g_vcRtOpt); g_vcRtN = n; g_vcRtMode = mode;
+            if (g_vcDictation && np > 0) np = -np;   /* (dictation: no phrase list - the count is kept to know something is wanted) */
             compiled = false;
             Vec *vec = NULL;
             if (SUCCEEDED(rec->lpVtbl->get_Constraints(rec, &vec)) && vec) {
@@ -11185,7 +11215,7 @@ static bool Vc_RunWinRT(void)
                 }
                 vec->lpVtbl->Release(vec);
             }
-            if (np > 0) {
+            if (np != 0) {
                 CompOp *op = NULL;
                 HRESULT ch = rec->lpVtbl->CompileConstraintsAsync(rec, &op);
                 if (FAILED(ch) || !op) Log("Voice: Windows speech wouldn't take the phrases (0x%08lX)", (unsigned long)ch);
@@ -11200,6 +11230,8 @@ static bool Vc_RunWinRT(void)
                             __x_ABI_CWindows_CMedia_CSpeechRecognition_CSpeechRecognitionResultStatus s = 6;
                             cr->lpVtbl->get_Status(cr, &s); compiled = s == 0;
                             if (!compiled) Log("Voice: Windows speech couldn't use the phrases (status %d)", (int)s);
+                            if (!compiled && np < 0) { g_vcDictation = false; g_vcRtBuilt = -1; Log("Voice: free speech isn't available (Windows online speech recognition is off?) - using fixed phrase lists"); }
+                            else if (compiled && np < 0) { static bool said = false; if (!said) { said = true; Log("Voice: understanding free speech (Windows dictation) - answers matched by their words"); } }
                             cr->lpVtbl->Release(cr);
                         }
                     }
@@ -11209,7 +11241,7 @@ static bool Vc_RunWinRT(void)
             if (mode != builtMode || mode == 2) Log("Voice: now listening for %s (%d phrases%s)", mode == 2 ? "dialogue answers" : mode == 1 ? "greetings" : "nothing", np, np && !compiled ? ", NOT ready" : "");
             builtMode = mode; g_vcRtBuilt = v;
         }
-        if (!compiled || np == 0) { Sleep(100); continue; }
+        if (!compiled || np == 0) { if (g_vcRtBuilt == -1) continue; Sleep(100); continue; }
         RecOp *op = NULL;
         if (FAILED(hr = rec->lpVtbl->RecognizeAsync(rec, &op)) || !op) { if (errs++ < 5) Log("Voice: Windows speech couldn't listen (0x%08lX)", (unsigned long)hr); Sleep(1000); continue; }
         LONG built = g_vcRtBuilt;
@@ -11228,7 +11260,11 @@ static bool Vc_RunWinRT(void)
                     if (SUCCEEDED(res->lpVtbl->get_Text(res, &t)) && t) { UINT32 len; const WCHAR *w = WindowsGetStringRawBuffer(t, &len); WideCharToMultiByte(CP_ACP, 0, w, -1, txt, sizeof txt, NULL, NULL); WindowsDeleteString(t); }
                     __x_ABI_CWindows_CMedia_CSpeechRecognition_CSpeechRecognitionConfidence cf = 3;
                     res->lpVtbl->get_Confidence(res, &cf);
-                    if (txt[0] && cf != 3) {
+                    if (txt[0] && np < 0) {   /* free speech: matched here by its words */
+                        int r = Vc_FuzzyRule(g_vcRtMode, txt, g_vcRtOpt, g_vcRtN);
+                        if (cf == 3 && r < 100) r = -1;
+                        Vc_Heard(txt, r, cf == 0 ? 1 : cf == 1 ? 0 : -1, cf == 0 ? 0.9f : cf == 1 ? 0.6f : 0.3f, built);
+                    } else if (txt[0] && cf != 3) {
                         int r = Vc_RuleFor(txt, ph, rule, np);
                         Vc_Heard(txt, r, cf == 0 ? 1 : cf == 1 ? 0 : -1, cf == 0 ? 0.9f : cf == 1 ? 0.6f : 0.3f, built);
                     } else { static int rl = 0; if (rl++ < 30) Log("Voice: heard something (\"%s\") but Windows rejected it as not matching", txt); }
@@ -11237,7 +11273,11 @@ static bool Vc_RunWinRT(void)
                 if (s != 0 && s != 7 /* (just silence) */ && s != 5) { static int sl = 0; if (sl++ < 10) Log("Voice: Windows speech result status %d%s", (int)s, s == 10 ? " (microphone unavailable)" : s == 4 ? " (poor audio)" : ""); if (s == 10) Sleep(2000); }
                 res->lpVtbl->Release(res);
             }
-        } else if (st == Error) Sleep(1500);
+        } else if (st == Error) {
+            static int dErr = 0;
+            if (np < 0 && ++dErr >= 2) { g_vcDictation = false; g_vcRtBuilt = -1; dErr = 0; Log("Voice: free speech keeps failing - using fixed phrase lists"); }
+            Sleep(1500);
+        }
         op->lpVtbl->Release(op);
     }
     return true;
@@ -11423,6 +11463,7 @@ static void Dialogue_Tick(void)
         if (Rd(who, 0x40)) {
             double was = 1; if (hold) Scr_Num(hold, who, &was);
             ref = who; refId = *(uint32_t *)(who + 0x0C); weRestrained = was == 0.0;
+            g_dlgProc = -1; g_dlgProcWas4 = false;
             { uint8_t ft = *(uint8_t *)(who + 4); if (ft == 0x3B || ft == 0x3C) { InterlockedExchange(&g_dlgBlocked, 0); g_dlgKeepActor = who;
                 char *proc = *(char **)(who + 0x68);
                 if (Rd(proc, 0x30) && *(uint8_t *)(proc + 0x28) == 0) { Keep_HookProcess(proc); InterlockedExchange(&g_procBlocked, 0); g_dlgKeepProc = proc; } } }
@@ -11437,6 +11478,7 @@ static void Dialogue_Tick(void)
             nx = QpcMs() + 300.0;
             char *p = Scr_Ref(pk, ref); double v = -1; Scr_Num(pr, ref, &v);
             uint32_t pid = Rd(p, 0x10) ? *(uint32_t *)(p + 0x0C) : 0;
+            g_dlgProc = (int)v; if ((int)v == 4) g_dlgProcWas4 = true;
             if (pid != lastPk || (int)v != lastPr) { lastPk = pid; lastPr = (int)v; Log("Talking: %08X AI package %08X (type %d), procedure %d", refId, pid, Rd(p, 0x40) ? (int)*(uint8_t *)(p + 0x1C) : -1, (int)v); }
         }
     }
@@ -11466,7 +11508,12 @@ static void Dialogue_Tick(void)
                     }
                     if (playing) { everPlayed = true; quietSince = 0; }
                     else if (!quietSince) quietSince = now;
-                    if (!playing && quietSince && now - quietSince > 350.0 && (everPlayed || now - stSince > 3000.0)) {
+                    {   static double dl = 0; if (now > dl) { dl = now + 1000.0; static int n = 0; if (n++ < 30)
+                            Log("Talking: waiting for their line - voice %s (sound %08X, process level %d), AI procedure %d", playing ? "playing" : "quiet",
+                                Rd(proc, 0x320) ? *(uint32_t *)(proc + 0x314) : 0, Rd(proc, 0x30) ? (int)*(uint8_t *)(proc + 0x28) : -1, g_dlgProc); } }
+                    bool procDone = g_dlgProcWas4 && g_dlgProc >= 0 && g_dlgProc != 4;   /* (their dialogue procedure ended: the greeting line is over) */
+                    if ((procDone && now - stSince > 500.0) || (!playing && quietSince && now - quietSince > 350.0 && (everPlayed || now - stSince > 3000.0))) {
+                        g_dlgProcWas4 = false;
                         *(uint8_t *)(sp + 0x7C) = 1; quietSince = 0; everPlayed = false; stSince = now;
                         if (unsticks++ < 40) Log("Talking: their line has finished (state %d) - on to the next", st);
                     }
