@@ -10833,6 +10833,8 @@ static int Loot_CrossKind(char **refOut)
 #include <asyncinfo.h>
 #include <initguid.h>
 #include <windows.media.speechrecognition.h>
+#include <mmdeviceapi.h>
+#include <functiondiscoverykeys_devpkey.h>
 /* (the Windows runtime calls are looked up when voice control starts, so the plugin still loads on older Windows) */
 static HRESULT (WINAPI *pRoInitialize)(RO_INIT_TYPE);
 static HRESULT (WINAPI *pRoActivateInstance)(HSTRING, IInspectable **);
@@ -11269,6 +11271,7 @@ static bool Vc_RunWinRT(void)
                         Vc_Heard(txt, r, cf == 0 ? 1 : cf == 1 ? 0 : -1, cf == 0 ? 0.9f : cf == 1 ? 0.6f : 0.3f, built);
                     } else { static int rl = 0; if (rl++ < 30) Log("Voice: heard something (\"%s\") but Windows rejected it as not matching", txt); }
                 } else if (s == 7) nSilence++;
+                if (s == 6 && np < 0) { static int u6 = 0; if (++u6 >= 3) { u6 = 0; g_vcDictation = false; g_vcRtBuilt = -1; Log("Voice: free speech isn't working on this PC (status 6) - using fixed phrase lists"); } }
                 if (s != 0 && s != 7) nOther++;
                 if (s != 0 && s != 7 /* (just silence) */ && s != 5) { static int sl = 0; if (sl++ < 10) Log("Voice: Windows speech result status %d%s", (int)s, s == 10 ? " (microphone unavailable)" : s == 4 ? " (poor audio)" : ""); if (s == 10) Sleep(2000); }
                 res->lpVtbl->Release(res);
@@ -11282,10 +11285,43 @@ static bool Vc_RunWinRT(void)
     }
     return true;
 }
+/* Which microphone Windows uses by default (the Windows speech engine listens on that one), and whether
+   Windows' online speech (needed for free speech) is allowed. Written to the log. */
+static void Vc_LogMics(void)
+{
+    IMMDeviceEnumerator *en = NULL;
+    if (FAILED(CoCreateInstance(&CLSID_MMDeviceEnumerator, NULL, CLSCTX_ALL, &IID_IMMDeviceEnumerator, (void **)&en)) || !en) return;
+    for (int role = 0; role < 2; role++) {
+        IMMDevice *d = NULL;
+        if (SUCCEEDED(IMMDeviceEnumerator_GetDefaultAudioEndpoint(en, eCapture, role ? eCommunications : eConsole, &d)) && d) {
+            IPropertyStore *ps = NULL; PROPVARIANT v; PropVariantInit(&v);
+            if (SUCCEEDED(IMMDevice_OpenPropertyStore(d, STGM_READ, &ps)) && ps && SUCCEEDED(IPropertyStore_GetValue(ps, &PKEY_Device_FriendlyName, &v)) && v.vt == VT_LPWSTR) {
+                char nm[200]; WideCharToMultiByte(CP_ACP, 0, v.pwszVal, -1, nm, sizeof nm, NULL, NULL);
+                Log("Voice: Windows' default %s microphone is \"%s\"", role ? "communications" : "recording", nm);
+            }
+            PropVariantClear(&v); if (ps) IPropertyStore_Release(ps); IMMDevice_Release(d);
+        } else if (!role) Log("Voice: Windows has no default microphone");
+    }
+    IMMDeviceCollection *col = NULL; UINT cnt = 0;
+    if (SUCCEEDED(IMMDeviceEnumerator_EnumAudioEndpoints(en, eCapture, DEVICE_STATE_ACTIVE, &col)) && col && SUCCEEDED(IMMDeviceCollection_GetCount(col, &cnt)))
+        for (UINT i = 0; i < cnt && i < 12; i++) {
+            IMMDevice *d = NULL; IPropertyStore *ps = NULL; PROPVARIANT v; PropVariantInit(&v);
+            if (SUCCEEDED(IMMDeviceCollection_Item(col, i, &d)) && d && SUCCEEDED(IMMDevice_OpenPropertyStore(d, STGM_READ, &ps)) && ps &&
+                SUCCEEDED(IPropertyStore_GetValue(ps, &PKEY_Device_FriendlyName, &v)) && v.vt == VT_LPWSTR) {
+                char nm[200]; WideCharToMultiByte(CP_ACP, 0, v.pwszVal, -1, nm, sizeof nm, NULL, NULL); Log("Voice:   microphone %u: \"%s\"", i + 1, nm); }
+            PropVariantClear(&v); if (ps) IPropertyStore_Release(ps); if (d) IMMDevice_Release(d);
+        }
+    if (col) IMMDeviceCollection_Release(col);
+    IMMDeviceEnumerator_Release(en);
+    DWORD acc = 0, sz = sizeof acc;
+    LONG r = RegGetValueA(HKEY_CURRENT_USER, "Software\\Microsoft\\Speech_OneCore\\Settings\\OnlineSpeechPrivacy", "HasAccepted", RRF_RT_REG_DWORD, NULL, &acc, &sz);
+    Log("Voice: Windows online speech recognition is %s", r != ERROR_SUCCESS ? "not set (off)" : acc ? "ON" : "OFF");
+}
 static DWORD WINAPI Vc_Thread(LPVOID unused)
 {
     (void)unused;
     HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED); (void)hr;
+    Vc_LogMics();
     if (g_voiceEngine != 2 && Vc_RunSapi()) return 0;
     if (g_voiceEngine != 1 && Vc_RunWinRT()) return 0;
     Log("Voice: no speech recognition could start - voice control off");
@@ -11498,7 +11534,7 @@ static void Dialogue_Tick(void)
                    Set it here when their voice has really stopped (the voice sound in their process, +0x314). */
                 static int lastSt = -1; static double stSince = 0, quietSince = 0; static bool everPlayed = false; static int unsticks = 0;
                 char *sp = *(char **)(dm + 0x80); int st = *(int *)(dm + 0x28); double now = QpcMs();
-                if (st != lastSt) { lastSt = st; stSince = now; quietSince = 0; everPlayed = false; }
+                if (st != lastSt) { lastSt = st; stSince = now; quietSince = 0; everPlayed = false; if (st == 2) g_dlgProcWas4 = false; }
                 if ((st == 3 || st == 1) && Rd(sp, 0x90) && *(uint8_t *)(sp + 0x7C) == 0) {
                     char *proc = *(char **)(sp + 0x68);
                     bool playing = false;
@@ -11511,8 +11547,11 @@ static void Dialogue_Tick(void)
                     {   static double dl = 0; if (now > dl) { dl = now + 1000.0; static int n = 0; if (n++ < 30)
                             Log("Talking: waiting for their line - voice %s (sound %08X, process level %d), AI procedure %d", playing ? "playing" : "quiet",
                                 Rd(proc, 0x320) ? *(uint32_t *)(proc + 0x314) : 0, Rd(proc, 0x30) ? (int)*(uint8_t *)(proc + 0x28) : -1, g_dlgProc); } }
-                    bool procDone = g_dlgProcWas4 && g_dlgProc >= 0 && g_dlgProc != 4;   /* (their dialogue procedure ended: the greeting line is over) */
-                    if ((procDone && now - stSince > 500.0) || (!playing && quietSince && now - quietSince > 350.0 && (everPlayed || now - stSince > 3000.0))) {
+                    if (Rd(proc, 0x320) && *(uint32_t *)(proc + 0x314) == 0xFFFFFFFF) playing = false;   /* (no voice sound at all) */
+                    /* only once their voice has stopped: after it played, or (a line that never played) when their
+                       dialogue procedure has ended and the menu has waited 6 s */
+                    bool procDone = g_dlgProcWas4 && g_dlgProc >= 0 && g_dlgProc != 4 && !everPlayed && now - stSince > 6000.0;
+                    if (!playing && quietSince && now - quietSince > 400.0 && (everPlayed || procDone || now - stSince > 8000.0)) {
                         g_dlgProcWas4 = false;
                         *(uint8_t *)(sp + 0x7C) = 1; quietSince = 0; everPlayed = false; stSince = now;
                         if (unsticks++ < 40) Log("Talking: their line has finished (state %d) - on to the next", st);
