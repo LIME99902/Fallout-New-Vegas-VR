@@ -4,7 +4,7 @@ FNVVRMC (the plugin file is `FNVR.dll`, and its settings are in `FNVR.ini`) is a
 
 You aim with your hand. You swing melee weapons and punches for real. You pick things up, throw them and climb. Guns go in holsters on your body, and you read the Pip-Boy on your actual wrist while the world keeps moving. On top of all that there is a Dying Light-style grappling hook.
 
-> Current version: **2.0.4**, **[download it from the Releases page](https://github.com/LIME99902/Fallout-New-Vegas-VR/releases/latest)** (`FNVVRMC-2.0.4-full.zip`). This is a one-person hobby project made for the author's own setup (see the [mod list](docs/MODLIST.md)). It works well there, but other setups are untested.
+> Current version: **2.1.0**, **[download it from the Releases page](https://github.com/LIME99902/Fallout-New-Vegas-VR/releases/latest)** (`FNVVRMC-2.1.0-full.zip`). This is a one-person hobby project made for the author's own setup (see the [mod list](docs/MODLIST.md)). It works well there, but other setups are untested.
 
 - **[Motion controls guide](docs/CONTROLS.md)**: every button, gesture and keyboard key.
 - **[Mod list](docs/MODLIST.md)**: the full load order and plugins FNVR is played with.
@@ -27,7 +27,7 @@ You aim with your hand. You swing melee weapons and punches for real. You pick t
 ## Install
 
 1. Install xNVSE and JIP LN NVSE, and make sure the game starts through it.
-2. Download **`FNVVRMC-2.0.4-full.zip`** from the **[Releases page](https://github.com/LIME99902/Fallout-New-Vegas-VR/releases/latest)** and unzip it into your `Fallout New Vegas` folder. It puts `FNVR.dll` in `Data\NVSE\Plugins\`.
+2. Download **`FNVVRMC-2.1.0-full.zip`** from the **[Releases page](https://github.com/LIME99902/Fallout-New-Vegas-VR/releases/latest)** and unzip it into your `Fallout New Vegas` folder. It puts `FNVR.dll` in `Data\NVSE\Plugins\`.
 3. The zip also includes a starter `Data\NVSE\Plugins\FNVR\FNVR.ini`. FNVR fills in everything else with defaults.
 4. Start SteamVR, put the headset on and launch the game through xNVSE.
 5. In game:
@@ -40,6 +40,20 @@ FNVR writes a log to `Fallout New Vegas\FNVR.log`. That's the first thing to loo
 ---
 
 ## Features
+
+### Getting started: the setup screen
+- Each time the game starts, a setup screen appears before you can use the main menu:
+  - **Who's playing:** pick your profile (up to four). A profile that isn't calibrated yet is a new player.
+  - **Play style:** standing, or **seated**.
+  - **Left-handed** on or off.
+  - **Calibrate height and arms:** two quick steps (height, then both arms out). It works right on the main menu.
+  - **Start playing:** a profile that isn't calibrated is calibrated first.
+- It can be turned off under Body & profiles → Setup screen at startup.
+
+### Seated play
+- Play sitting down at your character's full height: sitting up straight counts as standing.
+- **Hold the right stick down to crouch** and reach low things. Let go to come back up. The depth can be changed (Body & profiles → Seated crouch depth).
+- Made so players who can't stand, or play without legs, get the whole mod.
 
 ### Seeing the game
 - The game is shown in the headset with head tracking, and the field of view widens to fill the headset (F9 toggles this).
@@ -58,6 +72,7 @@ FNVR writes a log to `Fallout New Vegas\FNVR.log`. That's the first thing to loo
 - **Hand aiming:** guns shoot where your hand points, and your head just looks around. Calibrate once by clicking both sticks, then fine-tune with F3/F4/F6/F7.
 - **Two-handed aiming:** put your off hand on the gun and squeeze its grip to steady it. Works for two-handed melee weapons too (sledgehammers, axes).
 - **Real arms:** the in-game arms follow your controllers, the elbow follows your hand's angle, and the arms can be sized to yours.
+- **Self-repairing arms:** when the game rebuilds your arms (changing clothes, equipping), FNVR notices and finds every part again, and if a drawn hand ever stays away from your real hand it refreshes them by itself. There's no need to holster to fix glitched arms or Pip-Boy.
 - **Finger tracking:** fingers follow the controller's touch sensors.
 - **Real crouching and leaning:** crouch to reach the floor, lean over tables, and your body follows once you lean far enough.
 - **Melee by swinging:** with fists or a melee weapon, a real swing of your hand attacks. Optionally the right trigger attacks too. Automatic melee weapons (chainsaw, Ripper, Industrial Hand) run while the trigger is held.

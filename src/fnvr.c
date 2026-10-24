@@ -28,9 +28,9 @@
 #include "nvse_api.h"
 #include "openvr_capi.h"
 
-#define FNVR_VERSION        204
-#define FNVR_VERSION_STR    "2.0.4 (climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
-#define FNVR_VERSION_SHORT  "2.0.4"
+#define FNVR_VERSION        210
+#define FNVR_VERSION_STR    "2.1.0 (startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_SHORT  "2.1.0"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -392,9 +392,15 @@ static float g_standY = -1.0f;           /* standing head height (tracking space
 static float g_leanAnchor[2] = { 0, 0 }; /* head x/z the body is centred under */
 static bool  g_haveLeanAnchor = false;
 /* body calibration & profiles (see the settings panel) */
+static float Body_StandRef(void);
 static int   g_profActive = 1;
 static char  g_profName[5][32];
 static float g_bodyEye = 0;                    /* standing eye height (m); 0 = not calibrated */
+static bool  g_seated = false;                 /* profile: seated play - your sitting head height is the character's full height */
+static float g_seatEye = 0;                    /* profile: sitting eye height (m); 0 = not measured */
+static float g_seatCrouchDepth = 0.85f;        /* INI [Seated] fCrouchDepth: how far the right stick (down) crouches you, metres */
+static volatile bool g_seatCrouchWant = false; static float g_seatCrouchK = 0.0f;
+static bool  g_startSetup = true;              /* INI [Startup] bShowSetup: the setup screen before the main menu */
 static float g_bodyReach[2] = { 0, 0 };        /* game shoulder -> hand with the arm straight (m), left / right */
 static bool  g_bodyScaleWorld = true;          /* match the world's size to your height */
 static bool  g_bodyArmMatch = true;            /* in-game arms sized to yours */
@@ -417,6 +423,7 @@ static void  Profile_Save(void);
 static void  Profiles_Init(void);
 static bool  Settings_Update(const VRControllerState_t *mv, const VRControllerState_t *am, bool okMv, bool okAm);
 static void IntroSkip_Frame(void);
+static void StartSetup_Tick(void);
 static void  Settings_Frame(void);
 static void  Settings_Toggle(void);
 
@@ -451,6 +458,8 @@ static void LoadSettings(void)
     g_runScancode = (WORD)GetPrivateProfileIntA("Controls", "iRunKeyScancode", 0x2A, g_iniPath);
     g_grabEnabled = GetPrivateProfileIntA("Grab", "bGrabObjects", 1, g_iniPath) != 0;
     g_physicalMove = GetPrivateProfileIntA("Tracking", "bPhysicalCrouchLean", 1, g_iniPath) != 0;
+    { char cb[32]; GetPrivateProfileStringA("Seated", "fCrouchDepth", "0.85", cb, sizeof cb, g_iniPath); g_seatCrouchDepth = fminf(fmaxf((float)atof(cb), 0.2f), 1.4f); }
+    g_startSetup = GetPrivateProfileIntA("Startup", "bShowSetup", 1, g_iniPath) != 0;
     g_handCollision = GetPrivateProfileIntA("Grab", "bHandCollision", 1, g_iniPath) != 0;
     g_climbEnabled = GetPrivateProfileIntA("Grab", "bClimbing", 1, g_iniPath) != 0;
     g_wristPip = GetPrivateProfileIntA("Controls", "bWristPipBoy", 1, g_iniPath) != 0;
@@ -1706,6 +1715,13 @@ static void Controllers_Poll(bool menu)
         if (am->rAxis[0].y >  0.7f) b |= XB_DPAD_UP;
         if (am->rAxis[0].y < -0.7f) b |= XB_DPAD_DOWN;
     }
+    {   /* seated play: right stick held down = crouch (reach low things); it doesn't turn you while held */
+        float ry = am->rAxis[0].y, rx = am->rAxis[0].x;
+        bool want = g_seated && g_inGameplay && !menu && !g_pipOpen && !(g_lootShown && g_lootControls) && ry < -0.6f && fabsf(ry) > fabsf(rx);
+        if (want != g_seatCrouchWant) { static int cl = 0; if (cl++ < 6) Log("Seated crouch: %s", want ? "down (right stick)" : "back up"); }
+        g_seatCrouchWant = want;
+        if (want) p->sThumbRX = 0;
+    }
     p->wButtons = b;
     if (g_pipOpen && g_wristPip) {   /* Pip-Boy up: the right stick moves the map cursor on the map page; elsewhere it only flips
                                         through lists (as the d-pad) - so it never turns you while the world is running */
@@ -1963,6 +1979,7 @@ static void VR_Tick(void)
     ApplyHeadsetFov();
     g_camOverride = false;
     g_frameHasHmdPose = false;
+    StartSetup_Tick();
     Controllers_Poll(IsMenuMode());
 
     TrackedDevicePose_t pose;
@@ -2155,7 +2172,7 @@ static void VR_Tick(void)
             bool calDown = g_padActive && g_aimCalReq;
             if (calDown) {
                 g_aimCalReq = false;
-                g_standY = g_bodyEye > 0.8f ? g_bodyEye : -1.0f; g_haveLeanAnchor = false;   /* also re-centre standing height and lean */
+                { float ref = Body_StandRef(); g_standY = ref > 0.3f ? ref : -1.0f; } g_haveLeanAnchor = false;   /* also re-centre standing height and lean */
                 const float (*pm)[4] = pose.mDeviceToAbsoluteTracking.m;
                 float hf[3] = { -pm[0][2], -pm[1][2], -pm[2][2] };          /* head forward */
                 float alongZ = -(hf[0] * hm[0][2] + hf[1] * hm[1][2] + hf[2] * hm[2][2]);
@@ -5697,6 +5714,7 @@ static const char *g_boneNames[2][B_COUNT] = {
 };
 static char *g_bones[2][B_COUNT];
 static char *g_bonesFor = NULL;          /* first-person node the bones were found in */
+static uint32_t g_fpGen = 1;              /* bumped when the first-person body is rebuilt in place: every cache below re-reads */
 static float g_boneSaved[2][B_COUNT][12];
 static bool  g_armsLogged = false;
 
@@ -5750,8 +5768,8 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
             float *lf = (float *)(fo + NIAV_LOCAL_TRANSLATE), *lh = (float *)(ha + NIAV_LOCAL_TRANSLATE);
             for (int i = 0; i < 3; i++) { lf[i] *= kk; lh[i] *= kk; }
             {   /* the forearm's twist bone (the Pip-Boy sits on it) keeps its place along the longer/shorter forearm */
-                static char *twFor[2] = { NULL, NULL }, *twB[2] = { NULL, NULL };
-                if (twFor[side] != g_bonesFor) { twFor[side] = g_bonesFor; twB[side] = g_bonesFor ? FindBone(g_bonesFor, side ? "Bip01 R ForeTwist" : "Bip01 L ForeTwist", 0) : NULL; }
+                static char *twFor[2] = { NULL, NULL }, *twB[2] = { NULL, NULL }; static uint32_t twGen[2];
+                if (twFor[side] != g_bonesFor || twGen[side] != g_fpGen) { twFor[side] = g_bonesFor; twGen[side] = g_fpGen; g_twistScaled[side] = false; twB[side] = g_bonesFor ? FindBone(g_bonesFor, side ? "Bip01 R ForeTwist" : "Bip01 L ForeTwist", 0) : NULL; }
                 char *tb = twB[side];
                 if (tb && *(char **)(tb + NIAV_PARENT) == fo) {
                     float *lt = (float *)(tb + NIAV_LOCAL_TRANSLATE);
@@ -6133,8 +6151,9 @@ static bool Geo_Center(char *n, float c[3], float *r, int depth)
 }
 static void PipOn_Find(char *node)
 {
-    if (g_pFor == node) return;
-    g_pFor = node; g_pOn = NULL; g_pScr = FindNameCI(node, "pipboyscreen", 0); g_pScrPicked = false; g_pScrAuto = NULL;
+    static uint32_t pGen = 0;
+    if (g_pFor == node && pGen == g_fpGen) return;
+    g_pFor = node; pGen = g_fpGen; g_pOn = NULL; g_pScr = FindNameCI(node, "pipboyscreen", 0); g_pScrPicked = false; g_pScrAuto = NULL;
     Log("Pip-Boy: device screen %s", g_pScr ? "found" : "MISSING");
 }
 /* List every visible part of the first-person body/Pip-Boy (once), with where it sits relative to the
@@ -6627,7 +6646,8 @@ static void PipScr_Prepare(char *player, char *cam)
     if (!g_pipScrOn || !g_wristPip || !g_pipOpen || g_pipModeRaw != 3 || !cam || !player || !g_bbW) return;
     char *node = *(char **)(player + PLAYER_NODE_1ST_PERSON);
     if (!node) return;
-    if (g_pipTwFor != node) { g_pipTwFor = node; g_pipTw = FindBone(node, "Bip01 L ForeTwist", 0); if (!g_pipScrUser) g_pipScrHave = false; }
+    static uint32_t ptGen = 0;
+    if (g_pipTwFor != node || ptGen != g_fpGen) { g_pipTwFor = node; ptGen = g_fpGen; g_pipTw = FindBone(node, "Bip01 L ForeTwist", 0); if (!g_pipScrUser) g_pipScrHave = false; }
     char *tw = g_pipTw; if (!tw) return;
     {   /* the game's own screen shape: which part of the menu picture is the menu, and its proportions */
         static char *aspFor = NULL;
@@ -7548,11 +7568,52 @@ static void PipBox_Place(char *firstPerson, char *cam)
     g_pipBoxWidthM = rad * 1.6f * g_pipBoxFitIni / g_unitsPerMeter;   /* a 4:3 screen's width from its half-diagonal */
     g_pipBoxOk = true;
 }
+/* Each remembered bone must still hang under the first-person body: walk up from it, checking at every step that the
+   parent really lists it as a child (a freed, rebuilt body at the same address fails this). */
+static bool Bones_StillAttached(char *node)
+{
+    for (int s = 0; s < 2; s++) for (int b = 0; b < B_COUNT; b++) {
+        char *n = g_bones[s][b];
+        if (!n) return false;
+        for (int depth = 0; n != node; depth++) {
+            if (depth > 40 || IsBadReadPtr(n, 0xA8)) return false;
+            char *par = *(char **)(n + NIAV_PARENT);
+            if (!par || IsBadReadPtr(par, 0xA8)) return false;
+            char **kids = *(char ***)(par + 0xA0); uint16_t nk = *(uint16_t *)(par + 0xA6);
+            if (!kids || nk > 512 || IsBadReadPtr(kids, nk * 4)) return false;
+            bool found = false; for (int k = 0; k < nk; k++) if (kids[k] == n) { found = true; break; }
+            if (!found) return false;
+            n = par;
+        }
+    }
+    return true;
+}
+static void Arms_Heal(const char *why)
+{   /* what holstering used to fix by hand: find every part again and refresh the weapon in the hands */
+    static double lastAt = 0; double now = QpcMs();
+    if (now - lastAt < 5000.0) return;
+    lastAt = now;
+    g_fpGen++; g_bonesFor = NULL;
+    if (!g_reequipAt) g_reequipAt = now + 100.0;
+    Log("Arms: repairing the arms by themselves (%s)", why);
+}
 static bool Arms_Apply(char *player, char *cam)
 {
     if (!g_bodyValid || !cam) return false;
     char *node = *(char **)(player + PLAYER_NODE_1ST_PERSON);
     if (!node) return false;
+    {   /* rebuilt in place (same address): everything re-reads */
+        static int failRun = 0; static bool checkOff = false;
+        if (node == g_bonesFor && !checkOff) {
+            if (!Bones_StillAttached(node)) {
+                if (++failRun >= 3) { checkOff = true; Log("Arms: the rebuild check keeps failing on a fresh body - check switched off for this session"); }
+                else {
+                    g_fpGen++; g_bonesFor = NULL;
+                    static int rl = 0; if (rl++ < 10) Log("Arms: the first-person body was rebuilt - finding the arm, hand and Pip-Boy parts again");
+                }
+            } else failRun = 0;
+        }
+    }
     if (node != g_bonesFor) {
         g_bonesFor = node;
         for (int s = 0; s < 2; s++) for (int b = 0; b < B_COUNT; b++) g_bones[s][b] = FindBone(node, g_boneNames[s][b], 0);
@@ -7578,8 +7639,9 @@ static bool Arms_Apply(char *player, char *cam)
     if (g_pipNoAnim && !g_pipLockNow) {
         #define POSE_MAX 512
         static char *pn[POSE_MAX]; static float ps[POSE_MAX][13]; static int pc = 0; static char *pfor = NULL; static bool phave = false;
-        if (pfor != node) {
-            pfor = node; pc = 0; phave = false;
+        static uint32_t pGen = 0;
+        if (pfor != node || pGen != g_fpGen) {
+            pfor = node; pGen = g_fpGen; pc = 0; phave = false;
             char *spine = FindBone(node, "Bip01 Spine", 0);   /* from the spine down (the root follows your movement) */
             char *stack[POSE_MAX]; int sp = 0; if (spine) stack[sp++] = spine;
             while (sp && pc < POSE_MAX) {
@@ -7713,6 +7775,21 @@ static bool Arms_Apply(char *player, char *cam)
             }
         }
         Arm_Reach(s, T, D, Bh);
+        {   /* the drawn hand must end up where your hand is (when the arm can reach it): if it stays well off, repair */
+            static double offSince[2] = { 0, 0 };
+            const float *Hw = (const float *)(g_bones[s][B_HAND] + NIAV_WORLD_TRANSLATE), *Sw = (const float *)(g_bones[s][B_UPPER] + NIAV_WORLD_TRANSLATE);
+            const float *Ew = (const float *)(g_bones[s][B_FORE] + NIAV_WORLD_TRANSLATE);
+            float e[3], st[3], a1[3], a2[3]; V3Sub(e, Hw, T); V3Sub(st, T, Sw); V3Sub(a1, Ew, Sw); V3Sub(a2, Hw, Ew);
+            float miss = V3Len(e), need = V3Len(st), len = V3Len(a1) + V3Len(a2);
+            bool off = miss > 14.0f && need < len * 0.9f && !g_handOnWall[hnd] && !g_climb[hnd] && !g_holding[hnd];
+            if (!off) offSince[s] = 0;
+            else if (!offSince[s]) offSince[s] = QpcMs();
+            else if (QpcMs() - offSince[s] > 600.0) {
+                offSince[s] = 0;
+                char why[96]; snprintf(why, sizeof why, "%s hand drawn %.0f units from your real hand", s ? "right" : "left", miss);
+                Arms_Heal(why);
+            }
+        }
     }
 
     /* Pip-Boy bigger (easier to read) while it's open. */
@@ -7720,8 +7797,9 @@ static bool Arms_Apply(char *player, char *cam)
         /* While the Pip-Boy is up: hold the forearm-twist bone (which carries the Pip-Boy) at its everyday
            angle, then roll it around the forearm just enough that the screen faces your eyes. */
         static char *tw = NULL, *twFor = NULL, *scr = NULL; static float twRest[9]; static bool twHave = false;
-        if (twFor != node) {
-            twFor = node; tw = FindBone(node, "Bip01 L ForeTwist", 0); twHave = false;
+        static uint32_t twGen = 0;
+        if (twFor != node || twGen != g_fpGen) {
+            twFor = node; twGen = g_fpGen; tw = FindBone(node, "Bip01 L ForeTwist", 0); twHave = false;
             scr = FindNameCI(node, "pipboyscreen", 0);
             Log("Pip-Boy: twist bone %s, screen %s", tw ? "found" : "MISSING", scr ? *(const char **)(scr + 0x08) : "MISSING");
         }
@@ -7743,8 +7821,9 @@ static bool Arms_Apply(char *player, char *cam)
         }
         {   /* the Pip-Boy 2000's glass layers (glare, static) cover the menu: hide them while it's open */
             static char *layers[4] = { 0 }; static char *lFor = NULL; static int nl = 0; static bool hidden = false;
-            if (lFor != node) {
-                lFor = node; nl = 0;
+            static uint32_t lGen = 0;
+            if (lFor != node || lGen != g_fpGen) {
+                lFor = node; lGen = g_fpGen; nl = 0;
                 const char *want[2] = { "glare:0", "static:0" };
                 char *stack[256]; int sp = 0; stack[sp++] = node;
                 while (sp && nl < 4) {
@@ -7767,8 +7846,9 @@ static bool Arms_Apply(char *player, char *cam)
         }
         /* Bigger screen picture, grown around its own centre (not its corner). */
         static char *pipNode = NULL, *pipFor = NULL; static float pipScale0 = 1.0f, pipT0[3], pipCenterL[3]; static bool pipHaveC = false;
-        if (pipFor != node) {
-            pipFor = node; pipNode = FindNameCI(node, "pipboyon", 0); pipHaveC = false;
+        static uint32_t pfGen = 0;
+        if (pipFor != node || pfGen != g_fpGen) {
+            pipFor = node; pfGen = g_fpGen; pipNode = FindNameCI(node, "pipboyon", 0); pipHaveC = false;
             if (pipNode) { pipScale0 = *(float *)(pipNode + NIAV_LOCAL_SCALE); memcpy(pipT0, pipNode + NIAV_LOCAL_TRANSLATE, 12); }
         }
         if (pipNode && fabsf(g_pipScale - 1.0f) > 0.01f) {   /* (only when a bigger picture is asked for) */
@@ -7941,7 +8021,14 @@ static void HeadOffset_ApplyInner(char *player, char *cam)
     if (!g_bodyValid) return;
     float lag[3] = { 0, 0, 0 };
     HeadOffset_Lag(player, cam, lag);
-    if (!g_physicalMove) {
+    {   /* seated: the right stick (down) crouches you smoothly - and back up when let go */
+        static double at = 0; double now = QpcMs(); float dt = at > 0 ? (float)((now - at) / 1000.0) : 0.0f; at = now;
+        if (dt > 0.1f) dt = 0.1f;
+        float want = g_seated && g_seatCrouchWant ? 1.0f : 0.0f;
+        float spd = 3.0f * dt;
+        if (g_seatCrouchK < want) g_seatCrouchK = fminf(g_seatCrouchK + spd, want); else g_seatCrouchK = fmaxf(g_seatCrouchK - spd, want);
+    }
+    if (!g_physicalMove && !g_seated) {
         if (fabsf(lag[0]) + fabsf(lag[1]) + fabsf(lag[2]) < 0.05f) return;
         MoveNode(cam, lag, g_offCamT, g_offCamL); g_offCam = cam;
         char *first = *(char **)(player + PLAYER_NODE_1ST_PERSON);
@@ -7959,6 +8046,7 @@ static void HeadOffset_ApplyInner(char *player, char *cam)
         dx -= dx * k; dz -= dz * k;
     }
     float dy = fminf(hy - g_standY, 0.0f);
+    if (g_seated) dy -= g_seatCrouchK * g_seatCrouchDepth;   /* (seated crouch on the right stick) */
     if (dy < -1.6f) dy = -1.6f;
     float O = g_vrYawOffset;
     float w[3] = { ( cosf(O) * dx - sinf(O) * dz) * g_unitsPerMeter,
@@ -10748,16 +10836,20 @@ static void FmtLen(char *out, size_t cap, float m, int dec)
 }
 /* ---- body & profiles ---- */
 
+/* The head height that counts as "standing at full height": standing play - your standing eye height; seated play -
+   your sitting eye height (sit up straight = the character stands). */
+static float Body_StandRef(void) { return g_seated ? g_seatEye : g_bodyEye; }
 static void Body_Apply(void)
 {
     float upm = g_worldScaleManual;
-    if (g_bodyScaleWorld && g_bodyEye > 0.8f) {
+    float worldEye = g_bodyEye > 0.8f ? g_bodyEye : (g_seated ? 1.65f : 0.0f);   /* (seated: sized like an average standing person unless measured) */
+    if (g_bodyScaleWorld && worldEye > 0.8f) {
         float ge = g_gameEyeUnits > 60.0f ? g_gameEyeUnits : 120.0f;
-        upm = ge / g_bodyEye;
+        upm = ge / worldEye;
     }
     if (upm < 30.0f) upm = 30.0f; if (upm > 160.0f) upm = 160.0f;
     if (fabsf(upm - g_unitsPerMeter) > 0.01f) { Log("Body: world size now %.1f game units per metre", upm); g_unitsPerMeter = upm; }
-    if (g_bodyEye > 0.8f && (g_standY < 0 || fabsf(g_standY - g_bodyEye) > 0.25f)) g_standY = g_bodyEye;
+    { float ref = Body_StandRef(); if (ref > 0.3f && (g_standY < 0 || fabsf(g_standY - ref) > 0.25f)) g_standY = ref; }
 }
 static void Profile_Save(void)
 {
@@ -10771,6 +10863,8 @@ static void Profile_Save(void)
     IniFW(sec, "fWorldScale", g_worldScaleManual, "%.1f");
     SaveInt(sec, "bLeftHanded", g_leftHanded ? 1 : 0);
     IniFW(sec, "fAimPitchOffset", g_aimPitchOffsetDeg, "%.1f");
+    SaveInt(sec, "bSeated", g_seated ? 1 : 0);
+    IniFW(sec, "fSeatedEyeHeight", g_seatEye, "%.3f");
     /* keep the old single-person keys in step (older FNVR versions read these) */
     IniFW("Stereo", "fWorldScale", g_worldScaleManual, "%.1f");
     SaveInt("Controls", "bLeftHanded", g_leftHanded ? 1 : 0);
@@ -10791,14 +10885,17 @@ static void Profile_Load(int s)
         float w = IniF(sec, "fWorldScale", g_worldScaleManual); if (w > 20.0f && w < 200.0f) g_worldScaleManual = w;
         g_leftHanded = GetPrivateProfileIntA(sec, "bLeftHanded", g_leftHanded ? 1 : 0, g_iniPath) != 0;
         float a = IniF(sec, "fAimPitchOffset", g_aimPitchOffsetDeg); if (a >= -90 && a <= 90) g_aimPitchOffsetDeg = a;
+        g_seated = GetPrivateProfileIntA(sec, "bSeated", 0, g_iniPath) != 0;
+        g_seatEye = IniF(sec, "fSeatedEyeHeight", 0); if (!(g_seatEye > 0.4f && g_seatEye < 2.0f)) g_seatEye = 0;
     } else {   /* a new person: start from the current settings, body not measured yet */
-        g_bodyEye = 0; g_bodyReach[0] = g_bodyReach[1] = 0;
+        g_bodyEye = 0; g_bodyReach[0] = g_bodyReach[1] = 0; g_seated = false; g_seatEye = 0;
     }
     g_profActive = s;
     SaveInt("Profiles", "iActive", s);
     if (!exists) Profile_Save();
     Body_Apply();
-    Log("Profile %d '%s': eye height %.2f m, arm reach %.2f / %.2f m, world %s, arms %s, %s-handed", s, g_profName[s], g_bodyEye,
+    Log("Profile %d '%s': %s, eye height %.2f m (sitting %.2f m), arm reach %.2f / %.2f m, world %s, arms %s, %s-handed", s, g_profName[s],
+        g_seated ? "SEATED" : "standing", g_bodyEye, g_seatEye,
         g_bodyReach[0], g_bodyReach[1], g_bodyScaleWorld ? "matched to height" : "fixed size", g_bodyArmMatch ? "sized to yours" : "game length",
         g_leftHanded ? "left" : "right");
 }
@@ -10828,17 +10925,22 @@ static float Body_ArmScale(int side, float gameLen)
 #define SET_ROW_Y0 150
 #define SET_ROW_H 62
 #define SET_ROWS 14
-enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_HUD, SP_COUNT };
+enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_HUD, SP_START, SP_COUNT };
 static const char *const g_setPageName[SP_COUNT] = { "FNVR SETTINGS", "BODY & PROFILES", "PIP-BOY", "CONTROLS", "HOLSTERS & GESTURES", "HANDS & OBJECTS",
-                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS" };
+                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC" };
 enum { ST_BOOL, ST_FLOAT, ST_INT, ST_PAGE, ST_ACTION, ST_SIGN, ST_PROFILE, ST_INFO };
 enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16, SF_MELEE = 32, SF_HOLM = 64 };
-enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET };
+enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_START_PLAY };
 typedef struct {
     int page, type; const char *label; const char *sec, *key; void *var;
     float mn, mx, step; const char *fmt; int flags, arg; const char *help;
 } SetOpt;
 static const SetOpt g_setOpts[] = {
+    { SP_START, ST_PROFILE, "Who's playing", 0, 0, 0, 0, 0, 0, 0, 0, 0, "Pick your profile with left/right. A profile that isn't calibrated yet is a new player - up to four, each with their own body, play style and hand." },
+    { SP_START, ST_BOOL, "Play style", 0, 0, &g_seated, 0, 0, 0, 0, SF_PROFILE | SF_BODY, 0, "STANDING: play on your feet - really crouch to reach low things. SEATED: play sitting down at your character's full height; hold the right stick DOWN to crouch and reach low things." },
+    { SP_START, ST_BOOL, "Left-handed", 0, 0, &g_leftHanded, 0, 0, 0, 0, SF_PROFILE, 0, "Swap hands: the left hand aims and shoots, the right stick moves." },
+    { SP_START, ST_ACTION, "Calibrate height and arms", 0, 0, 0, 0, 0, 0, 0, 0, SA_CAL_BODY, "Two quick steps: your height (standing straight, or sitting up straight for seated play), then both arms straight out in front." },
+    { SP_START, ST_ACTION, "Start playing", 0, 0, 0, 0, 0, 0, 0, 0, SA_START_PLAY, "Go to the main menu. A profile that isn't calibrated is calibrated first. (Change any of this later: hold both thumbsticks in for a second.)" },
     { SP_MAIN, ST_PAGE, "Body & profiles", 0, 0, 0, 0, 0, 0, 0, 0, SP_BODY, "Your height and arm reach, so the world and your arms fit you. Up to four people, each with their own." },
     { SP_MAIN, ST_PAGE, "Pip-Boy", 0, 0, 0, 0, 0, 0, 0, 0, SP_PIP, "The Pip-Boy on your wrist: its screen, how it opens, how your forearm turns." },
     { SP_MAIN, ST_PAGE, "Controls", 0, 0, 0, 0, 0, 0, 0, 0, SP_CONTROLS, "Motion controls, aiming, melee swings, buttons and fingers." },
@@ -10849,10 +10951,15 @@ static const SetOpt g_setOpts[] = {
     { SP_MAIN, ST_PAGE, "Weapons & scopes", 0, 0, 0, 0, 0, 0, 0, 0, SP_WEAPONS, "See-through scopes and their zoom and brightness." },
     { SP_MAIN, ST_PAGE, "Movement & comfort", 0, 0, 0, 0, 0, 0, 0, 0, SP_MOVE, "Real crouching and leaning, sprinting and jumping." },
     { SP_MAIN, ST_PAGE, "Kid friendly stuff", 0, 0, 0, 0, 0, 0, 0, 0, SP_KIDS, "Turn off bodies bursting, limbs coming off, and blood." },
+    { SP_MAIN, ST_PAGE, "Startup setup screen", 0, 0, 0, 0, 0, 0, 0, 0, SP_START, "The screen shown before the main menu: who's playing, standing or seated, calibration." },
     { SP_MAIN, ST_ACTION, "Close settings", 0, 0, 0, 0, 0, 0, 0, 0, SA_CLOSE, "Hold both thumbsticks in for a second (or press F11) to open this panel again." },
 
     { SP_BODY, ST_BOOL, "US units (feet & inches)", "Display", "bUSUnits", &g_imperial, 0, 0, 0, 0, 0, 0, "ON: heights, reaches and distances in this panel are shown in feet and inches (speeds in mph) instead of metres." },
     { SP_BODY, ST_PROFILE, "Profile", 0, 0, 0, 0, 0, 0, 0, 0, 0, "Who is playing. Each profile keeps its own height, arm reach, handedness, aim angle and world size. Left/right to switch." },
+    { SP_BODY, ST_BOOL, "Play style", 0, 0, &g_seated, 0, 0, 0, 0, SF_PROFILE | SF_BODY, 0, "STANDING: play on your feet. SEATED: play sitting down at your character's full height; hold the right stick DOWN to crouch and reach low things. Calibrate again after switching." },
+    { SP_BODY, ST_FLOAT, "Sitting eye height", 0, 0, &g_seatEye, 0.0f, 1.9f, 0.01f, "%.2f m", SF_PROFILE | SF_BODY, 0, "Seated play: your eye height sitting up straight (it counts as your character standing). Measured by the calibration." },
+    { SP_BODY, ST_FLOAT, "Seated crouch depth", "Seated", "fCrouchDepth", &g_seatCrouchDepth, 0.2f, 1.4f, 0.05f, "%.2f m", 0, 0, "Seated play: how far down holding the right stick DOWN takes you." },
+    { SP_BODY, ST_BOOL, "Setup screen at startup", "Startup", "bShowSetup", &g_startSetup, 0, 0, 0, 0, 0, 0, "ON: each time the game starts, choose who's playing and standing or seated before the main menu." },
     { SP_BODY, ST_ACTION, "Calibrate my body", 0, 0, 0, 0, 0, 0, 0, 0, SA_CAL_BODY, "Two quick steps: stand straight (height), then hold both arms straight out in front (arm reach). Saved to this profile." },
     { SP_BODY, ST_FLOAT, "Eye height", 0, 0, &g_bodyEye, 0.0f, 2.3f, 0.01f, "%.2f m", SF_PROFILE | SF_BODY, 0, "Your standing eye height (the headset when you stand straight). 0 = not measured. Fine-tune with left/right." },
     { SP_BODY, ST_FLOAT, "Left arm reach", 0, 0, &g_bodyReach[0], 0.0f, 1.4f, 0.01f, "%.2f m", SF_PROFILE | SF_BODY, 0, "How far your left hand reaches with the arm straight. Measured by the calibration; 0 = use the game's arm length." },
@@ -11025,7 +11132,7 @@ static int Set_PageRows(int page, int *idx, int max)
 {
     int n = 0;
     for (int i = 0; i < SET_NOPTS && n < max; i++) if (g_setOpts[i].page == page) idx[n++] = i;
-    if (page != SP_MAIN && n < max) idx[n++] = -1;   /* "Back" */
+    if (page != SP_MAIN && page != SP_START && n < max) idx[n++] = -1;   /* "Back" */
     return n;
 }
 static void Set_Toast(const char *msg) { snprintf(g_setToast, sizeof g_setToast, "%s", msg); g_setToastUntil = QpcMs() + 3500.0; g_setDirty = true; }
@@ -11034,11 +11141,14 @@ static void Set_Buzz(unsigned short us) { int h = g_leftHanded ? 0 : 1; if (g_vr
 static void Set_ValueText(const SetOpt *o, char *out, size_t cap)
 {
     switch (o->type) {
-    case ST_BOOL: snprintf(out, cap, "%s", *(bool *)o->var ? "ON" : "OFF"); break;
+    case ST_BOOL:
+        if (o->var == &g_seated) snprintf(out, cap, "%s", g_seated ? "SEATED" : "STANDING");
+        else snprintf(out, cap, "%s", *(bool *)o->var ? "ON" : "OFF");
+        break;
     case ST_SIGN: snprintf(out, cap, "%s", *(float *)o->var < 0 ? "ON" : "OFF"); break;
     case ST_FLOAT: case ST_INFO: {
         float v = *(float *)o->var;
-        if (o->var == &g_bodyEye && v <= 0.0f) snprintf(out, cap, "not measured");
+        if ((o->var == &g_bodyEye || o->var == &g_seatEye) && v <= 0.0f) snprintf(out, cap, "not measured");
         else if ((o->var == &g_bodyReach[0] || o->var == &g_bodyReach[1]) && v <= 0.0f) snprintf(out, cap, "game's own");
         else if (g_imperial && o->fmt && strstr(o->fmt, " m/s")) snprintf(out, cap, "%.1f mph", v * 2.23694f);
         else if (g_imperial && o->fmt && strstr(o->fmt, "units/m")) snprintf(out, cap, "%.1f units/ft", v * 0.3048f);
@@ -11084,11 +11194,11 @@ static void Set_Step(const SetOpt *o, int dir, float mult)
     case ST_FLOAT: {
         float *v = (float *)o->var, step = o->step * mult;
         float nv = *v + dir * step;
-        if ((o->var == &g_bodyEye || o->var == &g_bodyReach[0] || o->var == &g_bodyReach[1]) && *v <= 0.0f && dir > 0)
-            nv = o->var == &g_bodyEye ? 1.60f : 0.60f;   /* start a not-yet-measured value somewhere sensible */
+        if ((o->var == &g_bodyEye || o->var == &g_seatEye || o->var == &g_bodyReach[0] || o->var == &g_bodyReach[1]) && *v <= 0.0f && dir > 0)
+            nv = o->var == &g_bodyEye ? 1.60f : o->var == &g_seatEye ? 1.20f : 0.60f;   /* start a not-yet-measured value somewhere sensible */
         if (nv < o->mn) nv = o->mn; if (nv > o->mx) nv = o->mx;
         nv = roundf(nv / o->step) * o->step;
-        if ((o->var == &g_bodyEye && nv < 0.8f) || ((o->var == &g_bodyReach[0] || o->var == &g_bodyReach[1]) && nv < 0.2f)) nv = 0.0f;
+        if ((o->var == &g_seatEye && nv < 0.4f) || (o->var == &g_bodyEye && nv < 0.8f) || ((o->var == &g_bodyReach[0] || o->var == &g_bodyReach[1]) && nv < 0.2f)) nv = 0.0f;
         *v = nv; break; }
     case ST_INT: {
         int *v = (int *)o->var, step = (int)(o->step * (mult > 1 ? mult : 1));
@@ -11106,6 +11216,8 @@ static void Set_Step(const SetOpt *o, int dir, float mult)
     Set_Buzz(500);
 }
 static void Settings_Close(void);
+static bool g_startAfterCal = false;   /* the startup screen's "Start playing" asked for a calibration first */
+static bool Body_Calibrated(void) { return Body_StandRef() > 0.3f && g_bodyReach[0] > 0.2f && g_bodyReach[1] > 0.2f; }
 static void Set_Activate(int optIdx, int part)
 {
     if (optIdx < 0) { g_setPageSel[g_setPage] = g_setSel; g_setPage = SP_MAIN; g_setSel = g_setPageSel[SP_MAIN]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); return; }
@@ -11119,9 +11231,12 @@ static void Set_Activate(int optIdx, int part)
         Set_Buzz(1200);
         switch (o->arg) {
         case SA_CLOSE: Settings_Close(); break;
+        case SA_START_PLAY:
+            if (Body_Calibrated()) { Profile_Save(); Settings_Close(); Log("Startup: %s is playing %s", g_profName[g_profActive], g_seated ? "seated" : "standing"); }
+            else { g_startAfterCal = true; g_setCal = 1; g_setCalAt = QpcMs(); g_setDirty = true; }
+            break;
         case SA_CAL_BODY: case SA_CAL_HEIGHT: g_setCal = 1; g_setCalAt = QpcMs(); g_setDirty = true; break;
         case SA_CAL_ARMS:
-            if (!g_inGameplay || g_menuCached) { Set_Toast("Close the game's menus first - the arm step needs your in-game arms"); break; }
             g_setCal = 2; g_setCalAt = QpcMs(); g_setDirty = true; break;
         case SA_PIP_ADJUST:
             if (g_pipOpen && g_pipModeRaw == 3) { g_adjStartReq = true; Settings_Close(); }
@@ -11212,17 +11327,25 @@ static void Set_Draw(void)
     int hy = SET_H - 222;
     Set_Fill(30, hy - 8, SET_W - 30, hy - 4, SC_LINE);
     const char *help = (g_setSel < n && idx[g_setSel] >= 0) ? g_setOpts[idx[g_setSel]].help : "Back to the first page.";
+    char startHelp[400];
+    if (g_setPage == SP_START) {   /* who's playing and whether they're calibrated, above the line's help */
+        char e1[32], e2[32], e3[32]; FmtLen(e1, sizeof e1, Body_StandRef(), 2); FmtLen(e2, sizeof e2, g_bodyReach[0], 2); FmtLen(e3, sizeof e3, g_bodyReach[1], 2);
+        if (Body_Calibrated()) snprintf(startHelp, sizeof startHelp, "%s - %s, %s eye height %s, arms %s / %s.\n%s", g_profName[g_profActive], g_seated ? "seated" : "standing", g_seated ? "sitting" : "standing", e1, e2, e3, help ? help : "");
+        else snprintf(startHelp, sizeof startHelp, "%s - %s, NOT CALIBRATED YET (Start playing calibrates first).\n%s", g_profName[g_profActive], g_seated ? "seated" : "standing", help ? help : "");
+        help = startHelp;
+    }
     if (QpcMs() < g_setToastUntil) { Set_Text(g_setFont, SC_AMB, 48, hy + 6, SET_W - 48, hy + 146, g_setToast, DT_LEFT | DT_WORDBREAK); }
     else Set_Text(g_setFontSmall, SC_AMB, 48, hy + 6, SET_W - 48, hy + 146, help ? help : "", DT_LEFT | DT_WORDBREAK);
     Set_Text(g_setFontSmall, SC_DIM, 40, SET_H - 66, SET_W - 40, SET_H - 16,
-             "Point + trigger   |   stick: choose, change   |   B: back   |   * = restart", DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+             g_setPage == SP_START ? "Point + trigger   |   stick: choose, change" : "Point + trigger   |   stick: choose, change   |   B: back   |   * = restart", DT_CENTER | DT_SINGLELINE | DT_VCENTER);
     /* calibration steps cover the list */
     if (g_setCal) {
         Set_Fill(60, 330, SET_W - 60, 900, SC_DARK);
         Set_Fill(60, 330, SET_W - 60, 336, SC_AMB); Set_Fill(60, 894, SET_W - 60, 900, SC_AMB);
         const char *t1 = g_setCal == 1 ? "STEP 1: HEIGHT" : "STEP 2: ARM REACH";
         const char *t2 = g_setCal == 1
-            ? "Stand up straight and look straight ahead.\n\nPull the RIGHT trigger."
+            ? (g_seated ? "Sit up straight in your seat and look straight ahead.\n\nPull the RIGHT trigger."
+                        : "Stand up straight and look straight ahead.\n\nPull the RIGHT trigger.")
             : "Hold BOTH arms straight out in front of you at shoulder height, look straight ahead.\n\nPull BOTH triggers.";
         Set_Text(g_setFontBig, SC_AMB, 90, 360, SET_W - 90, 440, t1, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
         Set_Text(g_setFont, SC_AMB, 110, 470, SET_W - 110, 820, t2, DT_CENTER | DT_WORDBREAK);
@@ -11279,6 +11402,29 @@ static void Settings_Open(void)
     Set_Buzz(2500);
     Log("Settings: opened");
 }
+/* The startup screen: once per launch, on the main menu, before you can use it - who's playing, standing or seated,
+   calibration. The game gets no controls until "Start playing". */
+static void Settings_OpenStart(void)
+{
+    Settings_Open();
+    if (!g_setOpen) return;
+    g_setPage = SP_START; g_setSel = Body_Calibrated() ? 4 : 0; g_setScroll = 0; g_setDirty = true;
+    g_setToastUntil = 0;
+    Log("Startup: setup screen shown (%s, %s, %s)", g_profName[g_profActive], g_seated ? "seated" : "standing", Body_Calibrated() ? "calibrated" : "not calibrated");
+}
+static void StartSetup_Tick(void)
+{
+    static bool done = false; static double seenAt = 0;
+    if (done || !g_startSetup) return;
+    if (g_inGameplay) { done = true; return; }   /* (loaded straight into a game: no startup screen) */
+    const volatile bool *vis = (const volatile bool *)0x011F308F;
+    bool mainMenu = vis[1013] && !g_newGameWait && HeadsetDisplayActive() && g_vrOverlay;   /* (the loading picture stays up behind the main menu) */
+    if (!mainMenu) { seenAt = 0; return; }
+    if (!seenAt) { seenAt = QpcMs(); return; }
+    if (QpcMs() - seenAt < 1500.0) return;
+    done = true;
+    if (!g_setOpen) Settings_OpenStart();
+}
 static void Settings_Close(void)
 {
     if (!g_setOpen) return;
@@ -11306,21 +11452,55 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
     trigPrev = trig; aPrev = a; bPrev = b; yPrev = y; bothTrigPrev = bothTrig;
     /* calibration steps */
     if (g_setCal) {
-        if (bEdge) { g_setCal = 0; g_setDirty = true; Set_Toast("Calibration cancelled"); return true; }
+        if (bEdge) { g_setCal = 0; g_startAfterCal = false; g_setDirty = true; Set_Toast("Calibration cancelled"); return true; }
         if (now - g_setCalAt < 600.0) return true;   /* (the click that started it) */
         if (g_setCal == 1 && trigEdge && !trigL) {
             TrackedDevicePose_t hp; g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, &hp, 1);
-            if (hp.bPoseIsValid && hp.mDeviceToAbsoluteTracking.m[1][3] > 0.8f && hp.mDeviceToAbsoluteTracking.m[1][3] < 2.4f) {
-                g_bodyEye = hp.mDeviceToAbsoluteTracking.m[1][3]; g_standY = g_bodyEye; g_haveLeanAnchor = false;
+            float hy = hp.mDeviceToAbsoluteTracking.m[1][3];
+            bool ok = hp.bPoseIsValid && (g_seated ? (hy > 0.4f && hy < 2.0f) : (hy > 0.8f && hy < 2.4f));
+            if (ok) {
+                if (g_seated) g_seatEye = hy; else g_bodyEye = hy;
+                g_standY = hy; g_haveLeanAnchor = false;
                 Body_Apply(); Profile_Save(); Set_Buzz(3000);
-                Log("Body: eye height measured %.3f m (world %.1f units/m)", g_bodyEye, g_unitsPerMeter);
-                if (g_inGameplay && !g_menuCached) { g_setCal = 2; g_setCalAt = now; }
-                else { g_setCal = 0; Set_Toast("Height saved. Do the arm step from the game (menus closed): Calibrate my body"); }
+                Log("Body: %s eye height measured %.3f m (world %.1f units/m)", g_seated ? "sitting" : "standing", hy, g_unitsPerMeter);
+                g_setCal = 2; g_setCalAt = now;
             } else Set_Toast("Couldn't read the headset height - try again");
             g_setDirty = true; return true;
         }
+        if (g_setCal == 2 && (!g_inGameplay || g_menuCached)) {   /* main menu: measured from the headset and controllers */
+            if (bothTrigEdge) {
+                TrackedDevicePose_t ps[16];
+                g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, ps, 16);
+                if (ps[0].bPoseIsValid) {
+                    float yaw = 0, pitch = 0; ExtractYawPitch(&ps[0].mDeviceToAbsoluteTracking, &yaw, &pitch);
+                    float H[3] = { ps[0].mDeviceToAbsoluteTracking.m[0][3], ps[0].mDeviceToAbsoluteTracking.m[1][3], ps[0].mDeviceToAbsoluteTracking.m[2][3] };
+                    float fw[3] = { -sinf(yaw), 0, -cosf(yaw) }, rt[3] = { cosf(yaw), 0, -sinf(yaw) };
+                    /* the shoulders sit where the game's do relative to the eyes (in proportion to your height) */
+                    float E = g_bodyEye > 0.8f ? g_bodyEye : (g_seated ? 1.65f : H[1]);
+                    int got = 0;
+                    for (int sd = 0; sd < 2; sd++) {
+                        uint32_t di = g_handIdx[sd];
+                        if (di >= 16 || !ps[di].bPoseIsValid) continue;
+                        float S[3], d[3];
+                        for (int i = 0; i < 3; i++) S[i] = H[i] + rt[i] * (sd ? 1.0f : -1.0f) * 0.116f * E - fw[i] * 0.087f * E;
+                        S[1] -= 0.204f * E;
+                        for (int i = 0; i < 3; i++) d[i] = ps[di].mDeviceToAbsoluteTracking.m[i][3] - S[i];
+                        float r = V3Len(d);
+                        if (r > 0.3f && r < 1.3f) { g_bodyReach[sd] = r; got++; }
+                    }
+                    if (got) {
+                        g_setCal = 0; Body_Apply(); Profile_Save(); Set_Buzz(3500);
+                        char e1[32], e2[32], e3[32]; FmtLen(e1, sizeof e1, Body_StandRef(), 2); FmtLen(e2, sizeof e2, g_bodyReach[0], 2); FmtLen(e3, sizeof e3, g_bodyReach[1], 2);
+                        char m[160]; snprintf(m, sizeof m, "Saved to %s: %s eye height %s, arm reach %s / %s", g_profName[g_profActive], g_seated ? "sitting" : "standing", e1, e2, e3);
+                        Set_Toast(m); Log("Body: %s (arms measured on the main menu)", m);
+                        if (g_startAfterCal && Body_Calibrated()) { g_startAfterCal = false; Settings_Close(); Log("Startup: %s is playing %s", g_profName[g_profActive], g_seated ? "seated" : "standing"); }
+                    } else Set_Toast("Couldn't see your controllers - hold both arms out and try again");
+                    g_setDirty = true;
+                }
+            }
+            return true;
+        }
         if (g_setCal == 2) {
-            if (!g_inGameplay || g_menuCached) { g_setCal = 0; Set_Toast("Close the game's menus first - the arm step needs your in-game arms"); return true; }
             static double maskAt = 0;
             if (bothTrigEdge && !g_armCalMask) { g_armCalMask = 3; g_armCalDone = false; maskAt = now; Set_Buzz(2000); }
             if (g_armCalMask && now - maskAt > 1500.0) { g_armCalMask = 0; g_armCalDone = true; }   /* (a hand out of view: keep what was measured) */
@@ -11329,6 +11509,7 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
                 char e1[32], e2[32], e3[32]; FmtLen(e1, sizeof e1, g_bodyEye, 2); FmtLen(e2, sizeof e2, g_bodyReach[0], 2); FmtLen(e3, sizeof e3, g_bodyReach[1], 2);
                 char m[160]; snprintf(m, sizeof m, "Saved to %s: eye height %s, arm reach %s / %s", g_profName[g_profActive], e1, e2, e3);
                 Set_Toast(m); Log("Body: %s", m);
+                if (g_startAfterCal && Body_Calibrated()) { g_startAfterCal = false; Settings_Close(); }
             }
             return true;
         }
@@ -11398,7 +11579,10 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
         int part = (trigEdge && g_setHover >= 0) ? g_setHoverPart : 1;
         if (i >= 0 && i < n) Set_Activate(idx[i], part);
     }
-    if (bEdge) { if (g_setPage == SP_MAIN) Settings_Close(); else Set_Activate(-1, 0); }
+    if (bEdge) {
+        if (g_setPage == SP_START) Set_Toast("Choose \"Start playing\" when you're ready");
+        else if (g_setPage == SP_MAIN) Settings_Close(); else Set_Activate(-1, 0);
+    }
     return true;
 }
 

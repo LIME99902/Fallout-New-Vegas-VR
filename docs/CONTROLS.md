@@ -4,6 +4,16 @@ This is the default right-handed layout. With **Left-handed** turned on (Setting
 
 "Grip" is the side button under your middle finger. A "fist" is grip + trigger squeezed together.
 
+## Seated play
+
+With **Play style: Seated** (setup screen or Body & profiles):
+
+| Control | What it does |
+|---|---|
+| Sit up straight | Your character stands at full height |
+| Hold right stick **down** | Crouch (reach low things); let go to come back up |
+| Everything else | The same as standing |
+
 ## Walking around
 
 | Control | What it does |
@@ -137,6 +147,8 @@ The take keys are sent as keyboard presses, so the game window must be the activ
 | Hold right grip for 6 seconds | Skip the intro movie (a ring in front of you fills up and counts down) |
 
 ## Setup and calibration
+
+When the game starts, the setup screen asks who's playing, standing or seated, and calibrates a new profile. Point and pull the trigger, or use the sticks; **Start playing** goes to the main menu.
 
 | Control | What it does |
 |---|---|
