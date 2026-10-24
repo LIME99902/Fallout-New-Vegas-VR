@@ -68,6 +68,7 @@ You feel a short buzz when your hand enters a holster or chest spot.
 |---|---|
 | Left grip, then left trigger | Fire the grapple where your left hand points; you get pulled there (trigger first = bullet time instead) |
 | Right grip, then right trigger | Fire with the right hand. Only when no gun is out, since with a gun the trigger shoots. Turn on in settings |
+| Hook a person or creature | Pulls them to you; they're knocked down when they arrive (let go to drop them) |
 | Let go before you arrive | Launch yourself with the speed you've built up |
 | Fire the other hand mid-pull | Swing on to a new point |
 

@@ -114,6 +114,7 @@ FNVR writes a log to `Fallout New Vegas\FNVR.log`. That's the first thing to loo
 - **Grappling hook (Dying Light style):** squeeze grip, then pull the trigger, and a line fires where your hand points and pulls you there, picking up speed as it goes. A trigger pulled on its own stays bullet time.
   - Let go early to launch yourself.
   - Fire the other hand mid-pull to swing on.
+  - **Hook a person or creature and you pull THEM to you**, Scorpion-style, and they're knocked down when they reach you (switchable back to pulling yourself to them).
   - Optional: a rope you can see, hooking onto people and creatures, controller rumble, and no fall damage after a launch.
   - Range, speed, launch strength, hop and air drag can all be changed in the settings.
   - Works with either hand. The right hand only grapples while no gun is out.

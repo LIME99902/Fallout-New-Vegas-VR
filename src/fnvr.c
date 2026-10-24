@@ -276,6 +276,7 @@ static bool  g_armSwing = true; static float g_armSwingSens = 1.0f; static bool 
 static bool  g_grapOn = true, g_grapSafe = true;   /* INI [Grapple] bEnabled, bSafeLanding */
 static bool  g_grapHand[2] = { true, false };      /* INI [Grapple] bLeftHand, bRightHand */
 static bool  g_grapRope = true, g_grapRumble = true, g_grapActors = true;   /* INI [Grapple] bShowRope, bRumble, bHookActors */
+static bool  g_grapYank = true;   /* INI [Grapple] bPullPeople: hooking a person pulls THEM to you (and knocks them down on arrival) */
 static float g_grapRange = 40.0f, g_grapSpeed = 28.0f, g_grapLaunch = 1.0f;   /* INI [Grapple] fRange (m), fTopSpeed (m/s), fLaunch (x) */
 static float g_grapRamp = 0.6f, g_grapStart = 0.35f, g_grapDrag = 0.35f, g_grapHop = 3.5f;   /* INI [Grapple] fTimeToTop (s), fStartSpeed (0-1), fAirDrag, fEndHop (m/s) */
 static bool  g_weaponOutThisFrame = true;
@@ -550,6 +551,7 @@ static void LoadSettings(void)
     { char ab[32]; GetPrivateProfileStringA("Controls", "fArmSwingSensitivity", "1.0", ab, sizeof ab, g_iniPath); g_armSwingSens = fminf(fmaxf((float)atof(ab), 0.3f), 3.0f); }
     g_grapRumble = GetPrivateProfileIntA("Grapple", "bRumble", 1, g_iniPath) != 0;
     g_grapActors = GetPrivateProfileIntA("Grapple", "bHookActors", 1, g_iniPath) != 0;
+    g_grapYank = GetPrivateProfileIntA("Grapple", "bPullPeople", 1, g_iniPath) != 0;
     g_ltBullet = GetPrivateProfileIntA("Controls", "bLeftTriggerBulletTime", 1, g_iniPath) != 0;
     g_bulletKey = GetPrivateProfileIntA("Controls", "iBulletTimeKey", 46, g_iniPath);
     { char cb[32]; GetPrivateProfileStringA("Controls", "fChestDown", "0.32", cb, sizeof cb, g_iniPath); g_chestDown = (float)atof(cb);
@@ -9500,8 +9502,32 @@ static bool Climb_MovePlayer(char *player, const float *pos)
     memcpy(g_moveWant, pos, 12); g_movePlayer = player; g_moveHave = true;
     return true;
 }
+static float g_actMoveWant[3]; static char *g_actMoveRef = NULL; static uint32_t g_actMoveID = 0; static bool g_actMoveHave = false;
+static char *g_actPushRef = NULL; static uint32_t g_actPushID = 0;   /* knocked down when it arrives */
+static void ActorMove_Flush(void)
+{   /* (main loop) the grappled person moved toward you / knocked down on arrival */
+    static void *mv = NULL, *push = NULL; static bool tried = false;
+    if (!tried && g_scriptIntf && g_scriptIntf->CompileScript) { tried = true;
+        mv = g_scriptIntf->CompileScript("ref rWho\nfloat x\nfloat y\nfloat z\nBegin Function { rWho, x, y, z }\nrWho.SetPosEx x y z\nEnd\n");
+        push = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho 3\nEnd\n");
+        if (!mv) Log("Grapple: couldn't set up pulling people (SetPosEx missing?)"); }
+    char *pl = (char *)GetPlayer();
+    bool loading = ((const volatile bool *)0x011F308F)[1007];
+    if (g_actMoveHave) {
+        g_actMoveHave = false;
+        if (mv && !loading && g_actMoveRef && LookupForm(g_actMoveID) == (void *)g_actMoveRef) {
+            uint32_t a, b, c; memcpy(&a, &g_actMoveWant[0], 4); memcpy(&b, &g_actMoveWant[1], 4); memcpy(&c, &g_actMoveWant[2], 4);
+            g_scriptIntf->CallFunctionAlt(mv, pl, 4, g_actMoveRef, a, b, c);
+        }
+    }
+    if (g_actPushRef) {
+        char *r = g_actPushRef; g_actPushRef = NULL;
+        if (push && !loading && LookupForm(g_actPushID) == (void *)r) { g_scriptIntf->CallFunctionAlt(push, pl, 1, r); Log("Grapple: knocked them down"); }
+    }
+}
 static void Move_Flush(void)
 {
+    ActorMove_Flush();
     if (!g_moveHave) return;
     g_moveHave = false;
     char *pl = *(char **)PLAYER_PTR_ADDR;
@@ -9772,6 +9798,7 @@ static struct {
     double coolUntil;
     float missEnd[3]; double missAt;      /* a shot that hit nothing: the line flies out and snaps back */
 } g_grap;
+static struct { bool on; char *ref; uint32_t id; int hand; float speed, t; } g_yank;   /* a person on the line, being pulled to you */
 static bool Grapple_Busy(void) { return g_grap.pull || g_grap.fling; }
 static void Grap_Buzz(int h, unsigned short us) { if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
 static void Grap_SetVel(char *ctrl, const float *v, bool withZ)
@@ -9833,6 +9860,33 @@ static void Grapple_Update(char *player, char *cam, float dt)
     int fireH = -1;   /* a hand that just made the grapple fist (the newest press wins - swing from hand to hand) */
     for (int k = 0; k < 2; k++) if (edge[k] && Grap_HandFree(k) && !(g_grap.pull && g_grap.hand == k)) fireH = k;
     int h = g_grap.hand;
+
+    if (g_yank.on) {   /* pulling a person to you */
+        int yh = g_yank.hand;
+        bool alive = g_yank.ref && LookupForm(g_yank.id) == (void *)g_yank.ref;
+        if (!ok || !alive || !combo[yh] || !g_grapHand[yh]) { g_yank.on = false; Log("Grapple: let them go"); return; }
+        g_yank.t += dt;
+        const float *A = (const float *)(g_yank.ref + 0x30);
+        float hd = *PlayerRotZ(player);
+        float want[3] = { P[0] + sinf(hd) * 1.0f * g_unitsPerMeter, P[1] + cosf(hd) * 1.0f * g_unitsPerMeter, P[2] };   /* a metre in front of you */
+        float to[3]; V3Sub(to, want, A);
+        float dist = V3Len(to);
+        float top = g_grapSpeed * g_unitsPerMeter;
+        g_yank.speed = fminf(g_yank.speed + top / g_grapRamp * dt, top);
+        float step = g_yank.speed * dt;
+        if (dist < fmaxf(0.4f * g_unitsPerMeter, step) || g_yank.t > 6.0f) {
+            g_yank.on = false;
+            if (dist < 1.0f * g_unitsPerMeter) { g_actPushRef = g_yank.ref; g_actPushID = g_yank.id; }
+            Grap_Buzz(yh, 3999);
+            Log("Grapple: %s (%.1f s)", dist < 1.0f * g_unitsPerMeter ? "pulled them to you" : "took too long", g_yank.t);
+            return;
+        }
+        float np[3]; for (int i = 0; i < 3; i++) np[i] = A[i] + to[i] / dist * step;
+        memcpy(g_actMoveWant, np, 12); g_actMoveRef = g_yank.ref; g_actMoveID = g_yank.id; g_actMoveHave = true;
+        if (g_grapRope && g_handWOk[yh]) { float tip[3] = { A[0], A[1], A[2] + 0.9f * g_unitsPerMeter }; Rope_Project(cam, g_handW[yh], tip); }
+        static int bz = 0; if (g_grapRumble && (bz++ & 3) == 0) Grap_Buzz(yh, 500);
+        return;
+    }
 
     if (g_grap.pull && fireH < 0) {
         if (!ok || !g_grapHand[h]) { Grap_End(player, ctrl, false, "stopped"); return; }
@@ -9923,6 +9977,14 @@ static void Grapple_Update(char *player, char *cam, float dt)
         Grap_Buzz(h, 1200); static int nl = 0; if (nl++ < 10) Log("Grapple: nothing to hook within %.0f m (%s hand)", g_grapRange, h ? "right" : "left"); return; }
     float hitD = fr * range;
     if (hitD < 1.5f * g_unitsPerMeter) { Grap_Buzz(h, 800); return; }
+    if (isActor && g_grapYank && !g_grap.pull) {   /* a person: pull THEM to you */
+        g_yank.on = true; g_yank.ref = hitRef; g_yank.id = *(uint32_t *)(hitRef + 0x0C); g_yank.hand = h;
+        g_yank.speed = g_grapStart * g_grapSpeed * g_unitsPerMeter; g_yank.t = 0;
+        g_grap.hand = h; g_grap.missAt = 0;
+        Grap_Buzz(h, 3000);
+        Log("Grapple: %s hand hooked someone %.1f m away (%08X) - pulling them to you", h ? "right" : "left", hitD / g_unitsPerMeter, g_yank.id);
+        return;
+    }
     bool wasPulling = g_grap.pull;
     for (int i = 0; i < 3; i++) { g_grap.target[i] = from[i] + d[i] * (hitD - 0.3f * g_unitsPerMeter); g_grap.dir[i] = d[i]; }
     if (!wasPulling) {
@@ -10277,7 +10339,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             if (loading || cell != lastCell) {
                 if (g_nearCount || g_holding[0] || g_holding[1] || g_climb[0] || g_climb[1] || g_thrown.ref)
                     Log("Physics: %s - letting go of everything for 2 s", loading ? "loading screen" : "new location");
-                Grab_ClearAll(); g_climb[0] = g_climb[1] = false; memset(&g_thrown, 0, sizeof g_thrown);
+                Grab_ClearAll(); g_climb[0] = g_climb[1] = false; memset(&g_thrown, 0, sizeof g_thrown); g_yank.on = false; g_actMoveHave = false;
                 quietUntil = QpcMs() + 2000.0; lastCell = cell;
             }
             physQuiet = QpcMs() < quietUntil;
@@ -11329,7 +11391,8 @@ static const SetOpt g_setOpts[] = {
     { SP_MOVE, ST_FLOAT, "Grapple time to top speed", "Grapple", "fTimeToTop", &g_grapRamp, 0.05f, 5.0f, 0.05f, "%.2f s", 0, 0, "How long the pull takes to reach its top speed." },
     { SP_MOVE, ST_FLOAT, "Grapple hop at the end", "Grapple", "fEndHop", &g_grapHop, 0.0f, 10.0f, 0.5f, "%.1f m/s", 0, 0, "The little upward hop when you reach the hook point (helps you up onto ledges)." },
     { SP_MOVE, ST_FLOAT, "Grapple air slowdown", "Grapple", "fAirDrag", &g_grapDrag, 0.0f, 3.0f, 0.05f, "%.2f", 0, 0, "How quickly a launch loses its sideways speed in the air (0 = never slows)." },
-    { SP_MOVE, ST_BOOL, "Grapple onto people & creatures", "Grapple", "bHookActors", &g_grapActors, 0, 0, 0, 0, 0, 0, "The line can hook onto people and creatures and pull you to them." },
+    { SP_MOVE, ST_BOOL, "Grapple onto people & creatures", "Grapple", "bHookActors", &g_grapActors, 0, 0, 0, 0, 0, 0, "The line can hook onto people and creatures." },
+    { SP_MOVE, ST_BOOL, "Grapple pulls people to you", "Grapple", "bPullPeople", &g_grapYank, 0, 0, 0, 0, 0, 0, "ON: hooking a person or creature pulls THEM to you and knocks them down when they arrive. OFF: the line pulls you to them." },
     { SP_MOVE, ST_BOOL, "Hide your body (grapple, climbing)", "Grapple", "bHideBody", &g_hideBodyGrap, 0, 0, 0, 0, 0, 0, "Your body below you disappears while the line pulls you or you climb (and a moment after), so it can't get in front of you." },
     { SP_MOVE, ST_BOOL, "Show the grapple rope", "Grapple", "bShowRope", &g_grapRope, 0, 0, 0, 0, 0, 0, "Draw the rope from your hand to the hook point." },
     { SP_MOVE, ST_BOOL, "Grapple rumble", "Grapple", "bRumble", &g_grapRumble, 0, 0, 0, 0, 0, 0, "Controller buzz while the line is pulling you." },
