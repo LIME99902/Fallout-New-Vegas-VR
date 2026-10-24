@@ -276,6 +276,8 @@ static bool  g_armSwing = true; static float g_armSwingSens = 1.0f; static bool 
 static bool  g_grapOn = true, g_grapSafe = true;   /* INI [Grapple] bEnabled, bSafeLanding */
 static bool  g_grapHand[2] = { true, false };      /* INI [Grapple] bLeftHand, bRightHand */
 static bool  g_grapRope = true, g_grapRumble = true, g_grapActors = true;   /* INI [Grapple] bShowRope, bRumble, bHookActors */
+static float g_foreDirW[2][3]; static double g_foreDirAt[2];   /* the drawn forearm's direction (elbow -> wrist), last frame */
+static float g_grapAimUp = 0.0f, g_grapAimRight = 0.0f;   /* INI [Grapple] fAimUp, fAimRight (degrees): fine-tuning where the line goes */
 static bool  g_grapYank = true;   /* INI [Grapple] bPullPeople: hooking a person pulls THEM to you (and knocks them down on arrival) */
 static float g_grapRange = 40.0f, g_grapSpeed = 28.0f, g_grapLaunch = 1.0f;   /* INI [Grapple] fRange (m), fTopSpeed (m/s), fLaunch (x) */
 static float g_grapRamp = 0.6f, g_grapStart = 0.35f, g_grapDrag = 0.35f, g_grapHop = 3.5f;   /* INI [Grapple] fTimeToTop (s), fStartSpeed (0-1), fAirDrag, fEndHop (m/s) */
@@ -552,6 +554,8 @@ static void LoadSettings(void)
     g_grapRumble = GetPrivateProfileIntA("Grapple", "bRumble", 1, g_iniPath) != 0;
     g_grapActors = GetPrivateProfileIntA("Grapple", "bHookActors", 1, g_iniPath) != 0;
     g_grapYank = GetPrivateProfileIntA("Grapple", "bPullPeople", 1, g_iniPath) != 0;
+    { char gb[32]; GetPrivateProfileStringA("Grapple", "fAimUp", "0", gb, sizeof gb, g_iniPath); g_grapAimUp = (float)atof(gb);
+      GetPrivateProfileStringA("Grapple", "fAimRight", "0", gb, sizeof gb, g_iniPath); g_grapAimRight = (float)atof(gb); }
     g_ltBullet = GetPrivateProfileIntA("Controls", "bLeftTriggerBulletTime", 1, g_iniPath) != 0;
     g_bulletKey = GetPrivateProfileIntA("Controls", "iBulletTimeKey", 46, g_iniPath);
     { char cb[32]; GetPrivateProfileStringA("Controls", "fChestDown", "0.32", cb, sizeof cb, g_iniPath); g_chestDown = (float)atof(cb);
@@ -5951,6 +5955,7 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
     V3Sub(f1, Wc, Ec);
     float tgt[3] = { S[0] + dir[0] * d, S[1] + dir[1] * d, S[2] + dir[2] * d };
     V3Sub(f2, tgt, Ec);
+    { float fl = V3Len(f2); if (fl > 1e-3f) { for (int i = 0; i < 3; i++) g_foreDirW[side][i] = f2[i] / fl; g_foreDirAt[side] = QpcMs(); } }   /* (the grapple fires along this) */
     M3 R2, Wf, Wfn; RotBetween(R2, f1, f2);
     memcpy(Wf, fo + NIAV_WORLD_ROTATE, sizeof Wf);
     M3Mul(Wfn, R2, Wf);
@@ -9961,7 +9966,15 @@ static void Grapple_Update(char *player, char *cam, float dt)
     if (fireH < 0 || !ok || QpcMs() < g_grap.coolUntil) return;
     h = fireH;
     /* fire: straight out from where the hand points */
-    float d[3]; for (int i = 0; i < 3; i++) d[i] = -g_handWR[h][i][2];
+    /* along your forearm as it's drawn (elbow -> wrist): where your arm points with a fist */
+    float d[3];
+    if (QpcMs() - g_foreDirAt[h] < 150.0) memcpy(d, g_foreDirW[h], 12);
+    else for (int i = 0; i < 3; i++) d[i] = -g_handWR[h][i][2];
+    if (g_grapAimUp != 0.0f || g_grapAimRight != 0.0f) {   /* fine-tuning: turn it up/down and left/right */
+        float hz = sqrtf(d[0] * d[0] + d[1] * d[1]);
+        float yaw = atan2f(d[0], d[1]) + g_grapAimRight / RAD2DEG, pit = atan2f(d[2], hz) + g_grapAimUp / RAD2DEG;
+        d[0] = sinf(yaw) * cosf(pit); d[1] = cosf(yaw) * cosf(pit); d[2] = sinf(pit);
+    }
     float dl = V3Len(d); if (dl < 0.5f) return; for (int i = 0; i < 3; i++) d[i] /= dl;
     float range = g_grapRange * g_unitsPerMeter, from[3], to[3];
     for (int i = 0; i < 3; i++) { from[i] = g_handW[h][i] + d[i] * 8.0f; to[i] = from[i] + d[i] * range; }
@@ -11392,6 +11405,8 @@ static const SetOpt g_setOpts[] = {
     { SP_MOVE, ST_FLOAT, "Grapple hop at the end", "Grapple", "fEndHop", &g_grapHop, 0.0f, 10.0f, 0.5f, "%.1f m/s", 0, 0, "The little upward hop when you reach the hook point (helps you up onto ledges)." },
     { SP_MOVE, ST_FLOAT, "Grapple air slowdown", "Grapple", "fAirDrag", &g_grapDrag, 0.0f, 3.0f, 0.05f, "%.2f", 0, 0, "How quickly a launch loses its sideways speed in the air (0 = never slows)." },
     { SP_MOVE, ST_BOOL, "Grapple onto people & creatures", "Grapple", "bHookActors", &g_grapActors, 0, 0, 0, 0, 0, 0, "The line can hook onto people and creatures." },
+    { SP_MOVE, ST_FLOAT, "Grapple aim: up/down", "Grapple", "fAimUp", &g_grapAimUp, -20.0f, 20.0f, 0.5f, "%.1f deg", 0, 0, "The line fires along your forearm. If it lands a little low or high, turn it up (+) or down (-)." },
+    { SP_MOVE, ST_FLOAT, "Grapple aim: left/right", "Grapple", "fAimRight", &g_grapAimRight, -20.0f, 20.0f, 0.5f, "%.1f deg", 0, 0, "If the line lands a little to one side, turn it right (+) or left (-)." },
     { SP_MOVE, ST_BOOL, "Grapple pulls people to you", "Grapple", "bPullPeople", &g_grapYank, 0, 0, 0, 0, 0, 0, "ON: hooking a person or creature pulls THEM to you and knocks them down when they arrive. OFF: the line pulls you to them." },
     { SP_MOVE, ST_BOOL, "Hide your body (grapple, climbing)", "Grapple", "bHideBody", &g_hideBodyGrap, 0, 0, 0, 0, 0, 0, "Your body below you disappears while the line pulls you or you climb (and a moment after), so it can't get in front of you." },
     { SP_MOVE, ST_BOOL, "Show the grapple rope", "Grapple", "bShowRope", &g_grapRope, 0, 0, 0, 0, 0, 0, "Draw the rope from your hand to the hook point." },
