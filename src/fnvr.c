@@ -300,9 +300,12 @@ static bool  g_chestPause = true; static float g_chestDown = 0.32f, g_chestFwd =
    forearm or your chest to use it. Let go without stabbing and it goes back. */
 static bool  g_stimOn = true;                   /* INI [Stimpak] bChestStimpak */
 static bool  g_voiceOn = true;          /* INI [Voice] bVoiceControl */
+static bool  g_dlgCamStuck = false;     /* the view didn't follow your head in a paused conversation: keep the world running instead */
+static bool  g_liveDlgWorld = false;    /* INI [Display] bLiveDialogueWorld: the world keeps running while you talk (lip sync can stop) */
 static bool  g_dlgHold = true;          /* INI [Display] bDialogueHoldStill: the person you talk to stands still */
 static float g_voiceConf = 0.30f;       /* INI [Voice] fMinConfidence: how sure the recognizer must be (0-1) */
 static bool  g_voiceGreet = true;       /* INI [Voice] bGreetToTalk */
+static int   g_voiceEngine = 0;         /* INI [Voice] iEngine: 0 automatic, 1 SAPI only, 2 Windows speech only */
 static char  g_voiceMic[128] = "";      /* INI [Voice] sMicName: part of the microphone's name (empty: the headset's, else Windows' default) */
 static int   g_stimHand = -1, g_stimType = 0; static char *g_stimRef = NULL; static uint32_t g_stimRefID = 0;
 static double g_stimAt = 0; static bool g_stimHeld = false;
@@ -479,9 +482,11 @@ static void LoadSettings(void)
     g_stimOn = GetPrivateProfileIntA("Stimpak", "bChestStimpak", 1, g_iniPath) != 0;
     g_voiceOn = GetPrivateProfileIntA("Voice", "bVoiceControl", 1, g_iniPath) != 0;
     g_dlgHold = GetPrivateProfileIntA("Display", "bDialogueHoldStill", 1, g_iniPath) != 0;
+    g_liveDlgWorld = GetPrivateProfileIntA("Display", "bLiveDialogueWorld", 0, g_iniPath) != 0;
     g_voiceGreet = GetPrivateProfileIntA("Voice", "bGreetToTalk", 1, g_iniPath) != 0;
     { char vb[32]; GetPrivateProfileStringA("Voice", "fMinConfidence", "0.30", vb, sizeof vb, g_iniPath); g_voiceConf = fminf(fmaxf((float)atof(vb), 0.0f), 0.95f);
       GetPrivateProfileStringA("Voice", "sMicName", "", g_voiceMic, sizeof g_voiceMic, g_iniPath); }
+    g_voiceEngine = (int)GetPrivateProfileIntA("Voice", "iEngine", 0, g_iniPath);
     { char lb[32];
       GetPrivateProfileStringA("LeftHanded", "fGunForward", "0", lb, sizeof lb, g_iniPath); g_lhGunFwd = (float)atof(lb);
       GetPrivateProfileStringA("LeftHanded", "fGunUp", "0", lb, sizeof lb, g_iniPath); g_lhGunUp = (float)atof(lb);
@@ -10603,6 +10608,11 @@ static uint8_t __cdecl Hook_AfterMenuFlag(void)
     }
     if (liveMenu != g_liveMenuNow) { g_liveMenuNow = liveMenu; Log("Live menus: %s", liveMenu ? "a menu is up - the world keeps running, you stay in it" : "menu closed"); }
     bool want = pipWant || liveMenu;
+    if (liveMenu && !pipWant && !g_liveDlgWorld && !g_dlgCamStuck) {   /* only a conversation up: the game runs it its own way (the world pauses as in the base game) */
+        const volatile bool *v = (const volatile bool *)0x011F308F; bool other = false;
+        for (unsigned k = 0; k < sizeof g_liveMenuIds / sizeof g_liveMenuIds[0]; k++) if (g_liveMenuIds[k] != 1009 && v[g_liveMenuIds[k]]) other = true;
+        if (v[1009] && !other) { want = false; static int dl = 0; if (dl++ < 3) Log("Live menus: talking - the game runs the conversation itself (lips and every line play), the rest of the world waits"); }
+    }
     if (want) {
         if (g_hwThreadsSaved < 0 && idle) { g_hwThreadsSaved = *hw; *hw = 1; Log("Real-time Pip-Boy: world running (single-thread AI while open, was %d threads)", g_hwThreadsSaved); }
         if (g_hwThreadsSaved >= 0) { *(volatile uint8_t *)0x011DEA2B = 0; g_menuFlagCleared = true; }
@@ -10735,6 +10745,35 @@ static int Loot_CrossKind(char **refOut)
        "option two" / "number two".
    The recognizer runs on its own thread; what it hears is acted on from the main loop. */
 #include <sapi.h>
+#include <roapi.h>
+#include <winstring.h>
+#include <asyncinfo.h>
+#include <initguid.h>
+#include <windows.media.speechrecognition.h>
+/* (the Windows runtime calls are looked up when voice control starts, so the plugin still loads on older Windows) */
+static HRESULT (WINAPI *pRoInitialize)(RO_INIT_TYPE);
+static HRESULT (WINAPI *pRoActivateInstance)(HSTRING, IInspectable **);
+static HRESULT (WINAPI *pRoGetActivationFactory)(HSTRING, REFIID, void **);
+static HRESULT (WINAPI *pWindowsCreateString)(PCNZWCH, UINT32, HSTRING *);
+static HRESULT (WINAPI *pWindowsDeleteString)(HSTRING);
+static HRESULT (WINAPI *pWindowsDuplicateString)(HSTRING, HSTRING *);
+static PCWSTR  (WINAPI *pWindowsGetStringRawBuffer)(HSTRING, UINT32 *);
+static bool Vc_LoadRT(void)
+{
+    HMODULE m = LoadLibraryA("combase.dll"); if (!m) return false;
+    pRoInitialize = (void *)GetProcAddress(m, "RoInitialize"); pRoActivateInstance = (void *)GetProcAddress(m, "RoActivateInstance");
+    pRoGetActivationFactory = (void *)GetProcAddress(m, "RoGetActivationFactory"); pWindowsCreateString = (void *)GetProcAddress(m, "WindowsCreateString");
+    pWindowsDeleteString = (void *)GetProcAddress(m, "WindowsDeleteString"); pWindowsDuplicateString = (void *)GetProcAddress(m, "WindowsDuplicateString");
+    pWindowsGetStringRawBuffer = (void *)GetProcAddress(m, "WindowsGetStringRawBuffer");
+    return pRoInitialize && pRoActivateInstance && pRoGetActivationFactory && pWindowsCreateString && pWindowsDeleteString && pWindowsDuplicateString && pWindowsGetStringRawBuffer;
+}
+#define RoInitialize pRoInitialize
+#define RoActivateInstance pRoActivateInstance
+#define RoGetActivationFactory pRoGetActivationFactory
+#define WindowsCreateString pWindowsCreateString
+#define WindowsDeleteString pWindowsDeleteString
+#define WindowsDuplicateString pWindowsDuplicateString
+#define WindowsGetStringRawBuffer pWindowsGetStringRawBuffer
 #define VC_MAXOPT 12
 #define VC_TXT 200
 static CRITICAL_SECTION g_vcCs; static bool g_vcCsOk = false;
@@ -10777,50 +10816,62 @@ static void Vc_Phrase(char *out, size_t cap, char words[][32], int k)
 }
 
 /* -- the recognizer thread -- */
-static ISpRecoGrammar *Vc_Grammar(ISpRecoContext *ctx) { ISpRecoGrammar *g = NULL; return SUCCEEDED(ISpRecoContext_CreateGrammar(ctx, 1, &g)) ? g : NULL; }
-static void Vc_AddPhrase(ISpRecoGrammar *g, SPSTATEHANDLE h, const char *s)
+/* Every way to say what's listened for now, with the rule it picks: greetings (rule 1), or for each answer
+   the whole line, its first 1-6 words, "option N" / "number N" (rule 100 + answer). A start two answers
+   share is left out, so it can't pick the wrong one. */
+#define VC_MAXPH 160
+static int Vc_MakePhrases(int mode, char opt[][VC_TXT], int n, char ph[][VC_TXT], int *rule)
 {
-    WCHAR w[VC_TXT]; if (!MultiByteToWideChar(CP_ACP, 0, s, -1, w, VC_TXT)) return;
-    HRESULT hr = ISpRecoGrammar_AddWordTransition(g, h, NULL, w, L" ", SPWT_LEXICAL, 1.0f, NULL);
-    static int fails = 0; if (FAILED(hr) && fails++ < 10) Log("Voice: phrase \"%s\" not usable (0x%08lX)", s, (unsigned long)hr);
+    int np = 0;
+    if (mode == 1) { for (int i = 0; g_vcGreetings[i] && np < VC_MAXPH; i++) { snprintf(ph[np], VC_TXT, "%s", g_vcGreetings[i]); rule[np++] = 1; } return np; }
+    if (mode != 2) return 0;
+    static char cand[VC_MAXOPT][10][VC_TXT]; int cn[VC_MAXOPT] = { 0 };
+    for (int i = 0; i < n; i++) {
+        char words[24][32]; int nw = Vc_Words(opt[i], words, 24);
+        if (nw > 12) nw = 12;
+        int ks[7] = { 1, 2, 3, 4, 5, 6, nw };
+        for (int q = 0; q < 7 && nw > 0; q++) {
+            int k = ks[q]; if (k > nw) continue;
+            if (k == 1 && strlen(words[0]) < 4) continue;   /* (one short word is too easy to hear by mistake) */
+            char s[VC_TXT]; Vc_Phrase(s, sizeof s, words, k);
+            bool dup = false; for (int r = 0; r < cn[i]; r++) if (!strcmp(cand[i][r], s)) dup = true;
+            if (!dup && cn[i] < 10) snprintf(cand[i][cn[i]++], VC_TXT, "%s", s);
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        for (int r = 0; r < cn[i] && np < VC_MAXPH; r++) {
+            bool shared = false;
+            for (int j = 0; j < n && !shared; j++) if (j != i) for (int t = 0; t < cn[j]; t++) if (!strcmp(cand[j][t], cand[i][r])) { shared = true; break; }
+            if (!shared) { snprintf(ph[np], VC_TXT, "%s", cand[i][r]); rule[np++] = 100 + i; }
+        }
+        if (i < 12 && np + 2 <= VC_MAXPH) {
+            snprintf(ph[np], VC_TXT, "option %s", g_vcNum[i]); rule[np++] = 100 + i;
+            snprintf(ph[np], VC_TXT, "number %s", g_vcNum[i]); rule[np++] = 100 + i;
+        }
+    }
+    return np;
 }
+static int Vc_RuleFor(const char *heard, char ph[][VC_TXT], int *rule, int np)
+{
+    char words[24][32]; int nw = Vc_Words(heard, words, 24); char s[VC_TXT]; Vc_Phrase(s, sizeof s, words, nw);
+    for (int i = 0; i < np; i++) if (!strcmp(ph[i], s)) return rule[i];
+    for (int i = 0; i < np; i++) if (!_stricmp(ph[i], heard)) return rule[i];
+    return -1;
+}
+
+/* -- Windows' older speech engine (SAPI) -- */
+static ISpRecoGrammar *Vc_Grammar(ISpRecoContext *ctx) { ISpRecoGrammar *g = NULL; return SUCCEEDED(ISpRecoContext_CreateGrammar(ctx, 1, &g)) ? g : NULL; }
 static int Vc_Build(ISpRecoGrammar *g, int mode, char opt[][VC_TXT], int n)
 {
+    static char ph[VC_MAXPH][VC_TXT]; int rule[VC_MAXPH];
+    int np = Vc_MakePhrases(mode, opt, n, ph, rule);
     ISpRecoGrammar_SetRuleState(g, NULL, NULL, SPRS_INACTIVE);
     ISpRecoGrammar_ResetGrammar(g, 0x409);
     int rules = 0;
-    if (mode == 1) {
-        SPSTATEHANDLE h; if (SUCCEEDED(ISpRecoGrammar_GetRule(g, NULL, 1, SPRAF_TopLevel | SPRAF_Active, TRUE, &h))) {
-            for (int i = 0; g_vcGreetings[i]; i++) Vc_AddPhrase(g, h, g_vcGreetings[i]);
-            rules++;
-        }
-    } else if (mode == 2) {
-        /* every way to say each answer: the whole line, its first 1-6 words, "option N" / "number N" - a start
-           that two answers share is left out, so it can't pick the wrong one */
-        static char ph[VC_MAXOPT][10][VC_TXT]; int pn[VC_MAXOPT] = { 0 };
-        for (int i = 0; i < n; i++) {
-            char words[24][32]; int nw = Vc_Words(opt[i], words, 24);
-            if (nw > 12) nw = 12;
-            int ks[7] = { 1, 2, 3, 4, 5, 6, nw };
-            for (int q = 0; q < 7 && nw > 0; q++) {
-                int k = ks[q]; if (k > nw) continue;
-                if (k == 1 && strlen(words[0]) < 4) continue;   /* (one short word is too easy to hear by mistake) */
-                char s[VC_TXT]; Vc_Phrase(s, sizeof s, words, k);
-                bool dup = false; for (int r = 0; r < pn[i]; r++) if (!strcmp(ph[i][r], s)) dup = true;
-                if (!dup && pn[i] < 10) snprintf(ph[i][pn[i]++], VC_TXT, "%s", s);
-            }
-        }
-        for (int i = 0; i < n; i++) {
-            SPSTATEHANDLE h; if (FAILED(ISpRecoGrammar_GetRule(g, NULL, 100 + i, SPRAF_TopLevel | SPRAF_Active, TRUE, &h))) continue;
-            for (int r = 0; r < pn[i]; r++) {
-                bool shared = false;
-                for (int j = 0; j < n && !shared; j++) if (j != i) for (int t = 0; t < pn[j]; t++) if (!strcmp(ph[j][t], ph[i][r])) { shared = true; break; }
-                if (!shared) Vc_AddPhrase(g, h, ph[i][r]);
-            }
-            if (i < 12) { char s[64]; snprintf(s, sizeof s, "option %s", g_vcNum[i]); Vc_AddPhrase(g, h, s);
-                          snprintf(s, sizeof s, "number %s", g_vcNum[i]); Vc_AddPhrase(g, h, s); }
-            rules++;
-        }
+    for (int i = 0; i < np; i++) {
+        SPSTATEHANDLE h; if (FAILED(ISpRecoGrammar_GetRule(g, NULL, rule[i], SPRAF_TopLevel | SPRAF_Active, TRUE, &h))) continue;
+        WCHAR w[VC_TXT]; if (!MultiByteToWideChar(CP_ACP, 0, ph[i], -1, w, VC_TXT)) continue;
+        if (SUCCEEDED(ISpRecoGrammar_AddWordTransition(g, h, NULL, w, L" ", SPWT_LEXICAL, 1.0f, NULL))) rules++;
     }
     HRESULT hr = ISpRecoGrammar_Commit(g, 0);
     if (rules && SUCCEEDED(hr)) ISpRecoGrammar_SetRuleState(g, NULL, NULL, SPRS_ACTIVE);
@@ -10831,10 +10882,8 @@ static ISpObjectToken *Vc_FindToken(const WCHAR *cat, const char *want, bool use
     ISpObjectTokenCategory *c = NULL; ISpObjectToken *best = NULL; IEnumSpObjectTokens *en = NULL;
     if (FAILED(CoCreateInstance(&CLSID_SpObjectTokenCategory, NULL, CLSCTX_ALL, &IID_ISpObjectTokenCategory, (void **)&c))) return NULL;
     if (SUCCEEDED(ISpObjectTokenCategory_SetId(c, cat, FALSE)) && SUCCEEDED(ISpObjectTokenCategory_EnumTokens(c, NULL, NULL, &en))) {
-        /* the wanted name first, then the usual names of headset microphones */
         const char *pats[8] = { want, "oculus", "headset microphone", "quest", "virtual desktop", "steam streaming microphone", "vive", "index" };
-        int bestRank = 99; ISpObjectToken *t;
-        ULONG got;
+        int bestRank = 99; ISpObjectToken *t; ULONG got;
         while (IEnumSpObjectTokens_Next(en, 1, &t, &got) == S_OK && got == 1) {
             WCHAR *wn = NULL; char nm[160] = "";
             if (SUCCEEDED(ISpObjectToken_GetStringValue(t, NULL, &wn)) && wn) { WideCharToMultiByte(CP_ACP, 0, wn, -1, nm, sizeof nm, NULL, NULL); CoTaskMemFree(wn); }
@@ -10848,7 +10897,7 @@ static ISpObjectToken *Vc_FindToken(const WCHAR *cat, const char *want, bool use
             else ISpObjectToken_Release(t);
         }
         IEnumSpObjectTokens_Release(en);
-        if (useDefault && best && bestRank == 50) {   /* nothing headset-like: Windows' default microphone */
+        if (useDefault && best && bestRank == 50) {
             WCHAR *defId = NULL;
             if (SUCCEEDED(ISpObjectTokenCategory_GetDefaultTokenId(c, &defId)) && defId) {
                 ISpObjectToken *d = NULL;
@@ -10862,66 +10911,250 @@ static ISpObjectToken *Vc_FindToken(const WCHAR *cat, const char *want, bool use
     ISpObjectTokenCategory_Release(c);
     return best;
 }
-static DWORD WINAPI Vc_Thread(LPVOID unused)
+static void Vc_Snapshot(int *mode, int *n, char opt[][VC_TXT], LONG *v)
 {
-    (void)unused;
-    HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    EnterCriticalSection(&g_vcCs); *mode = g_vcMode; *n = g_vcN; memcpy(opt, g_vcOpt, sizeof g_vcOpt); *v = g_vcVer; LeaveCriticalSection(&g_vcCs);
+}
+static void Vc_Heard(const char *txt, int rule, int conf3, float conf, LONG built)
+{   /* conf3: 1 high, 0 normal/medium, -1 low */
+    bool ok = rule >= 0 && (conf >= g_voiceConf || conf3 > 0 || (conf3 == 0 && g_voiceConf <= 0.6f) || (conf3 < 0 && g_voiceConf <= 0.15f));
+    Log("Voice: heard \"%s\" (sure %.2f, %s) -> %s", txt, conf, conf3 > 0 ? "high" : conf3 < 0 ? "low" : "medium", rule < 0 ? "not on the list" : ok ? "used" : "ignored (not sure enough)");
+    if (ok) { InterlockedExchange(&g_vcHitRule, rule); InterlockedExchange(&g_vcHitVer, built); }
+}
+static bool Vc_RunSapi(void)
+{
+    HRESULT hr;
     ISpRecognizer *rec = NULL; ISpRecoContext *ctx = NULL; ISpRecoGrammar *g = NULL; ISpObjectToken *mic = NULL;
     char micName[160] = "?", recName[160] = "";
-    if (FAILED(CoCreateInstance(&CLSID_SpInprocRecognizer, NULL, CLSCTX_ALL, &IID_ISpRecognizer, (void **)&rec))) { Log("Voice: Windows speech recognition isn't available on this PC - voice control off"); goto fail; }
+    if (FAILED(hr = CoCreateInstance(&CLSID_SpInprocRecognizer, NULL, CLSCTX_INPROC_SERVER, &IID_ISpRecognizer, (void **)&rec))) { Log("Voice: Windows' older speech engine (SAPI) isn't there (0x%08lX)", (unsigned long)hr); goto fail; }
     mic = Vc_FindToken(L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\AudioInput", g_voiceMic, true, micName, sizeof micName);
-    if (!mic || FAILED(hr = ISpRecognizer_SetInput(rec, (IUnknown *)mic, TRUE))) { Log("Voice: no microphone could be opened (0x%08lX) - voice control off", (unsigned long)hr); goto fail; }
+    if (!mic || FAILED(hr = ISpRecognizer_SetInput(rec, (IUnknown *)mic, TRUE))) { Log("Voice: SAPI couldn't open a microphone (0x%08lX)", (unsigned long)hr); goto fail; }
     if (FAILED(hr = ISpRecognizer_CreateRecoContext(rec, &ctx))) {
         ISpObjectToken *rt = Vc_FindToken(L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Recognizers", "", false, recName, sizeof recName);
         if (rt) { ISpRecognizer_SetRecognizer(rec, rt); ISpObjectToken_Release(rt); hr = ISpRecognizer_CreateRecoContext(rec, &ctx); }
     }
-    if (FAILED(hr) || !ctx) { Log("Voice: no speech recognizer for this Windows language (0x%08lX) - install English speech in Windows settings (Time & language > Speech). Voice control off", (unsigned long)hr); goto fail; }
+    if (FAILED(hr) || !ctx) { Log("Voice: SAPI has no recognizer for this language (0x%08lX)", (unsigned long)hr); goto fail; }
     ULONGLONG want = VC_SPFEI(SPEI_RECOGNITION) | VC_SPFEI(SPEI_FALSE_RECOGNITION);
     ISpRecoContext_SetInterest(ctx, want, want);
     ISpRecoContext_SetNotifyWin32Event(ctx);
     HANDLE ev = ISpRecoContext_GetNotifyEventHandle(ctx);
-    if (!(g = Vc_Grammar(ctx))) { Log("Voice: couldn't make a phrase list - voice control off"); goto fail; }
+    if (!(g = Vc_Grammar(ctx))) { Log("Voice: SAPI couldn't make a phrase list"); goto fail; }
     ISpRecognizer_SetRecoState(rec, SPRST_ACTIVE);
-    Log("Voice: listening on \"%s\"%s%s", micName, recName[0] ? " with " : "", recName);
+    Log("Voice: listening (SAPI) on \"%s\"%s%s", micName, recName[0] ? " with " : "", recName);
     InterlockedExchange(&g_vcState, 1);
     LONG built = -1; int builtMode = -1;
+    static char ph[VC_MAXPH][VC_TXT]; static int rule[VC_MAXPH]; int np = 0;
     for (;;) {
-        LONG v = g_vcVer;
-        if (v != built) {
-            int mode, n; static char opt[VC_MAXOPT][VC_TXT];
-            EnterCriticalSection(&g_vcCs); mode = g_vcMode; n = g_vcN; memcpy(opt, g_vcOpt, sizeof opt); v = g_vcVer; LeaveCriticalSection(&g_vcCs);
-            ISpRecoContext_Pause(ctx, 0);
-            int r = Vc_Build(g, mode, opt, n);
-            ISpRecoContext_Resume(ctx, 0);
-            if (mode != builtMode || mode == 2) Log("Voice: now listening for %s (%d)", mode == 2 ? "dialogue answers" : mode == 1 ? "greetings" : "nothing", r);
+        if (g_vcVer != built) {
+            int mode, n; LONG v; static char opt[VC_MAXOPT][VC_TXT];
+            Vc_Snapshot(&mode, &n, opt, &v);
+            np = Vc_MakePhrases(mode, opt, n, ph, rule);
+            ISpRecoContext_Pause(ctx, 0); int r = Vc_Build(g, mode, opt, n); ISpRecoContext_Resume(ctx, 0);
+            if (mode != builtMode || mode == 2) Log("Voice: now listening for %s (%d phrases)", mode == 2 ? "dialogue answers" : mode == 1 ? "greetings" : "nothing", r);
             built = v; builtMode = mode;
         }
         if (ev) WaitForSingleObject(ev, 60); else Sleep(60);
         SPEVENT e; ULONG got = 0;
         while (SUCCEEDED(ISpRecoContext_GetEvents(ctx, 1, &e, &got)) && got == 1) {
             if (e.eEventId == SPEI_RECOGNITION && e.elParamType == SPET_LPARAM_IS_OBJECT && e.lParam) {
-                ISpRecoResult *res = (ISpRecoResult *)e.lParam; SPPHRASE *ph = NULL; WCHAR *wt = NULL; char txt[VC_TXT] = "";
+                ISpRecoResult *res = (ISpRecoResult *)e.lParam; SPPHRASE *p = NULL; WCHAR *wt = NULL; char txt[VC_TXT] = "";
                 if (SUCCEEDED(ISpRecoResult_GetText(res, SP_GETWHOLEPHRASE, SP_GETWHOLEPHRASE, TRUE, &wt, NULL)) && wt) { WideCharToMultiByte(CP_ACP, 0, wt, -1, txt, sizeof txt, NULL, NULL); CoTaskMemFree(wt); }
-                if (SUCCEEDED(ISpRecoResult_GetPhrase(res, &ph)) && ph) {
-                    float conf = ph->Rule.SREngineConfidence; int c3 = ph->Rule.Confidence; LONG id = (LONG)ph->Rule.ulId;
-                    bool ok = conf >= g_voiceConf || c3 == SP_HIGH_CONFIDENCE;
-                    Log("Voice: heard \"%s\" (sure %.2f, %s) -> %s", txt, conf, c3 > 0 ? "high" : c3 < 0 ? "low" : "normal", ok ? "used" : "ignored (not sure enough)");
-                    if (ok) { InterlockedExchange(&g_vcHitRule, id); InterlockedExchange(&g_vcHitVer, built); }
-                    CoTaskMemFree(ph);
+                if (SUCCEEDED(ISpRecoResult_GetPhrase(res, &p)) && p) {
+                    Vc_Heard(txt, (int)p->Rule.ulId, p->Rule.Confidence > 0 ? 1 : p->Rule.Confidence < 0 ? -1 : 0, p->Rule.SREngineConfidence, built);
+                    CoTaskMemFree(p);
                 }
-            } else if (e.eEventId == SPEI_FALSE_RECOGNITION) { static int fl = 0; if (fl++ < 20) Log("Voice: heard something that isn't on the list"); }
+            }
             if (e.elParamType == SPET_LPARAM_IS_OBJECT && e.lParam) ((IUnknown *)e.lParam)->lpVtbl->Release((IUnknown *)e.lParam);
             else if ((e.elParamType == SPET_LPARAM_IS_POINTER || e.elParamType == SPET_LPARAM_IS_STRING) && e.lParam) CoTaskMemFree((void *)e.lParam);
             got = 0;
         }
     }
 fail:
-    InterlockedExchange(&g_vcState, -1);
     if (g) ISpRecoGrammar_Release(g);
     if (ctx) ISpRecoContext_Release(ctx);
     if (mic) ISpObjectToken_Release(mic);
     if (rec) ISpRecognizer_Release(rec);
-    if (SUCCEEDED(hr) || hr == S_FALSE) CoUninitialize();
+    return false;
+}
+
+/* -- Windows' current speech engine (Windows.Media.SpeechRecognition, Windows 10/11, offline with the
+      language's speech pack). It listens on Windows' default microphone. -- */
+typedef struct { __FIIterable_1_HSTRINGVtbl *lpVtbl; LONG ref; HSTRING s[VC_MAXPH]; UINT32 n; } VcList;
+typedef struct { __FIIterator_1_HSTRINGVtbl *lpVtbl; LONG ref; VcList *list; UINT32 i; } VcIter;
+static HRESULT STDMETHODCALLTYPE VcL_QI(__FIIterable_1_HSTRING *This, REFIID riid, void **pp)
+{
+    if (IsEqualGUID(riid, &IID_IUnknown) || IsEqualGUID(riid, &IID_IInspectable) || IsEqualGUID(riid, &IID___FIIterable_1_HSTRING)) { *pp = This; ((VcList *)This)->ref++; return S_OK; }
+    *pp = NULL; return E_NOINTERFACE;
+}
+static ULONG STDMETHODCALLTYPE VcL_AddRef(__FIIterable_1_HSTRING *This) { return (ULONG)InterlockedIncrement(&((VcList *)This)->ref); }
+static ULONG STDMETHODCALLTYPE VcL_Release(__FIIterable_1_HSTRING *This)
+{
+    VcList *l = (VcList *)This; LONG r = InterlockedDecrement(&l->ref);
+    if (!r) { for (UINT32 i = 0; i < l->n; i++) WindowsDeleteString(l->s[i]); HeapFree(GetProcessHeap(), 0, l); }
+    return (ULONG)r;
+}
+static HRESULT STDMETHODCALLTYPE VcL_GetIids(__FIIterable_1_HSTRING *This, ULONG *c, IID **iids) { (void)This; *c = 0; *iids = NULL; return S_OK; }
+static HRESULT STDMETHODCALLTYPE VcL_GetName(__FIIterable_1_HSTRING *This, HSTRING *n) { (void)This; *n = NULL; return S_OK; }
+static HRESULT STDMETHODCALLTYPE VcL_GetTrust(__FIIterable_1_HSTRING *This, TrustLevel *t) { (void)This; *t = BaseTrust; return S_OK; }
+static HRESULT STDMETHODCALLTYPE VcI_QI(__FIIterator_1_HSTRING *This, REFIID riid, void **pp)
+{
+    if (IsEqualGUID(riid, &IID_IUnknown) || IsEqualGUID(riid, &IID_IInspectable) || IsEqualGUID(riid, &IID___FIIterator_1_HSTRING)) { *pp = This; ((VcIter *)This)->ref++; return S_OK; }
+    *pp = NULL; return E_NOINTERFACE;
+}
+static ULONG STDMETHODCALLTYPE VcI_AddRef(__FIIterator_1_HSTRING *This) { return (ULONG)InterlockedIncrement(&((VcIter *)This)->ref); }
+static ULONG STDMETHODCALLTYPE VcI_Release(__FIIterator_1_HSTRING *This)
+{
+    VcIter *it = (VcIter *)This; LONG r = InterlockedDecrement(&it->ref);
+    if (!r) { VcL_Release((__FIIterable_1_HSTRING *)it->list); HeapFree(GetProcessHeap(), 0, it); }
+    return (ULONG)r;
+}
+static HRESULT STDMETHODCALLTYPE VcI_GetIids(__FIIterator_1_HSTRING *This, ULONG *c, IID **iids) { (void)This; *c = 0; *iids = NULL; return S_OK; }
+static HRESULT STDMETHODCALLTYPE VcI_GetName(__FIIterator_1_HSTRING *This, HSTRING *n) { (void)This; *n = NULL; return S_OK; }
+static HRESULT STDMETHODCALLTYPE VcI_GetTrust(__FIIterator_1_HSTRING *This, TrustLevel *t) { (void)This; *t = BaseTrust; return S_OK; }
+static HRESULT STDMETHODCALLTYPE VcI_Current(__FIIterator_1_HSTRING *This, HSTRING *v)
+{ VcIter *it = (VcIter *)This; if (it->i >= it->list->n) { *v = NULL; return E_BOUNDS; } return WindowsDuplicateString(it->list->s[it->i], v); }
+static HRESULT STDMETHODCALLTYPE VcI_HasCurrent(__FIIterator_1_HSTRING *This, boolean *v) { VcIter *it = (VcIter *)This; *v = it->i < it->list->n; return S_OK; }
+static HRESULT STDMETHODCALLTYPE VcI_MoveNext(__FIIterator_1_HSTRING *This, boolean *v) { VcIter *it = (VcIter *)This; if (it->i < it->list->n) it->i++; *v = it->i < it->list->n; return S_OK; }
+static HRESULT STDMETHODCALLTYPE VcI_GetMany(__FIIterator_1_HSTRING *This, UINT32 cap, HSTRING *items, UINT32 *got)
+{
+    VcIter *it = (VcIter *)This; UINT32 k = 0;
+    while (k < cap && it->i < it->list->n) { WindowsDuplicateString(it->list->s[it->i], &items[k]); k++; it->i++; }
+    *got = k; return S_OK;
+}
+static __FIIterator_1_HSTRINGVtbl g_vcIterVt = { VcI_QI, VcI_AddRef, VcI_Release, VcI_GetIids, VcI_GetName, VcI_GetTrust, VcI_Current, VcI_HasCurrent, VcI_MoveNext, VcI_GetMany };
+static HRESULT STDMETHODCALLTYPE VcL_First(__FIIterable_1_HSTRING *This, __FIIterator_1_HSTRING **out)
+{
+    VcIter *it = (VcIter *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof *it);
+    if (!it) return E_OUTOFMEMORY;
+    it->lpVtbl = &g_vcIterVt; it->ref = 1; it->list = (VcList *)This; VcL_AddRef(This);
+    *out = (__FIIterator_1_HSTRING *)it; return S_OK;
+}
+static __FIIterable_1_HSTRINGVtbl g_vcListVt = { VcL_QI, VcL_AddRef, VcL_Release, VcL_GetIids, VcL_GetName, VcL_GetTrust, VcL_First };
+static HSTRING Vc_HStr(const WCHAR *w) { HSTRING h = NULL; WindowsCreateString(w, (UINT32)wcslen(w), &h); return h; }
+static AsyncStatus Vc_Wait(IUnknown *op, int maxMs, bool (*cancelIf)(void))
+{
+    IAsyncInfo *ai = NULL; AsyncStatus st = Error;
+    if (FAILED(op->lpVtbl->QueryInterface(op, &IID_IAsyncInfo, (void **)&ai)) || !ai) return Error;
+    bool cancelled = false;
+    for (int t = 0; ; t += 30) {
+        if (FAILED(IAsyncInfo_get_Status(ai, &st))) { st = Error; break; }
+        if (st != Started) break;
+        if (!cancelled && ((cancelIf && cancelIf()) || (maxMs > 0 && t > maxMs))) { IAsyncInfo_Cancel(ai); cancelled = true; }
+        Sleep(30);
+    }
+    if (st == Error) { HRESULT e = 0; IAsyncInfo_get_ErrorCode(ai, &e); static int el = 0; if (el++ < 10) Log("Voice: Windows speech error 0x%08lX%s", (unsigned long)e,
+        (unsigned long)e == 0x80045509UL ? " (speech privacy: turn on Settings > Privacy & security > Speech > Online speech recognition, or install the English speech pack)" :
+        (unsigned long)e == 0x80070005UL ? " (microphone access refused: Settings > Privacy & security > Microphone > let desktop apps use it)" : ""); }
+    IAsyncInfo_Release(ai);
+    return st;
+}
+static LONG g_vcRtBuilt = -1;
+static bool Vc_PhrasesChanged(void) { return g_vcVer != g_vcRtBuilt; }
+static bool Vc_RunWinRT(void)
+{
+    typedef __x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognizer Rec;
+    typedef __x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognitionListConstraintFactory Fac;
+    typedef __x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognitionListConstraint LCon;
+    typedef __x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognitionConstraint Con;
+    typedef __FIVector_1_Windows__CMedia__CSpeechRecognition__CISpeechRecognitionConstraint Vec;
+    typedef __FIAsyncOperation_1_Windows__CMedia__CSpeechRecognition__CSpeechRecognitionCompilationResult CompOp;
+    typedef __FIAsyncOperation_1_Windows__CMedia__CSpeechRecognition__CSpeechRecognitionResult RecOp;
+    typedef __x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognitionCompilationResult CompRes;
+    typedef __x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognitionResult Res;
+    if (!Vc_LoadRT()) { Log("Voice: this Windows has no Windows runtime speech (needs Windows 10 or 11)"); return false; }
+    HRESULT hr = RoInitialize(RO_INIT_MULTITHREADED);
+    if (FAILED(hr) && hr != RPC_E_CHANGED_MODE) { Log("Voice: Windows runtime not available (0x%08lX)", (unsigned long)hr); return false; }
+    IInspectable *ins = NULL; Rec *rec = NULL; Fac *fac = NULL;
+    HSTRING cls = Vc_HStr(L"Windows.Media.SpeechRecognition.SpeechRecognizer");
+    hr = RoActivateInstance(cls, &ins); WindowsDeleteString(cls);
+    if (FAILED(hr) || !ins || FAILED(hr = ins->lpVtbl->QueryInterface(ins, &IID___x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognizer, (void **)&rec)) || !rec) {
+        Log("Voice: Windows speech recognition couldn't start (0x%08lX) - is an English speech language installed? (Settings > Time & language > Speech)", (unsigned long)hr);
+        if (ins) ins->lpVtbl->Release(ins); return false; }
+    ins->lpVtbl->Release(ins);
+    HSTRING fcls = Vc_HStr(L"Windows.Media.SpeechRecognition.SpeechRecognitionListConstraint");
+    hr = RoGetActivationFactory(fcls, &IID___x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognitionListConstraintFactory, (void **)&fac); WindowsDeleteString(fcls);
+    if (FAILED(hr) || !fac) { Log("Voice: Windows speech: no phrase lists (0x%08lX)", (unsigned long)hr); rec->lpVtbl->Release(rec); return false; }
+    Log("Voice: listening (Windows speech) on Windows' default microphone - set the headset's microphone as the default recording device in Windows sound settings");
+    InterlockedExchange(&g_vcState, 1);
+    static char ph[VC_MAXPH][VC_TXT]; static int rule[VC_MAXPH]; int np = 0, builtMode = -1; bool compiled = false; int errs = 0;
+    for (;;) {
+        if (g_vcVer != g_vcRtBuilt) {
+            int mode, n; LONG v; static char opt[VC_MAXOPT][VC_TXT];
+            Vc_Snapshot(&mode, &n, opt, &v);
+            np = Vc_MakePhrases(mode, opt, n, ph, rule);
+            compiled = false;
+            Vec *vec = NULL;
+            if (SUCCEEDED(rec->lpVtbl->get_Constraints(rec, &vec)) && vec) {
+                vec->lpVtbl->Clear(vec);
+                if (np > 0) {
+                    VcList *l = (VcList *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof *l);
+                    if (l) {
+                        l->lpVtbl = &g_vcListVt; l->ref = 1;
+                        for (int i = 0; i < np; i++) { WCHAR w[VC_TXT]; MultiByteToWideChar(CP_ACP, 0, ph[i], -1, w, VC_TXT); l->s[l->n++] = Vc_HStr(w); }
+                        LCon *lc = NULL; Con *c = NULL;
+                        hr = fac->lpVtbl->Create(fac, (__FIIterable_1_HSTRING *)l, &lc);
+                        VcL_Release((__FIIterable_1_HSTRING *)l);
+                        if (SUCCEEDED(hr) && lc && SUCCEEDED(lc->lpVtbl->QueryInterface(lc, &IID___x_ABI_CWindows_CMedia_CSpeechRecognition_CISpeechRecognitionConstraint, (void **)&c)) && c) {
+                            vec->lpVtbl->Append(vec, c); c->lpVtbl->Release(c);
+                        } else Log("Voice: Windows speech: phrase list refused (0x%08lX)", (unsigned long)hr);
+                        if (lc) lc->lpVtbl->Release(lc);
+                    }
+                }
+                vec->lpVtbl->Release(vec);
+            }
+            if (np > 0) {
+                CompOp *op = NULL;
+                if (SUCCEEDED(rec->lpVtbl->CompileConstraintsAsync(rec, &op)) && op) {
+                    if (Vc_Wait((IUnknown *)op, 10000, NULL) == Completed) {
+                        CompRes *cr = NULL;
+                        if (SUCCEEDED(op->lpVtbl->GetResults(op, &cr)) && cr) {
+                            __x_ABI_CWindows_CMedia_CSpeechRecognition_CSpeechRecognitionResultStatus s = 6;
+                            cr->lpVtbl->get_Status(cr, &s); compiled = s == 0;
+                            if (!compiled) Log("Voice: Windows speech couldn't use the phrases (status %d)", (int)s);
+                            cr->lpVtbl->Release(cr);
+                        }
+                    }
+                    op->lpVtbl->Release(op);
+                }
+            }
+            if (mode != builtMode || mode == 2) Log("Voice: now listening for %s (%d phrases%s)", mode == 2 ? "dialogue answers" : mode == 1 ? "greetings" : "nothing", np, np && !compiled ? ", NOT ready" : "");
+            builtMode = mode; g_vcRtBuilt = v;
+        }
+        if (!compiled || np == 0) { Sleep(100); continue; }
+        RecOp *op = NULL;
+        if (FAILED(hr = rec->lpVtbl->RecognizeAsync(rec, &op)) || !op) { if (errs++ < 5) Log("Voice: Windows speech couldn't listen (0x%08lX)", (unsigned long)hr); Sleep(1000); continue; }
+        LONG built = g_vcRtBuilt;
+        AsyncStatus st = Vc_Wait((IUnknown *)op, 0, Vc_PhrasesChanged);
+        if (st == Completed) {
+            Res *res = NULL;
+            if (SUCCEEDED(op->lpVtbl->GetResults(op, &res)) && res) {
+                __x_ABI_CWindows_CMedia_CSpeechRecognition_CSpeechRecognitionResultStatus s = 6;
+                res->lpVtbl->get_Status(res, &s);
+                if (s == 0) {
+                    HSTRING t = NULL; char txt[VC_TXT] = "";
+                    if (SUCCEEDED(res->lpVtbl->get_Text(res, &t)) && t) { UINT32 len; const WCHAR *w = WindowsGetStringRawBuffer(t, &len); WideCharToMultiByte(CP_ACP, 0, w, -1, txt, sizeof txt, NULL, NULL); WindowsDeleteString(t); }
+                    __x_ABI_CWindows_CMedia_CSpeechRecognition_CSpeechRecognitionConfidence cf = 3;
+                    res->lpVtbl->get_Confidence(res, &cf);
+                    if (txt[0] && cf != 3) {
+                        int r = Vc_RuleFor(txt, ph, rule, np);
+                        Vc_Heard(txt, r, cf == 0 ? 1 : cf == 1 ? 0 : -1, cf == 0 ? 0.9f : cf == 1 ? 0.6f : 0.3f, built);
+                    } else if (txt[0]) { static int rl = 0; if (rl++ < 20) Log("Voice: heard \"%s\" but too unsure (rejected)", txt); }
+                } else if (s != 7 /* (just silence) */ && s != 5) { static int sl = 0; if (sl++ < 10) Log("Voice: Windows speech result status %d%s", (int)s, s == 10 ? " (microphone unavailable)" : s == 4 ? " (poor audio)" : ""); if (s == 10) Sleep(2000); }
+                res->lpVtbl->Release(res);
+            }
+        } else if (st == Error) Sleep(1500);
+        op->lpVtbl->Release(op);
+    }
+    return true;
+}
+static DWORD WINAPI Vc_Thread(LPVOID unused)
+{
+    (void)unused;
+    HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED); (void)hr;
+    if (g_voiceEngine != 2 && Vc_RunSapi()) return 0;
+    if (g_voiceEngine != 1 && Vc_RunWinRT()) return 0;
+    Log("Voice: no speech recognition could start - voice control off");
+    InterlockedExchange(&g_vcState, -1);
     return 0;
 }
 
@@ -11030,17 +11263,33 @@ static void Voice_Tick(void)
    look at you; both are undone the moment the conversation closes. [Display] bDialogueHoldStill. */
 static void Dialogue_Tick(void)
 {
+    {   /* paused conversation: make sure the view still follows your head; if not, talk with the world running */
+        static bool on = false; static float cam0 = 0, head0 = 0; static double t0 = 0;
+        const volatile bool *v0 = (const volatile bool *)0x011F308F;
+        bool paused = v0[1009] && g_liveMenuNow && !g_menuFlagCleared && g_inGameplay && !g_dlgCamStuck;
+        char *sg = *(char **)SCENEGRAPH_PTR_ADDR; char *cm = Rd(sg, SCENEGRAPH_CAMERA + 4) ? *(char **)(sg + SCENEGRAPH_CAMERA) : NULL;
+        if (paused && Rd(cm, 0x9C)) {
+            const float *m = (const float *)(cm + NIAV_WORLD_ROTATE); float cy = atan2f(m[3], m[0]);
+            if (!on) { on = true; cam0 = cy; head0 = g_vrHeadYaw; t0 = QpcMs(); }
+            else if (QpcMs() - t0 > 400.0) {
+                float dh = fabsf(WrapPi(g_vrHeadYaw - head0)) * RAD2DEG, dc = fabsf(WrapPi(cy - cam0)) * RAD2DEG;
+                if (dh > 15.0f && dc < 3.0f) { g_dlgCamStuck = true; Log("Talking: the view didn't follow your head (head %.0f deg, view %.0f deg) - conversations keep the world running instead", dh, dc); }
+                else if (dh > 15.0f) { static int okl = 0; if (okl++ < 2) Log("Talking: view follows your head in the conversation (head %.0f deg, view %.0f deg)", dh, dc); cam0 = cy; head0 = g_vrHeadYaw; }
+            }
+        } else on = false;
+    }
     static char *ref = NULL; static uint32_t refId = 0; static bool weRestrained = false, active = false; static double openAt = 0;
     static void *find = NULL, *hold = NULL, *undo = NULL; static bool failed = false;
     const volatile bool *vis = (const volatile bool *)0x011F308F;
-    bool talking = vis[1009] && g_liveMenuNow && g_inGameplay && !vis[1007];
-    if (!failed && !find && g_scriptIntf && g_scriptIntf->CompileScript) {
+    bool talking = vis[1009] && g_liveMenuNow && g_menuFlagCleared && g_inGameplay && !vis[1007];   /* (only when the world keeps running while you talk) */
+    static int tries = 0;
+    if (!failed && !find && g_inGameplay && !vis[1007] && g_scriptIntf && g_scriptIntf->CompileScript) {
         find = g_scriptIntf->CompileScript("ref r\nref rFound\nBegin Function { }\nset r to GetFirstRef 200 1\nwhile r != 0\nif r.IsInDialogueWithPlayer\nset rFound to r\nendif\nset r to GetNextRef\nloop\nSetFunctionValue rFound\nEnd\n");
         hold = g_scriptIntf->CompileScript("ref r\nint iWas\nBegin Function { r }\nset iWas to r.GetRestrained\nif iWas == 0\nr.SetRestrained 1\nendif\nr.Look player\nSetFunctionValue iWas\nEnd\n");
         undo = g_scriptIntf->CompileScript("ref r\nint iUn\nBegin Function { r, iUn }\nif iUn\nr.SetRestrained 0\nendif\nr.StopLook\nEnd\n");
-        if (!find || !hold || !undo) { failed = true; Log("Talking: couldn't set up holding the person still"); }
+        if (!find || !hold || !undo) { if (++tries >= 3) failed = true; find = NULL; Log("Talking: couldn't set up holding the person still (try %d)", tries); }
     }
-    if (failed) return;
+    if (failed || !find) return;
     if (talking && !active && g_dlgHold) {
         if (!openAt) openAt = QpcMs();
         if (QpcMs() - openAt < 150.0) return;   /* (a moment for the conversation to be set up) */
@@ -11728,6 +11977,7 @@ static const SetOpt g_setOpts[] = {
     { SP_HUD, ST_FLOAT, "Look away to close menus", "Display", "fLookAwayClose", &g_lookAwayDeg, 0.0f, 180.0f, 5.0f, "%.0f deg", 0, 0, "With live menus: turn your head this far away from a menu and it closes. 0 = never." },
     { SP_DISPLAY, ST_BOOL, "Game menus on the big screen", "Display", "bMenusOnScreen", &g_farGameMenus, 0, 0, 0, 0, 0, 0, "Pause menu, messages, containers and other in-game menus on the same screen." },
     { SP_HUD, ST_FLOAT, "HUD size", "Display", "fUIScale", &g_uiScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view the HUD covers. Smaller = health, AP and compass come in from the edges where you can see them." },
+    { SP_HUD, ST_BOOL, "Talking: world keeps running", "Display", "bLiveDialogueWorld", &g_liveDlgWorld, 0, 0, 0, 0, 0, 0, "OFF (best): while you talk the game runs the conversation its own way - lips stay in sync and every line plays; the rest of the world waits, as in the base game. ON: everything keeps moving, but people may stop mid-conversation." },
     { SP_HUD, ST_BOOL, "Talking: they stand still", "Display", "bDialogueHoldStill", &g_dlgHold, 0, 0, 0, 0, 0, 0, "ON: the person you're talking to stays in place and looks at you while you talk (no shuffling or head snapping). Let go as soon as the conversation ends." },
     { SP_HUD, ST_BOOL, "Voice: say your answers", "Voice", "bVoiceControl", &g_voiceOn, 0, 0, 0, 0, 0, 0, "ON: the headset's microphone listens in conversations - say an answer (its first few words are enough) or \"option two\". Uses Windows' own speech recognition, offline." },
     { SP_HUD, ST_BOOL, "Voice: say hello to talk", "Voice", "bGreetToTalk", &g_voiceGreet, 0, 0, 0, 0, 0, 0, "ON: look at someone and say \"hey\", \"hello\" or \"excuse me\" to start talking to them." },
