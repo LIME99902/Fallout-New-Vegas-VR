@@ -11195,6 +11195,7 @@ static int Vc_Collect(char *t, int depth, char *clickT, VcAns *out, int n, int *
     float *vis = Tile_Val(t, 0xFA3);
     if (vis && *vis == 0.0f && depth > 0) return n;   /* hidden branch */
     float *idv = Tile_Val(t, 0xFAA);
+    if (depth > 0 && strstr(Tile_Name(t), "Speaker")) return n;   /* (what they say and their name - not your answers) */
     if (depth > 0 && idv && *idv >= 0.0f) clickT = t;   /* the nearest clickable piece above (or on) the text */
     char **vals = *(char ***)(t + 0x14); uint32_t nv = *(uint32_t *)(t + 0x18);
     if (clickT && vals && nv < 4096 && Rd(vals, nv * 4))
@@ -11256,6 +11257,18 @@ static void Voice_Tick(void)
                 next = 0;   /* new answers: read them again now */
             } else Log("Voice: answer %d was heard but isn't on screen any more", i + 1);
         } else if (g_vcMode == 1 && rule == 1 && !talking && !IsMenuMode()) {
+            if (!(lastPerson && now - lastPersonAt < 1500.0 && Rd(lastPerson, 0x28))) {   /* nobody under the crosshair: the nearest person in front of you */
+                static void *nearScr = NULL; static bool nf = false;
+                if (!nearScr && !nf && g_scriptIntf && g_scriptIntf->CompileScript) {
+                    nearScr = g_scriptIntf->CompileScript("ref rWho\nref rBest\nfloat fD\nfloat fA\nfloat fBest\nBegin Function { }\nset fBest to 300\nset rWho to GetFirstRef 200 1\nwhile rWho != 0\nif rWho != player\nif rWho.GetDead == 0\nset fD to rWho.GetDistance player\nif fD < fBest\nset fA to player.GetHeadingAngle rWho\nif fA < 35 && fA > -35\nset fBest to fD\nset rBest to rWho\nendif\nendif\nendif\nendif\nset rWho to GetNextRef\nloop\nSetFunctionValue rBest\nEnd\n");
+                    if (!nearScr) { nf = true; Log("Voice: nearby-person search couldn't be set up"); }
+                }
+                if (nearScr) {
+                    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+                    struct { union { double num; void *form; } u; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+                    if (((CallFn_t)g_scriptIntf->CallFunction)(nearScr, GetPlayer(), NULL, &res, 0) && res.type == 2 && Rd(res.u.form, 0x28)) { lastPerson = (char *)res.u.form; lastPersonAt = now; }
+                }
+            }
             if (lastPerson && now - lastPersonAt < 1500.0 && Rd(lastPerson, 0x28)) {
                 static void *scr = NULL; static bool failed = false;
                 if (!scr && !failed && g_scriptIntf && g_scriptIntf->CompileScript && g_scriptIntf->CallFunctionAlt) {
