@@ -400,6 +400,7 @@ static bool  g_seated = false;                 /* profile: seated play - your si
 static float g_seatEye = 0;                    /* profile: sitting eye height (m); 0 = not measured */
 static float g_seatCrouchDepth = 0.85f;        /* INI [Seated] fCrouchDepth: how far the right stick (down) crouches you, metres */
 static volatile bool g_seatCrouchWant = false; static float g_seatCrouchK = 0.0f;
+static float g_lhGunFwd = 0.0f, g_lhGunUp = 0.0f, g_lhGunSide = 0.0f;   /* INI [LeftHanded] fGunForward/fGunUp/fGunSide (cm): fine-tuning the gun in the left hand */
 static bool  g_startSetup = true;              /* INI [Startup] bShowSetup: the setup screen before the main menu */
 static float g_bodyReach[2] = { 0, 0 };        /* game shoulder -> hand with the arm straight (m), left / right */
 static bool  g_bodyScaleWorld = true;          /* match the world's size to your height */
@@ -460,6 +461,10 @@ static void LoadSettings(void)
     g_physicalMove = GetPrivateProfileIntA("Tracking", "bPhysicalCrouchLean", 1, g_iniPath) != 0;
     { char cb[32]; GetPrivateProfileStringA("Seated", "fCrouchDepth", "0.85", cb, sizeof cb, g_iniPath); g_seatCrouchDepth = fminf(fmaxf((float)atof(cb), 0.2f), 1.4f); }
     g_startSetup = GetPrivateProfileIntA("Startup", "bShowSetup", 1, g_iniPath) != 0;
+    { char lb[32];
+      GetPrivateProfileStringA("LeftHanded", "fGunForward", "0", lb, sizeof lb, g_iniPath); g_lhGunFwd = (float)atof(lb);
+      GetPrivateProfileStringA("LeftHanded", "fGunUp", "0", lb, sizeof lb, g_iniPath); g_lhGunUp = (float)atof(lb);
+      GetPrivateProfileStringA("LeftHanded", "fGunSide", "0", lb, sizeof lb, g_iniPath); g_lhGunSide = (float)atof(lb); }
     g_handCollision = GetPrivateProfileIntA("Grab", "bHandCollision", 1, g_iniPath) != 0;
     g_climbEnabled = GetPrivateProfileIntA("Grab", "bClimbing", 1, g_iniPath) != 0;
     g_wristPip = GetPrivateProfileIntA("Controls", "bWristPipBoy", 1, g_iniPath) != 0;
@@ -1484,6 +1489,9 @@ static void Controllers_Poll(bool menu)
     /* "move" hand = left stick, "aim" hand = right stick (swapped for left-handed players) */
     const VRControllerState_t *mv = &c[g_leftHanded ? 1 : 0], *am = &c[g_leftHanded ? 0 : 1];
     bool okMv = ok[g_leftHanded ? 1 : 0], okAm = ok[g_leftHanded ? 0 : 1];
+    /* sticks, stick clicks and face buttons stay on the physical controllers for everyone (left stick moves, right stick
+       turns, A/B right, X/Y left) - left-handed only swaps the hand things: trigger to fire, grips, the gun */
+    const VRControllerState_t *sL = &c[0], *sR = &c[1];
     {   /* both sticks clicked in: held about a second = FNVR settings; a quick click = calibrate the aim */
         static double bothSince = 0; static bool bothUsed = false;
         bool both = okMv && okAm && Pressed(mv, EVRButtonId_k_EButton_SteamVR_Touchpad) && Pressed(am, EVRButtonId_k_EButton_SteamVR_Touchpad);
@@ -1518,13 +1526,13 @@ static void Controllers_Poll(bool menu)
     XState st;
     memset(&st, 0, sizeof st);
     XPad *p = &st.Gamepad;
-    p->sThumbLX = AxisToShort(mv->rAxis[0].x);
-    p->sThumbLY = AxisToShort(mv->rAxis[0].y);
+    p->sThumbLX = AxisToShort(sL->rAxis[0].x);
+    p->sThumbLY = AxisToShort(sL->rAxis[0].y);
     {   float sw = ArmSwing_Stick(menu);   /* arm-swing running: only while the stick is left alone */
-        float sx = mv->rAxis[0].x, sy = mv->rAxis[0].y;
+        float sx = sL->rAxis[0].x, sy = sL->rAxis[0].y;
         if (sw > 0 && sx * sx + sy * sy < 0.04f) { p->sThumbLX = 0; p->sThumbLY = AxisToShort(sw); } else g_swingSprint = false; }
-    p->sThumbRX = AxisToShort(am->rAxis[0].x);                   /* turning */
-    p->sThumbRY = menu ? AxisToShort(am->rAxis[0].y) : 0;      /* up/down look comes from head/hand */
+    p->sThumbRX = AxisToShort(sR->rAxis[0].x);                   /* turning */
+    p->sThumbRY = menu ? AxisToShort(sR->rAxis[0].y) : 0;      /* up/down look comes from head/hand */
     p->bLeftTrigger  = (BYTE)(fminf(fmaxf(mv->rAxis[1].x, 0.0f), 1.0f) * 255.0f);   /* aim / block */
     p->bRightTrigger = (BYTE)(fminf(fmaxf(am->rAxis[1].x, 0.0f), 1.0f) * 255.0f);   /* attack */
     Melee_Update(menu);
@@ -1553,15 +1561,15 @@ static void Controllers_Poll(bool menu)
     bool rGrip = Pressed(am, EVRButtonId_k_EButton_Grip) || am->rAxis[2].x > 0.7f;
     bool lGrip = Pressed(mv, EVRButtonId_k_EButton_Grip) || mv->rAxis[2].x > 0.7f;
     bool rGripRaw = rGrip, lGripRaw = lGrip;
-    bool rA = Pressed(am, EVRButtonId_k_EButton_A), rB = Pressed(am, EVRButtonId_k_EButton_ApplicationMenu);
-    bool lX = Pressed(mv, EVRButtonId_k_EButton_A), lY = Pressed(mv, EVRButtonId_k_EButton_ApplicationMenu);
+    bool rA = Pressed(sR, EVRButtonId_k_EButton_A), rB = Pressed(sR, EVRButtonId_k_EButton_ApplicationMenu);
+    bool lX = Pressed(sL, EVRButtonId_k_EButton_A), lY = Pressed(sL, EVRButtonId_k_EButton_ApplicationMenu);
     {   /* a button still held from a menu or the Pip-Boy (A to fast travel, B to close) does nothing in the game until it's let go */
         static bool aLatch = false, bLatch = false;
         if (menu || g_pipOpen) { aLatch = rA; bLatch = rB; }
         else { if (!rA) aLatch = false; if (!rB) bLatch = false; if (aLatch) rA = false; if (bLatch) rB = false; }
     }
-    bool rClick = Pressed(am, EVRButtonId_k_EButton_SteamVR_Touchpad);
-    bool lClick = Pressed(mv, EVRButtonId_k_EButton_SteamVR_Touchpad);
+    bool rClick = Pressed(sR, EVRButtonId_k_EButton_SteamVR_Touchpad);
+    bool lClick = Pressed(sL, EVRButtonId_k_EButton_SteamVR_Touchpad);
     g_bothSticksClicked = rClick && lClick;
     if (g_bothSticksClicked) rClick = lClick = false;   /* calibration gesture - don't also sneak/run */
     /* Grips with no weapon out: grab whatever loose object is in reach of that hand
@@ -1695,7 +1703,7 @@ static void Controllers_Poll(bool menu)
         if (lY)     b |= g_bindMask[BIND_ACTIVATE];      /* left Y: the same */
         if (rClick) b |= g_bindMask[BIND_SNEAK];
         {   /* right stick up/down scrolls the list: the loot mod scrolls with the mouse wheel, so turn the stick into wheel clicks */
-            static double nextWheel = 0; float y = am->rAxis[0].y;
+            static double nextWheel = 0; float y = sR->rAxis[0].y;
             if (fabsf(y) > 0.55f) {
                 double now = QpcMs();
                 if (now >= nextWheel) {
@@ -1715,11 +1723,11 @@ static void Controllers_Poll(bool menu)
     }
     bool pipMap = g_pipOpen && g_wristPip && ((const volatile bool *)0x011F308F)[0x3FF];   /* Pip-Boy on its map page */
     if (menu && !pipMap) {   /* in menus, the aim stick also works as a d-pad for tabs (not in the Pip-Boy: there it is the real right stick) */
-        if (am->rAxis[0].y >  0.7f) b |= XB_DPAD_UP;
-        if (am->rAxis[0].y < -0.7f) b |= XB_DPAD_DOWN;
+        if (sR->rAxis[0].y >  0.7f) b |= XB_DPAD_UP;
+        if (sR->rAxis[0].y < -0.7f) b |= XB_DPAD_DOWN;
     }
     {   /* seated play: right stick held down = crouch (reach low things); it doesn't turn you while held */
-        float ry = am->rAxis[0].y, rx = am->rAxis[0].x;
+        float ry = sR->rAxis[0].y, rx = sR->rAxis[0].x;
         bool want = g_seated && g_inGameplay && !menu && !g_pipOpen && !(g_lootShown && g_lootControls) && ry < -0.6f && fabsf(ry) > fabsf(rx);
         if (want != g_seatCrouchWant) { static int cl = 0; if (cl++ < 6) Log("Seated crouch: %s", want ? "down (right stick)" : "back up"); }
         g_seatCrouchWant = want;
@@ -1732,7 +1740,7 @@ static void Controllers_Poll(bool menu)
                            at a third of its strength (the cursor still moves, the turning is gentle) */
             /* (just past the game's dead zone, then only a share of the rest - so a small push still moves the cursor) */
             #define PIPSTK(v) (fabsf(v) < 0.12f ? 0.0f : copysignf(0.26f + 0.74f * g_pipStickScale * (fabsf(v) - 0.12f) / 0.88f, (v)))
-            p->sThumbRX = AxisToShort(PIPSTK(am->rAxis[0].x)); p->sThumbRY = AxisToShort(PIPSTK(am->rAxis[0].y));
+            p->sThumbRX = AxisToShort(PIPSTK(sR->rAxis[0].x)); p->sThumbRY = AxisToShort(PIPSTK(sR->rAxis[0].y));
             #undef PIPSTK
         }
         else { p->sThumbRX = 0; p->sThumbRY = 0; } }
@@ -1774,7 +1782,7 @@ static void Controllers_Poll(bool menu)
         p->bLeftTrigger  = (BYTE)(fminf(fmaxf(mv->rAxis[1].x, 0.0f), 1.0f) * 255.0f);
         p->bRightTrigger = (BYTE)(fminf(fmaxf(am->rAxis[1].x, 0.0f), 1.0f) * 255.0f);
     }
-    if (PipAdjust_Update(mv, am, lClick, rA, rB)) { memset(p, 0, sizeof *p); b = 0; lClick = false; }
+    if (PipAdjust_Update(sL, sR, lClick, rA, rB)) { memset(p, 0, sizeof *p); b = 0; lClick = false; }
 
     SetRunKey((lClick || g_swingSprint) && !menu);
     Sprint_Update((lClick || g_swingSprint) && !menu && g_inGameplay);
@@ -5731,7 +5739,7 @@ static const char *g_boneNames[2][B_COUNT] = {
 static char *g_bones[2][B_COUNT];
 static char *g_bonesFor = NULL;          /* first-person node the bones were found in */
 static uint32_t g_fpGen = 1;
-static float g_lhT[3]; static M3 g_lhD; static bool g_lhOk = false;   /* left-handed: where the left hand is drawn this frame, and its turn */
+static float g_lhT[3]; static M3 g_lhD, g_lhBa; static bool g_lhOk = false;   /* left-handed: where the left hand is drawn this frame, and its turn */
 static float g_lhWeapL[12]; static char *g_lhWeapNode = NULL;          /* the gun's own placement, put back after drawing */              /* bumped when the first-person body is rebuilt in place: every cache below re-reads */
 static float g_boneSaved[2][B_COUNT][12];
 static bool  g_armsLogged = false;
@@ -7831,7 +7839,7 @@ static bool Arms_Apply(char *player, char *cam)
             }
         }
         Arm_Reach(s, T, D, Bh);
-        if (s == 0) { memcpy(g_lhT, T, 12); memcpy(g_lhD, D, sizeof D); g_lhOk = true; }
+        if (s == 0) { memcpy(g_lhT, T, 12); memcpy(g_lhD, D, sizeof D); memcpy(g_lhBa, Ba, sizeof Ba); g_lhOk = true; }
         {   /* the drawn hand must end up where your hand is (when the arm can reach it): if it stays well off, repair */
             static double offSince[2] = { 0, 0 };
             const float *Hw = (const float *)(g_bones[s][B_HAND] + NIAV_WORLD_TRANSLATE), *Sw = (const float *)(g_bones[s][B_UPPER] + NIAV_WORLD_TRANSLATE);
@@ -7864,9 +7872,13 @@ static bool Arms_Apply(char *player, char *cam)
             /* the gun's place relative to the hand that holds it */
             M3 Lrm, Gr; memcpy(Lrm, Lr, 36);
             M3Mul(Gr, Rv, Lrm);
-            float Gp[3], lw[3]; for (int i = 0; i < 3; i++) lw[i] = (Rv[i][0] * Lt[0] + Rv[i][1] * Lt[1] + Rv[i][2] * Lt[2]) * ps;
-            const float *Lw = (const float *)(lh + NIAV_WORLD_TRANSLATE);
-            for (int i = 0; i < 3; i++) Gp[i] = Lw[i] + lw[i];
+            /* where it sits: the mirror of its spot in the right palm (the two hands' bones are mirror images across their
+               own x axis), measured from the left hand - then your fine-tuning along the controller's axes */
+            const float *Lw = (const float *)(lh + NIAV_WORLD_TRANSLATE), *Lhr = (const float *)(lh + NIAV_WORLD_ROTATE);
+            float tm[3] = { -Lt[0], Lt[1], Lt[2] }, Gp[3];
+            for (int i = 0; i < 3; i++) Gp[i] = Lw[i] + (Lhr[i * 3 + 0] * tm[0] + Lhr[i * 3 + 1] * tm[1] + Lhr[i * 3 + 2] * tm[2]) * ps;
+            {   float k = g_unitsPerMeter / 100.0f;   /* cm -> game units; controller axes: -Z forward, +Y up, +X right */
+                for (int i = 0; i < 3; i++) Gp[i] += (-g_lhBa[i][2] * g_lhGunFwd + g_lhBa[i][1] * g_lhGunUp + g_lhBa[i][0] * g_lhGunSide) * k; }
             /* back into the right hand's frame (the gun stays its child) */
             M3 PrT, Pm, Nl; memcpy(Pm, Pr, 36); M3T(PrT, Pm); M3Mul(Nl, PrT, Gr);
             memcpy(Lr, Nl, 36);
@@ -11160,6 +11172,9 @@ static const SetOpt g_setOpts[] = {
     { SP_DISPLAY, ST_FLOAT, "Menu revolver roll", "Controls", "fMenuGunRoll", &g_seqRoll, -180.0f, 180.0f, 5.0f, "%.0f deg", 0, 0, "Turn the menu revolver around its barrel if it sits tilted in your hand." },
     { SP_DISPLAY, ST_FLOAT, "Flat menu width", "Display", "fMenuScreenFOV", &g_menuScreenFov, 30.0f, 110.0f, 5.0f, "%.0f deg", 0, 0, "Width of the flat screen used for some menus and loading screens." },
 
+    { SP_WEAPONS, ST_FLOAT, "Left-handed gun: forward/back", "LeftHanded", "fGunForward", &g_lhGunFwd, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Left-handed play: move the gun in your left hand forward (+) or back (-)." },
+    { SP_WEAPONS, ST_FLOAT, "Left-handed gun: up/down", "LeftHanded", "fGunUp", &g_lhGunUp, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Left-handed play: move the gun in your left hand up (+) or down (-)." },
+    { SP_WEAPONS, ST_FLOAT, "Left-handed gun: left/right", "LeftHanded", "fGunSide", &g_lhGunSide, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Left-handed play: move the gun in your left hand to the right (+) or left (-)." },
     { SP_WEAPONS, ST_BOOL, "See-through scopes", "Controls", "bSeeThroughScopes", &g_scopesEnabled, 0, 0, 0, 0, SF_RESTART, 0, "Look through a scope on your gun to see a magnified view. Turning it ON needs a restart." },
     { SP_WEAPONS, ST_BOOL, "Raise to eye to aim scopes", "Controls", "bRaiseToEyeScopes", &g_autoScope, 0, 0, 0, 0, 0, 0, "Bring a scoped gun up to your eye and the game's own scope view comes up." },
     { SP_WEAPONS, ST_INT, "Fire rate", "Controls", "iFireRatePercent", &g_fireRatePct, 25, 400, 5, "%.0f%%", 0, 0, "How fast guns fire, for the gun in your hand. 100% = the game's own; higher = faster, lower = slower. (Automatic guns fire faster; others' attack is quicker.)" },

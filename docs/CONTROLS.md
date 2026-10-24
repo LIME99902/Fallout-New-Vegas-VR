@@ -1,6 +1,6 @@
 # FNVR motion controls guide
 
-This is the default right-handed layout. With **Left-handed** turned on (Settings → Body & profiles), the two hands swap: the left hand aims and shoots, and the right stick moves.
+This is the default right-handed layout. With **Left-handed** turned on (setup screen or Body & profiles), the gun is held and fired with your **left** hand and the right hand supports it. The sticks and face buttons stay where they are: left stick moves, right stick turns, A/B on the right, X/Y on the left.
 
 "Grip" is the side button under your middle finger. A "fist" is grip + trigger squeezed together.
 
