@@ -292,6 +292,12 @@ static void Hol_Load(void);   /* INI [Grapple] bHideBody: no body below you whil
 static char *g_bodyHidden = NULL;
 static float g_grapTrigH[2] = { 0, 0 };  /* each hand's trigger, 0..1 (0 = left, 1 = right) */
 static bool  g_chestPause = true; static float g_chestDown = 0.32f, g_chestFwd = 0.10f, g_chestR = 0.14f;   /* INI [Controls] bChestPause etc. */
+/* Stimpaks: a free hand grabbing at your chest pulls one out (Stimpak first, else Super Stimpak); stab it into your other
+   forearm or your chest to use it. Let go without stabbing and it goes back. */
+static bool  g_stimOn = true;                   /* INI [Stimpak] bChestStimpak */
+static int   g_stimHand = -1, g_stimType = 0; static char *g_stimRef = NULL; static uint32_t g_stimRefID = 0;
+static double g_stimAt = 0; static bool g_stimHeld = false;
+static volatile int g_stimDo = 0; static char *g_stimDoRef = NULL; static uint32_t g_stimDoID = 0; static int g_stimDoType = 0;   /* 1 use, 2 put back (run from the main loop) */
 static WORD  g_chestPress = 0; static double g_chestPressUntil = 0;
 static uint32_t g_holsterId[3] = { 0, 0, 0 };
 static bool  g_holstersOn = true;                    /* INI [Controls] bHolsters */
@@ -461,6 +467,7 @@ static void LoadSettings(void)
     g_physicalMove = GetPrivateProfileIntA("Tracking", "bPhysicalCrouchLean", 1, g_iniPath) != 0;
     { char cb[32]; GetPrivateProfileStringA("Seated", "fCrouchDepth", "0.85", cb, sizeof cb, g_iniPath); g_seatCrouchDepth = fminf(fmaxf((float)atof(cb), 0.2f), 1.4f); }
     g_startSetup = GetPrivateProfileIntA("Startup", "bShowSetup", 1, g_iniPath) != 0;
+    g_stimOn = GetPrivateProfileIntA("Stimpak", "bChestStimpak", 1, g_iniPath) != 0;
     { char lb[32];
       GetPrivateProfileStringA("LeftHanded", "fGunForward", "0", lb, sizeof lb, g_iniPath); g_lhGunFwd = (float)atof(lb);
       GetPrivateProfileStringA("LeftHanded", "fGunUp", "0", lb, sizeof lb, g_iniPath); g_lhGunUp = (float)atof(lb);
@@ -1120,6 +1127,9 @@ static int PlayerWeaponType(void)
 
 static void *PlayerWeaponForm(void);
 static bool Scr_Num(void *scr, void *arg, double *out);
+static char *Scr_Ref(void *scr, void *arg);
+static int Stim_Pick(void);
+static bool Stim_Begin(int h, int type);
 static volatile int g_animAction = -1;   /* the player's current action (game's GetAnimAction): -1 none, 0 equip, 1 unequip, 2-4 attack, 9 reload */
 static double g_animIdleSince = 0;      /* when the action last became "none" */
 static bool g_animLastBusy = false;     /* the action before "none" was drawing or holstering */
@@ -1638,9 +1648,14 @@ static void Controllers_Poll(bool menu)
                     inPrev[hh] = in;
                     if (in && !busy && !g_pipOpen) {
                         if (grip && !cPrev[hh]) {
-                            g_chestPress = XB_START; g_chestPressUntil = QpcMs() + 120.0;
-                            g_vrSystem->TriggerHapticPulse(g_handIdx[hh], 0, 3000);
-                            Log("Chest grab (%s hand): pause menu %s", hh ? "right" : "left", menu ? "close" : "open");
+                            bool gunHand = hh == (g_leftHanded ? 0 : 1) && PlayerWeaponOut() && PlayerWeaponType() != -1;
+                            int st = (g_stimOn && !menu && g_inGameplay && !gunHand && g_stimHand < 0 && !g_stimDo && !g_holding[hh]) ? Stim_Pick() : -1;
+                            if (st >= 0 && Stim_Begin(hh, st)) g_vrSystem->TriggerHapticPulse(g_handIdx[hh], 0, 2000);
+                            else {
+                                g_chestPress = XB_START; g_chestPressUntil = QpcMs() + 120.0;
+                                g_vrSystem->TriggerHapticPulse(g_handIdx[hh], 0, 3000);
+                                Log("Chest grab (%s hand): pause menu %s", hh ? "right" : "left", menu ? "close" : "open");
+                            }
                         }
                         if (hh == amH) rGrip = false; else lGrip = false;   /* not activate / VATS */
                     }
@@ -9940,6 +9955,55 @@ static void PowerArmor_NoFall(char *player)
     *(float *)(ctrl + 0x544) = ((float *)(player + 0x30))[2];
 }
 
+/* ---- stimpaks (drawing side: holding it, stabbing) ---- */
+static void Stim_Release(int h, int what)
+{   /* the hand lets go of it; the main loop then uses it or puts it back */
+    if (g_holding[h] && g_held[h].ref == g_stimRef) { Held_Collide(h); memset(&g_held[h], 0, sizeof g_held[h]); g_holding[h] = false; }
+    g_stimDoRef = g_stimRef; g_stimDoID = g_stimRefID; g_stimDoType = g_stimType; g_stimDo = what;
+    g_stimHand = -1; g_stimRef = NULL; g_stimHeld = false;
+}
+static void Stim_Update(float dt, bool noWeapon)
+{
+    if (g_stimHand < 0) return;
+    int h = g_stimHand, o = 1 - h;
+    double now = QpcMs();
+    bool valid = g_stimRef && LookupForm(g_stimRefID) == (void *)g_stimRef;
+    if (!valid) { Stim_Release(h, 2); return; }
+    if (!g_stimHeld) {   /* (its 3D appears a moment after it's placed) */
+        if (RefBody(g_stimRef) && g_handWOk[h]) { Grab_Start(h, g_stimRef); g_stimHeld = g_holding[h] && g_held[h].ref == g_stimRef; }
+        if (!g_stimHeld && now - g_stimAt > 2000.0) { Log("Stimpak: couldn't put it in your hand - putting it back"); Stim_Release(h, 2); }
+        return;
+    }
+    if (!g_holding[h] || g_held[h].ref != g_stimRef || !g_gripHeld[h]) { Stim_Release(h, 2); return; }   /* let go: back in the inventory */
+    /* stab: the hand moving quickly into your other forearm or your chest */
+    const float *P = g_vrHandPos[h];
+    float fw[3] = { -sinf(g_vrHeadYaw), 0, -cosf(g_vrHeadYaw) }, chest[3];
+    for (int i = 0; i < 3; i++) chest[i] = g_vrHeadPos[i] + fw[i] * g_chestFwd;
+    chest[1] -= g_chestDown;
+    float dc[3]; V3Sub(dc, P, chest);
+    bool inChest = V3Len(dc) < g_chestR;
+    bool inArm = false;
+    if (g_vrHandOk[o]) {   /* the forearm: from the other hand back toward its elbow (the controller's +Z) */
+        float A[3], B[3], AB[3], AP[3];
+        for (int i = 0; i < 3; i++) { A[i] = g_vrHandPos[o][i]; B[i] = A[i] + g_vrHandRot[o][i][2] * 0.26f; }
+        V3Sub(AB, B, A); V3Sub(AP, P, A);
+        float t = fminf(fmaxf(V3Dot(AP, AB) / fmaxf(V3Dot(AB, AB), 1e-6f), 0.0f), 1.0f), q[3];
+        for (int i = 0; i < 3; i++) q[i] = A[i] + AB[i] * t - P[i];
+        inArm = V3Len(q) < 0.09f;
+    }
+    static bool wasIn = false, armed = false; static double armFor = 0;
+    if (armFor != g_stimAt) { armFor = g_stimAt; armed = false; wasIn = true; }   /* (a new one: the hand starts at your chest) */
+    bool in = inChest || inArm;
+    if (!in && now - g_stimAt > 250.0) armed = true;   /* it has to leave your chest and arm before a stab counts */
+    if (in && !wasIn && armed && g_handSpeed[h] > 0.45f) {
+        Log("Stimpak: stabbed into your %s (%.1f m/s)", inArm ? "arm" : "chest", g_handSpeed[h]);
+        if (g_vrSystem) { g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999); if (inArm && g_handIdx[o] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[o], 0, 3999); }
+        Stim_Release(h, 1);
+        wasIn = false; return;
+    }
+    wasIn = in;
+    if (!noWeapon && g_holding[h]) Grab_Hold(h, dt);   /* (with a gun out the normal holding below doesn't run) */
+}
 static void Grab_Update(char *player, char *cam)
 {
     LARGE_INTEGER now, fq; QueryPerformanceCounter(&now); QueryPerformanceFrequency(&fq);
@@ -9950,7 +10014,8 @@ static void Grab_Update(char *player, char *cam)
     Hands_ComputeWorld(player, cam);
     bool noWeapon = !g_weaponOutThisFrame || PlayerWeaponType() == -1;
     for (int h = 0; h < 2; h++) {
-        if (g_holding[h] && (!g_grabWant[h] || !noWeapon || !g_handWOk[h])) {
+        bool keep = h == g_stimHand ? g_gripHeld[h] : g_grabWant[h];
+        if (g_holding[h] && (!keep || (!noWeapon && h != g_stimHand) || !g_handWOk[h])) {
             if (g_grabWant[h]) Log("Grab: %s hand drops its object (%s)", h ? "right" : "left", !noWeapon ? "weapon drawn" : "hand tracking lost");
             Grab_Drop(h, g_handWOk[h]);
         }
@@ -9962,6 +10027,7 @@ static void Grab_Update(char *player, char *cam)
     Grapple_Update(player, cam, dt);
     PowerArmor_NoFall(player);
     if (!Grapple_Busy()) Momentum_Update(player, dt);
+    Stim_Update(dt, noWeapon);
     if (!g_grabEnabled || !noWeapon) { g_grabCand[0] = g_grabCand[1] = NULL; return; }
     for (int h = 0; h < 2; h++) if (!g_grabWant[h]) g_grabBlock[h] = false;
     for (int h = 0; h < 2; h++)
@@ -10589,6 +10655,60 @@ static bool Scr_Num(void *scr, void *arg, double *out)
     if (!ok || res.type != 1) return false;
     *out = res.num; return true;
 }
+static char *Scr_Ref(void *scr, void *arg)
+{   /* run a little function and get the reference it returns */
+    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+    if (!g_scriptIntf || !g_scriptIntf->CallFunction || !scr) return NULL;
+    struct { union { double num; void *form; } u; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+    bool ok = ((CallFn_t)g_scriptIntf->CallFunction)(scr, GetPlayer(), NULL, &res, 1, arg);
+    if (!ok || res.type != 2) return NULL;
+    return (char *)res.u.form;
+}
+/* ---- stimpaks (main loop side: inventory and using) ---- */
+static const char *const g_stimNames[2] = { "Stimpak", "SuperStimpak" };
+static int Stim_Pick(void)
+{   /* which one to pull out: a Stimpak if you have one, else a Super Stimpak; -1 = none */
+    static void *cnt[2]; static bool tried = false;
+    if (!tried) { tried = true;
+        for (int i = 0; i < 2; i++) { char b[200]; snprintf(b, sizeof b, "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to rWho.GetItemCount %s\nSetFunctionValue iVal\nEnd\n", g_stimNames[i]);
+            cnt[i] = g_scriptIntf && g_scriptIntf->CompileScript ? g_scriptIntf->CompileScript(b) : NULL;
+            if (!cnt[i]) Log("Stimpak: couldn't set up counting %s", g_stimNames[i]); } }
+    for (int i = 0; i < 2; i++) { double v = 0; if (cnt[i] && Scr_Num(cnt[i], GetPlayer(), &v) && v >= 1.0) return i; }
+    return -1;
+}
+static bool Stim_Begin(int h, int type)
+{   /* take one out of your inventory and put it in the world, to be held in your hand */
+    static void *place[2]; static bool tried = false;
+    if (!tried) { tried = true;
+        for (int i = 0; i < 2; i++) { char b[260]; snprintf(b, sizeof b, "ref rWho\nref rNew\nBegin Function { rWho }\nrWho.RemoveItem %s 1 1\nset rNew to rWho.PlaceAtMe %s 1\nSetFunctionValue rNew\nEnd\n", g_stimNames[i], g_stimNames[i]);
+            place[i] = g_scriptIntf && g_scriptIntf->CompileScript ? g_scriptIntf->CompileScript(b) : NULL; } }
+    if (type < 0 || type > 1 || !place[type]) return false;
+    char *ref = Scr_Ref(place[type], GetPlayer());
+    if (!ref) { Log("Stimpak: couldn't take one out"); return false; }
+    g_stimRef = ref; g_stimRefID = *(uint32_t *)(ref + 0x0C); g_stimType = type; g_stimHand = h; g_stimAt = QpcMs(); g_stimHeld = false;
+    Log("Stimpak: %s pulled out with the %s hand (ref %08X)", type ? "Super Stimpak" : "Stimpak", h ? "right" : "left", g_stimRefID);
+    return true;
+}
+static void Stim_Flush(void)
+{   /* use it (stabbed) or put it back (let go) - removing the one held in the world either way */
+    int what = g_stimDo; if (!what) return;
+    g_stimDo = 0;
+    static void *useS[2], *backS[2], *backNoRef[2]; static bool tried = false;
+    if (!tried) { tried = true;
+        for (int i = 0; i < 2; i++) { char b[300];
+            snprintf(b, sizeof b, "ref rWho\nref rStim\nBegin Function { rWho, rStim }\nrStim.Disable\nrStim.MarkForDelete\nrWho.AddItem %s 1 1\nrWho.EquipItem %s 0 1\nEnd\n", g_stimNames[i], g_stimNames[i]);
+            useS[i] = g_scriptIntf->CompileScript(b);
+            snprintf(b, sizeof b, "ref rWho\nref rStim\nBegin Function { rWho, rStim }\nrStim.Disable\nrStim.MarkForDelete\nrWho.AddItem %s 1 1\nEnd\n", g_stimNames[i]);
+            backS[i] = g_scriptIntf->CompileScript(b);
+            snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nrWho.AddItem %s 1 1\nEnd\n", g_stimNames[i]);
+            backNoRef[i] = g_scriptIntf->CompileScript(b); } }
+    int t = g_stimDoType & 1; char *pl = (char *)GetPlayer();
+    bool refOk = g_stimDoRef && LookupForm(g_stimDoID) == (void *)g_stimDoRef;
+    if (what == 1 && refOk && useS[t]) { g_scriptIntf->CallFunctionAlt(useS[t], pl, 2, pl, g_stimDoRef); Log("Stimpak: used (%s)", t ? "Super Stimpak" : "Stimpak"); }
+    else if (refOk && backS[t]) { g_scriptIntf->CallFunctionAlt(backS[t], pl, 2, pl, g_stimDoRef); Log("Stimpak: put back"); }
+    else if (backNoRef[t]) { g_scriptIntf->CallFunctionAlt(backNoRef[t], pl, 1, pl); Log("Stimpak: put back (the one in your hand was gone)"); }
+    g_stimDoRef = NULL;
+}
 static void FireRate_Tick(void)
 {
     if (!g_inGameplay || !g_scriptIntf || !g_scriptIntf->CompileScript || !g_scriptIntf->CallFunctionAlt) return;
@@ -11108,6 +11228,7 @@ static const SetOpt g_setOpts[] = {
     { SP_CONTROLS, ST_BOOL, "Menu pointer shot", "Controls", "bMenuPointerShot", &g_mmShot, 0, 0, 0, 0, 0, 0, "Each menu click fires a Ranger Sequoia shot (sound, recoil, flash)." },
     { SP_CONTROLS, ST_FLOAT, "Menu shot volume", "Controls", "fMenuShotVolume", &g_mmShotVol, 0.0f, 1.0f, 0.05f, "%.2f", 0, 0, "How loud the menu revolver's shot is (1 = a real gunshot)." },
 
+    { SP_SPOTS, ST_BOOL, "Chest grab: stimpak", "Stimpak", "bChestStimpak", &g_stimOn, 0, 0, 0, 0, 0, 0, "ON: a free hand grabbing at your chest pulls out a Stimpak (or a Super Stimpak) if you have one - stab it into your other forearm or your chest to use it, let go to put it back. With none, the chest grab opens the pause menu." },
     { SP_SPOTS, ST_BOOL, "Holsters", "Controls", "bHolsters", &g_holstersOn, 0, 0, 0, 0, 0, 0, "Right grip at your right hip (pistols, one-hand melee) or over your right shoulder (long guns) holsters or draws." },
     { SP_SPOTS, ST_FLOAT, "Hip holster: below eyes", "Controls", "fHipHolsterDown", &g_hipDown, 0.2f, 1.2f, 0.02f, "%.2f m", 0, 0, "How far below your eyes the hip holster is." },
     { SP_SPOTS, ST_FLOAT, "Hip holster: to the side", "Controls", "fHipHolsterSide", &g_hipSide, 0.0f, 0.6f, 0.02f, "%.2f m", 0, 0, "How far out to your right the hip holster is." },
@@ -12096,6 +12217,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         { double t0 = QpcMs(); VR_Tick(); g_tTick += QpcMs() - t0; }
         NewGame_Tick();
         Move_Flush();
+        Stim_Flush();
         Far_UiTick();
         Holster_Tick();
         LootMenu_Tick(); Hud_Tick(); FireRate_Tick();

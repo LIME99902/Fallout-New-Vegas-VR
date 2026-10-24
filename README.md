@@ -88,6 +88,7 @@ FNVR writes a log to `Fallout New Vegas\FNVR.log`. That's the first thing to loo
 - **Holsters:** right grip at your right hip draws or holsters pistols and one-handed melee weapons. Right grip over your right shoulder does the same for long guns and two-handed melee weapons.
 - **Visible holsters:** a holstered weapon is shown on your body: a pistol on your hip, a rifle over your shoulder. Its angle can be adjusted per holster.
 - **Chest grab:** squeeze a grip at the middle of your chest to open or close the pause menu.
+- **Stimpaks:** with a Stimpak or Super Stimpak in your inventory, a free hand grabbing at your chest pulls one out; stab it into your other forearm or your chest to heal (exactly as the game's own stimpak, skills and perks included). Let go without stabbing and it goes back.
 
 ### Pip-Boy on your wrist
 - **Opening it:** raise your left wrist to your face and the Pip-Boy opens on your actual arm. Lower it and it closes. It opens instantly, without the game's slow raise animation.

@@ -54,7 +54,9 @@ With **Play style: Seated** (setup screen or Body & profiles):
 |---|---|
 | Right grip at your right hip | Draw or holster a pistol / one-handed melee weapon |
 | Right grip over your right shoulder | Draw or holster a long gun / two-handed melee weapon |
-| Either grip at the middle of your chest | Open or close the pause menu |
+| Free hand's grip at the middle of your chest | Pull out a **Stimpak** (or Super Stimpak) if you have one - otherwise the pause menu |
+| Stab the stimpak into your other forearm or your chest | Use it: heals like the game's own stimpak (skills and perks count) |
+| Let go of a stimpak without stabbing | It goes back into your inventory |
 | Left X | Pause menu too |
 | Raise your left wrist to your face | Open the Pip-Boy. Lower it to close |
 
