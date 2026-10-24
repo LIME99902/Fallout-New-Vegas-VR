@@ -5843,10 +5843,14 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
         M3 BhT; M3T(BhT, Bh);
         bool pipAnim = g_pipOpen || g_pipModeRaw != 0;   /* the Pip-Boy animation poses the hand: ignore it */
         if (!g_haveHandRef[side] && g_handRefIniOk[side]) { memcpy(g_handRef[side], g_handRefIni[side], 36); g_haveHandRef[side] = true; }   /* (saved from an earlier game) */
-        if (g_weaponOutThisFrame && !pipAnim) {
+        /* the support hand when it isn't on the gun: always the same fixed turn (not the gun animation's support pose,
+           which differs for every weapon) - so the drawn arm, and the grapple along it, don't change with the weapon */
+        bool supportFree = side != (g_leftHanded ? 0 : 1) && !g_twoHand && !g_twoHandWant;
+        if (supportFree && g_handRefIniOk[side]) { memcpy(g_handRef[side], g_handRefIni[side], 36); g_haveHandRef[side] = true; M3Mul(handWorld0, Bh, g_handRef[side]); }
+        else if (g_weaponOutThisFrame && !pipAnim) {
             M3Mul(g_handRef[side], BhT, handWorld0); g_haveHandRef[side] = true;
             static double seenAt[2] = { 0, 0 }; static bool saved[2] = { false, false };
-            if (g_animAction != -1) seenAt[side] = 0;   /* (only the plain holding pose - never mid-equip or mid-reload) */
+            if (g_animAction != -1 || side != (g_leftHanded ? 0 : 1)) seenAt[side] = 0;   /* (only the gun hand's plain holding pose - never mid-equip or mid-reload) */
             else if (!seenAt[side]) seenAt[side] = QpcMs();
             if (!saved[side] && seenAt[side] && QpcMs() - seenAt[side] > 1500.0) {   /* remember it for next time (and for a new game, before any weapon is drawn) */
                 saved[side] = true;
@@ -9853,7 +9857,8 @@ static void Grapple_Update(char *player, char *cam, float dt)
         static double learnSince[2] = { 0, 0 }; static bool saved[2] = { false, false }; static float acc[2][3];
         bool noWeap = !g_weaponOutThisFrame || PlayerWeaponType() == -1;
         for (int k = 0; k < 2; k++) {
-            if (!noWeap || !g_handWOk[k] || QpcMs() - g_foreDirAt[k] > 150.0 || g_holding[k] || g_climb[k] || g_pipOpen) { learnSince[k] = 0; continue; }
+            if (!noWeap || !g_handWOk[k] || QpcMs() - g_foreDirAt[k] > 150.0 || g_holding[k] || g_climb[k] || g_pipOpen ||
+                (g_animIdleSince && QpcMs() - g_animIdleSince < 1500.0)) { learnSince[k] = 0; continue; }   /* (not while a holster is still moving the arms) */
             float loc[3]; for (int j = 0; j < 3; j++) loc[j] = g_handWR[k][0][j] * g_foreDirW[k][0] + g_handWR[k][1][j] * g_foreDirW[k][1] + g_handWR[k][2][j] * g_foreDirW[k][2];
             if (!learnSince[k]) { learnSince[k] = QpcMs(); memcpy(acc[k], loc, 12); }
             else for (int j = 0; j < 3; j++) acc[k][j] += (loc[j] - acc[k][j]) * 0.05f;
