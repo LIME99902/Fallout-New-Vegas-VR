@@ -299,6 +299,10 @@ static bool  g_chestPause = true; static float g_chestDown = 0.32f, g_chestFwd =
 /* Stimpaks: a free hand grabbing at your chest pulls one out (Stimpak first, else Super Stimpak); stab it into your other
    forearm or your chest to use it. Let go without stabbing and it goes back. */
 static bool  g_stimOn = true;                   /* INI [Stimpak] bChestStimpak */
+static bool  g_voiceOn = true;          /* INI [Voice] bVoiceControl */
+static float g_voiceConf = 0.30f;       /* INI [Voice] fMinConfidence: how sure the recognizer must be (0-1) */
+static bool  g_voiceGreet = true;       /* INI [Voice] bGreetToTalk */
+static char  g_voiceMic[128] = "";      /* INI [Voice] sMicName: part of the microphone's name (empty: the headset's, else Windows' default) */
 static int   g_stimHand = -1, g_stimType = 0; static char *g_stimRef = NULL; static uint32_t g_stimRefID = 0;
 static double g_stimAt = 0; static bool g_stimHeld = false;
 static volatile int g_stimDo = 0; static char *g_stimDoRef = NULL; static uint32_t g_stimDoID = 0; static int g_stimDoType = 0;   /* 1 use, 2 put back (run from the main loop) */
@@ -472,6 +476,10 @@ static void LoadSettings(void)
     { char cb[32]; GetPrivateProfileStringA("Seated", "fCrouchDepth", "0.85", cb, sizeof cb, g_iniPath); g_seatCrouchDepth = fminf(fmaxf((float)atof(cb), 0.2f), 1.4f); }
     g_startSetup = GetPrivateProfileIntA("Startup", "bShowSetup", 1, g_iniPath) != 0;
     g_stimOn = GetPrivateProfileIntA("Stimpak", "bChestStimpak", 1, g_iniPath) != 0;
+    g_voiceOn = GetPrivateProfileIntA("Voice", "bVoiceControl", 1, g_iniPath) != 0;
+    g_voiceGreet = GetPrivateProfileIntA("Voice", "bGreetToTalk", 1, g_iniPath) != 0;
+    { char vb[32]; GetPrivateProfileStringA("Voice", "fMinConfidence", "0.30", vb, sizeof vb, g_iniPath); g_voiceConf = fminf(fmaxf((float)atof(vb), 0.0f), 0.95f);
+      GetPrivateProfileStringA("Voice", "sMicName", "", g_voiceMic, sizeof g_voiceMic, g_iniPath); }
     { char lb[32];
       GetPrivateProfileStringA("LeftHanded", "fGunForward", "0", lb, sizeof lb, g_iniPath); g_lhGunFwd = (float)atof(lb);
       GetPrivateProfileStringA("LeftHanded", "fGunUp", "0", lb, sizeof lb, g_iniPath); g_lhGunUp = (float)atof(lb);
@@ -10715,6 +10723,304 @@ static int Loot_CrossKind(char **refOut)
     if (rt == 0x3B || rt == 0x3C) return 2;      /* person / creature */
     return 3;
 }
+/* ---- Voice: talk to people with your own voice ------------------------------------------------------
+   The headset's microphone (Quest through Link / Air Link / Virtual Desktop / Steam Link, or any mic set in
+   [Voice] sMicName) is listened to by Windows' own offline speech recognizer (SAPI). It only listens for a
+   small set of phrases at a time:
+     - in the world, looking at a person: a greeting ("hey", "hello", "excuse me"...) starts the conversation,
+       as if you pressed activate on them;
+     - in a conversation: the answers on screen - say the answer (its first few words are enough), or
+       "option two" / "number two".
+   The recognizer runs on its own thread; what it hears is acted on from the main loop. */
+#include <sapi.h>
+#define VC_MAXOPT 12
+#define VC_TXT 200
+static CRITICAL_SECTION g_vcCs; static bool g_vcCsOk = false;
+static int  g_vcMode = 0;                         /* 0 not listening, 1 greetings, 2 dialogue answers (main thread writes, under g_vcCs) */
+static char g_vcOpt[VC_MAXOPT][VC_TXT]; static int g_vcN = 0;
+static volatile LONG g_vcVer = 0;                 /* bumped whenever the phrase set changes */
+static volatile LONG g_vcHitVer = -1, g_vcHitRule = -1;
+static HANDLE g_vcThread = NULL; static volatile LONG g_vcState = 0;   /* 0 not started, 1 running, -1 failed */
+static const char *g_vcGreetings[] = { "hey", "hello", "hi", "hi there", "hey there", "hello there", "excuse me", "howdy",
+    "greetings", "can we talk", "let's talk", "talk to me", "got a minute", "hey you", "good morning", "good evening", "what's up", NULL };
+static const char *g_vcNum[] = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve" };
+#define VC_SPFEI(e) ((1ULL << (e)) | (1ULL << SPEI_RESERVED1) | (1ULL << SPEI_RESERVED2))
+
+/* An answer's words, as they'd be said: no [Speech 50] / (Lie) tags, no punctuation, no numbers. */
+static int Vc_Words(const char *src, char words[][32], int maxw)
+{
+    int n = 0, depth = 0; char cur[32]; int cl = 0;
+    for (const char *p = src; ; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (c == '[' || c == '(' || c == '<' || c == '{') { depth++; }
+        else if (c == ']' || c == ')' || c == '>' || c == '}') { if (depth > 0) depth--; cl = 0; continue; }
+        bool letter = isalpha(c) || c == '\'' || c >= 0xC0;
+        bool digit = isdigit(c);
+        if (depth == 0 && (letter || digit) && c) { if (cl < 30) cur[cl++] = (char)(digit ? '#' : tolower(c)); continue; }
+        if (cl > 0) {
+            cur[cl] = 0;
+            bool hasDigit = strchr(cur, '#') != NULL;
+            while (cl > 0 && cur[cl - 1] == '\'') cur[--cl] = 0;
+            char *s = cur; while (*s == '\'') s++;
+            if (!hasDigit && *s && n < maxw) { snprintf(words[n], 32, "%s", s); n++; }
+            cl = 0;
+        }
+        if (!c) break;
+    }
+    return n;
+}
+static void Vc_Phrase(char *out, size_t cap, char words[][32], int k)
+{
+    out[0] = 0; for (int i = 0; i < k; i++) { if (i) strncat(out, " ", cap - strlen(out) - 1); strncat(out, words[i], cap - strlen(out) - 1); }
+}
+
+/* -- the recognizer thread -- */
+static ISpRecoGrammar *Vc_Grammar(ISpRecoContext *ctx) { ISpRecoGrammar *g = NULL; return SUCCEEDED(ISpRecoContext_CreateGrammar(ctx, 1, &g)) ? g : NULL; }
+static void Vc_AddPhrase(ISpRecoGrammar *g, SPSTATEHANDLE h, const char *s)
+{
+    WCHAR w[VC_TXT]; if (!MultiByteToWideChar(CP_ACP, 0, s, -1, w, VC_TXT)) return;
+    HRESULT hr = ISpRecoGrammar_AddWordTransition(g, h, NULL, w, L" ", SPWT_LEXICAL, 1.0f, NULL);
+    static int fails = 0; if (FAILED(hr) && fails++ < 10) Log("Voice: phrase \"%s\" not usable (0x%08lX)", s, (unsigned long)hr);
+}
+static int Vc_Build(ISpRecoGrammar *g, int mode, char opt[][VC_TXT], int n)
+{
+    ISpRecoGrammar_SetRuleState(g, NULL, NULL, SPRS_INACTIVE);
+    ISpRecoGrammar_ResetGrammar(g, 0x409);
+    int rules = 0;
+    if (mode == 1) {
+        SPSTATEHANDLE h; if (SUCCEEDED(ISpRecoGrammar_GetRule(g, NULL, 1, SPRAF_TopLevel | SPRAF_Active, TRUE, &h))) {
+            for (int i = 0; g_vcGreetings[i]; i++) Vc_AddPhrase(g, h, g_vcGreetings[i]);
+            rules++;
+        }
+    } else if (mode == 2) {
+        /* every way to say each answer: the whole line, its first 1-6 words, "option N" / "number N" - a start
+           that two answers share is left out, so it can't pick the wrong one */
+        static char ph[VC_MAXOPT][10][VC_TXT]; int pn[VC_MAXOPT] = { 0 };
+        for (int i = 0; i < n; i++) {
+            char words[24][32]; int nw = Vc_Words(opt[i], words, 24);
+            if (nw > 12) nw = 12;
+            int ks[7] = { 1, 2, 3, 4, 5, 6, nw };
+            for (int q = 0; q < 7 && nw > 0; q++) {
+                int k = ks[q]; if (k > nw) continue;
+                if (k == 1 && strlen(words[0]) < 4) continue;   /* (one short word is too easy to hear by mistake) */
+                char s[VC_TXT]; Vc_Phrase(s, sizeof s, words, k);
+                bool dup = false; for (int r = 0; r < pn[i]; r++) if (!strcmp(ph[i][r], s)) dup = true;
+                if (!dup && pn[i] < 10) snprintf(ph[i][pn[i]++], VC_TXT, "%s", s);
+            }
+        }
+        for (int i = 0; i < n; i++) {
+            SPSTATEHANDLE h; if (FAILED(ISpRecoGrammar_GetRule(g, NULL, 100 + i, SPRAF_TopLevel | SPRAF_Active, TRUE, &h))) continue;
+            for (int r = 0; r < pn[i]; r++) {
+                bool shared = false;
+                for (int j = 0; j < n && !shared; j++) if (j != i) for (int t = 0; t < pn[j]; t++) if (!strcmp(ph[j][t], ph[i][r])) { shared = true; break; }
+                if (!shared) Vc_AddPhrase(g, h, ph[i][r]);
+            }
+            if (i < 12) { char s[64]; snprintf(s, sizeof s, "option %s", g_vcNum[i]); Vc_AddPhrase(g, h, s);
+                          snprintf(s, sizeof s, "number %s", g_vcNum[i]); Vc_AddPhrase(g, h, s); }
+            rules++;
+        }
+    }
+    HRESULT hr = ISpRecoGrammar_Commit(g, 0);
+    if (rules && SUCCEEDED(hr)) ISpRecoGrammar_SetRuleState(g, NULL, NULL, SPRS_ACTIVE);
+    return SUCCEEDED(hr) ? rules : -1;
+}
+static ISpObjectToken *Vc_FindToken(const WCHAR *cat, const char *want, bool useDefault, char *nameOut, size_t cap)
+{
+    ISpObjectTokenCategory *c = NULL; ISpObjectToken *best = NULL; IEnumSpObjectTokens *en = NULL;
+    if (FAILED(CoCreateInstance(&CLSID_SpObjectTokenCategory, NULL, CLSCTX_ALL, &IID_ISpObjectTokenCategory, (void **)&c))) return NULL;
+    if (SUCCEEDED(ISpObjectTokenCategory_SetId(c, cat, FALSE)) && SUCCEEDED(ISpObjectTokenCategory_EnumTokens(c, NULL, NULL, &en))) {
+        /* the wanted name first, then the usual names of headset microphones */
+        const char *pats[8] = { want, "oculus", "headset microphone", "quest", "virtual desktop", "steam streaming microphone", "vive", "index" };
+        int bestRank = 99; ISpObjectToken *t;
+        ULONG got;
+        while (IEnumSpObjectTokens_Next(en, 1, &t, &got) == S_OK && got == 1) {
+            WCHAR *wn = NULL; char nm[160] = "";
+            if (SUCCEEDED(ISpObjectToken_GetStringValue(t, NULL, &wn)) && wn) { WideCharToMultiByte(CP_ACP, 0, wn, -1, nm, sizeof nm, NULL, NULL); CoTaskMemFree(wn); }
+            Log("Voice: found %s \"%s\"", useDefault ? "microphone" : "recognizer", nm);
+            char low[160]; snprintf(low, sizeof low, "%s", nm); for (char *q = low; *q; q++) *q = (char)tolower((unsigned char)*q);
+            int rank = 50;
+            for (int k = 0; k < 8; k++) if (pats[k] && pats[k][0]) { char pl[128]; snprintf(pl, sizeof pl, "%s", pats[k]); for (char *q = pl; *q; q++) *q = (char)tolower((unsigned char)*q);
+                if (strstr(low, pl)) { rank = k; break; } }
+            if (!useDefault && rank == 50 && (strstr(low, "english") || strstr(low, "en-"))) rank = 40;
+            if (!best || rank < bestRank) { if (best) ISpObjectToken_Release(best); best = t; bestRank = rank; snprintf(nameOut, cap, "%s", nm); }
+            else ISpObjectToken_Release(t);
+        }
+        IEnumSpObjectTokens_Release(en);
+        if (useDefault && best && bestRank == 50) {   /* nothing headset-like: Windows' default microphone */
+            WCHAR *defId = NULL;
+            if (SUCCEEDED(ISpObjectTokenCategory_GetDefaultTokenId(c, &defId)) && defId) {
+                ISpObjectToken *d = NULL;
+                if (SUCCEEDED(CoCreateInstance(&CLSID_SpObjectToken, NULL, CLSCTX_ALL, &IID_ISpObjectToken, (void **)&d)) && SUCCEEDED(ISpObjectToken_SetId(d, NULL, defId, FALSE))) {
+                    ISpObjectToken_Release(best); best = d; snprintf(nameOut, cap, "Windows' default microphone");
+                } else if (d) ISpObjectToken_Release(d);
+                CoTaskMemFree(defId);
+            }
+        }
+    }
+    ISpObjectTokenCategory_Release(c);
+    return best;
+}
+static DWORD WINAPI Vc_Thread(LPVOID unused)
+{
+    (void)unused;
+    HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+    ISpRecognizer *rec = NULL; ISpRecoContext *ctx = NULL; ISpRecoGrammar *g = NULL; ISpObjectToken *mic = NULL;
+    char micName[160] = "?", recName[160] = "";
+    if (FAILED(CoCreateInstance(&CLSID_SpInprocRecognizer, NULL, CLSCTX_ALL, &IID_ISpRecognizer, (void **)&rec))) { Log("Voice: Windows speech recognition isn't available on this PC - voice control off"); goto fail; }
+    mic = Vc_FindToken(L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\AudioInput", g_voiceMic, true, micName, sizeof micName);
+    if (!mic || FAILED(hr = ISpRecognizer_SetInput(rec, (IUnknown *)mic, TRUE))) { Log("Voice: no microphone could be opened (0x%08lX) - voice control off", (unsigned long)hr); goto fail; }
+    if (FAILED(hr = ISpRecognizer_CreateRecoContext(rec, &ctx))) {
+        ISpObjectToken *rt = Vc_FindToken(L"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech\\Recognizers", "", false, recName, sizeof recName);
+        if (rt) { ISpRecognizer_SetRecognizer(rec, rt); ISpObjectToken_Release(rt); hr = ISpRecognizer_CreateRecoContext(rec, &ctx); }
+    }
+    if (FAILED(hr) || !ctx) { Log("Voice: no speech recognizer for this Windows language (0x%08lX) - install English speech in Windows settings (Time & language > Speech). Voice control off", (unsigned long)hr); goto fail; }
+    ULONGLONG want = VC_SPFEI(SPEI_RECOGNITION) | VC_SPFEI(SPEI_FALSE_RECOGNITION);
+    ISpRecoContext_SetInterest(ctx, want, want);
+    ISpRecoContext_SetNotifyWin32Event(ctx);
+    HANDLE ev = ISpRecoContext_GetNotifyEventHandle(ctx);
+    if (!(g = Vc_Grammar(ctx))) { Log("Voice: couldn't make a phrase list - voice control off"); goto fail; }
+    ISpRecognizer_SetRecoState(rec, SPRST_ACTIVE);
+    Log("Voice: listening on \"%s\"%s%s", micName, recName[0] ? " with " : "", recName);
+    InterlockedExchange(&g_vcState, 1);
+    LONG built = -1; int builtMode = -1;
+    for (;;) {
+        LONG v = g_vcVer;
+        if (v != built) {
+            int mode, n; static char opt[VC_MAXOPT][VC_TXT];
+            EnterCriticalSection(&g_vcCs); mode = g_vcMode; n = g_vcN; memcpy(opt, g_vcOpt, sizeof opt); v = g_vcVer; LeaveCriticalSection(&g_vcCs);
+            ISpRecoContext_Pause(ctx, 0);
+            int r = Vc_Build(g, mode, opt, n);
+            ISpRecoContext_Resume(ctx, 0);
+            if (mode != builtMode || mode == 2) Log("Voice: now listening for %s (%d)", mode == 2 ? "dialogue answers" : mode == 1 ? "greetings" : "nothing", r);
+            built = v; builtMode = mode;
+        }
+        if (ev) WaitForSingleObject(ev, 60); else Sleep(60);
+        SPEVENT e; ULONG got = 0;
+        while (SUCCEEDED(ISpRecoContext_GetEvents(ctx, 1, &e, &got)) && got == 1) {
+            if (e.eEventId == SPEI_RECOGNITION && e.elParamType == SPET_LPARAM_IS_OBJECT && e.lParam) {
+                ISpRecoResult *res = (ISpRecoResult *)e.lParam; SPPHRASE *ph = NULL; WCHAR *wt = NULL; char txt[VC_TXT] = "";
+                if (SUCCEEDED(ISpRecoResult_GetText(res, SP_GETWHOLEPHRASE, SP_GETWHOLEPHRASE, TRUE, &wt, NULL)) && wt) { WideCharToMultiByte(CP_ACP, 0, wt, -1, txt, sizeof txt, NULL, NULL); CoTaskMemFree(wt); }
+                if (SUCCEEDED(ISpRecoResult_GetPhrase(res, &ph)) && ph) {
+                    float conf = ph->Rule.SREngineConfidence; int c3 = ph->Rule.Confidence; LONG id = (LONG)ph->Rule.ulId;
+                    bool ok = conf >= g_voiceConf || c3 == SP_HIGH_CONFIDENCE;
+                    Log("Voice: heard \"%s\" (sure %.2f, %s) -> %s", txt, conf, c3 > 0 ? "high" : c3 < 0 ? "low" : "normal", ok ? "used" : "ignored (not sure enough)");
+                    if (ok) { InterlockedExchange(&g_vcHitRule, id); InterlockedExchange(&g_vcHitVer, built); }
+                    CoTaskMemFree(ph);
+                }
+            } else if (e.eEventId == SPEI_FALSE_RECOGNITION) { static int fl = 0; if (fl++ < 20) Log("Voice: heard something that isn't on the list"); }
+            if (e.elParamType == SPET_LPARAM_IS_OBJECT && e.lParam) ((IUnknown *)e.lParam)->lpVtbl->Release((IUnknown *)e.lParam);
+            else if ((e.elParamType == SPET_LPARAM_IS_POINTER || e.elParamType == SPET_LPARAM_IS_STRING) && e.lParam) CoTaskMemFree((void *)e.lParam);
+            got = 0;
+        }
+    }
+fail:
+    InterlockedExchange(&g_vcState, -1);
+    if (g) ISpRecoGrammar_Release(g);
+    if (ctx) ISpRecoContext_Release(ctx);
+    if (mic) ISpObjectToken_Release(mic);
+    if (rec) ISpRecognizer_Release(rec);
+    if (SUCCEEDED(hr) || hr == S_FALSE) CoUninitialize();
+    return 0;
+}
+
+/* -- the main-loop side -- */
+typedef struct { char *tile; char text[VC_TXT]; } VcAns;
+static int Vc_Collect(char *t, int depth, char *clickT, VcAns *out, int n, int *budget)
+{
+    if (!Rd(t, 0x30) || depth > 14 || --(*budget) < 0) return n;
+    float *vis = Tile_Val(t, 0xFA3);
+    if (vis && *vis == 0.0f && depth > 0) return n;   /* hidden branch */
+    float *idv = Tile_Val(t, 0xFAA);
+    if (depth > 0 && idv && *idv >= 0.0f) clickT = t;   /* the nearest clickable piece above (or on) the text */
+    char **vals = *(char ***)(t + 0x14); uint32_t nv = *(uint32_t *)(t + 0x18);
+    if (clickT && vals && nv < 4096 && Rd(vals, nv * 4))
+        for (uint32_t i = 0; i < nv; i++) {
+            char *v = vals[i];
+            if (!Rd(v, 0x14) || *(uint32_t *)v != 0xFC4 /* string */) continue;
+            const char *s = *(const char **)(v + 0x0C);
+            if (!Rd(s, 1) || strlen(s) < 2) continue;
+            char words[24][32]; if (Vc_Words(s, words, 24) == 0) continue;
+            int k; for (k = 0; k < n; k++) if (out[k].tile == clickT) break;   /* one answer per clickable piece (its longest text) */
+            if (k == n) { if (n >= VC_MAXOPT) continue; out[n].tile = clickT; out[n].text[0] = 0; n++; }
+            if (strlen(s) > strlen(out[k].text)) snprintf(out[k].text, VC_TXT, "%s", s);
+        }
+    char *node = *(char **)(t + 0x04);
+    for (int k = 0; node && k < 300 && Rd(node, 12); k++, node = *(char **)node) n = Vc_Collect(*(char **)(node + 8), depth + 1, clickT, out, n, budget);
+    return n;
+}
+static char *Vc_DialogTileMenu(void)
+{
+    char **arr = Rd((void *)0x011F350C, 4) ? *(char ***)0x011F350C : NULL;
+    if (!arr || !Rd(arr + 8, 4)) return NULL;
+    char *tm = arr[1009 - 1001];
+    return Rd(tm, 0x40) ? tm : NULL;
+}
+static int Vc_Answers(VcAns *out)
+{
+    char *tm = Vc_DialogTileMenu(); if (!tm) return 0;
+    int budget = 3000;
+    return Vc_Collect(tm, 0, NULL, out, 0, &budget);
+}
+static void Voice_Tick(void)
+{
+    if (!g_vcCsOk) { InitializeCriticalSection(&g_vcCs); g_vcCsOk = true; }
+    if (g_voiceOn && !g_vcThread && g_inGameplay) { g_vcThread = CreateThread(NULL, 0, Vc_Thread, NULL, 0, NULL); }
+    if (g_vcState != 1) return;
+    static double next = 0; static char *lastPerson = NULL; static double lastPersonAt = 0;
+    static VcAns ans[VC_MAXOPT]; static int nAns = 0;
+    const volatile bool *vis = (const volatile bool *)0x011F308F;
+    double now = QpcMs();
+    bool talking = vis[1009];
+    if (!talking && !IsMenuMode()) {   /* who you're looking at, kept a moment so "hello" said as you turn still counts */
+        char *ref = NULL; if (Loot_CrossKind(&ref) == 2 && ref) { lastPerson = ref; lastPersonAt = now; }
+    }
+    /* something heard? */
+    LONG hv = InterlockedExchange(&g_vcHitVer, -1);
+    if (hv >= 0 && hv == g_vcVer) {
+        LONG rule = g_vcHitRule;
+        if (g_vcMode == 2 && talking && rule >= 100 && rule - 100 < nAns) {
+            VcAns now2[VC_MAXOPT]; int n2 = Vc_Answers(now2); int i = (int)(rule - 100);
+            char *tile = NULL; for (int k = 0; k < n2; k++) if (!strcmp(now2[k].text, ans[i].text)) tile = now2[k].tile;
+            char *menu = tile ? Tile_Menu(tile) : NULL;
+            if (tile && menu) {
+                int id = (int)Tile_Value(tile, 0xFAA, -1.0f);
+                Log("Voice: answer %d chosen: \"%s\" (piece %s, id %d)", i + 1, ans[i].text, Tile_Name(tile), id);
+                ((TileSound_t)0x00A0B110)(tile, 0xFCB /* clicksound */);
+                ((TileSetFloat_t)0x00A012D0)(tile, 0xFC7, 1.0f, false);
+                ((TileSetFloat_t)0x00A012D0)(tile, 0xFC7, 0.0f, false);
+                void **vt = *(void ***)menu; ((MenuClick_t)vt[3])(menu, id, tile);
+                next = 0;   /* new answers: read them again now */
+            } else Log("Voice: answer %d was heard but isn't on screen any more", i + 1);
+        } else if (g_vcMode == 1 && rule == 1 && !talking && !IsMenuMode()) {
+            if (lastPerson && now - lastPersonAt < 1500.0 && Rd(lastPerson, 0x28)) {
+                static void *scr = NULL; static bool failed = false;
+                if (!scr && !failed && g_scriptIntf && g_scriptIntf->CompileScript && g_scriptIntf->CallFunctionAlt) {
+                    scr = g_scriptIntf->CompileScript("ref r\nBegin Function { r }\nif r.GetDead == 0\nr.Activate player 1\nendif\nEnd\n");
+                    if (!scr) { failed = true; Log("Voice: greeting script didn't compile"); }
+                }
+                if (scr) { Log("Voice: greeting %p - starting the conversation", (void *)lastPerson); g_scriptIntf->CallFunctionAlt(scr, GetPlayer(), 1, lastPerson); }
+            } else Log("Voice: greeting heard, but you're not looking at anyone");
+        }
+    }
+    if (now < next) return;
+    next = now + 250.0;
+    /* what to listen for now */
+    int mode = 0; VcAns a[VC_MAXOPT]; int n = 0;
+    if (g_voiceOn && g_inGameplay) {
+        if (talking) { mode = 2; n = Vc_Answers(a); }
+        else if (g_voiceGreet && !IsMenuMode()) mode = 1;
+    }
+    bool same = mode == g_vcMode && n == g_vcN;
+    for (int i = 0; same && i < n; i++) if (strcmp(a[i].text, g_vcOpt[i])) same = false;
+    if (same) return;
+    EnterCriticalSection(&g_vcCs);
+    g_vcMode = mode; g_vcN = n;
+    for (int i = 0; i < n; i++) snprintf(g_vcOpt[i], VC_TXT, "%s", a[i].text);
+    InterlockedIncrement(&g_vcVer);
+    LeaveCriticalSection(&g_vcCs);
+    memcpy(ans, a, sizeof a); nAns = n;
+    if (mode == 2) { static int dl = 0; if (dl++ < 30) { Log("Voice: %d answers on screen:", n); for (int i = 0; i < n; i++) Log("  %d. \"%s\" (piece %s, id %d)", i + 1, a[i].text, Tile_Name(a[i].tile), (int)Tile_Value(a[i].tile, 0xFAA, -1.0f)); } }
+}
 /* ---- HUD parts on/off ----------------------------------------------------------------------------
    The game's HUD in the headset: each part can be hidden ([HUD] in FNVR.ini, or the VR settings). The parts
    are found by name on the HUD, so HUD mods that rename them may need a look at the log (HUD parts are listed). */
@@ -11378,6 +11684,9 @@ static const SetOpt g_setOpts[] = {
     { SP_HUD, ST_FLOAT, "Look away to close menus", "Display", "fLookAwayClose", &g_lookAwayDeg, 0.0f, 180.0f, 5.0f, "%.0f deg", 0, 0, "With live menus: turn your head this far away from a menu and it closes. 0 = never." },
     { SP_DISPLAY, ST_BOOL, "Game menus on the big screen", "Display", "bMenusOnScreen", &g_farGameMenus, 0, 0, 0, 0, 0, 0, "Pause menu, messages, containers and other in-game menus on the same screen." },
     { SP_HUD, ST_FLOAT, "HUD size", "Display", "fUIScale", &g_uiScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view the HUD covers. Smaller = health, AP and compass come in from the edges where you can see them." },
+    { SP_HUD, ST_BOOL, "Voice: say your answers", "Voice", "bVoiceControl", &g_voiceOn, 0, 0, 0, 0, 0, 0, "ON: the headset's microphone listens in conversations - say an answer (its first few words are enough) or \"option two\". Uses Windows' own speech recognition, offline." },
+    { SP_HUD, ST_BOOL, "Voice: say hello to talk", "Voice", "bGreetToTalk", &g_voiceGreet, 0, 0, 0, 0, 0, 0, "ON: look at someone and say \"hey\", \"hello\" or \"excuse me\" to start talking to them." },
+    { SP_HUD, ST_FLOAT, "Voice: how sure", "Voice", "fMinConfidence", &g_voiceConf, 0.0f, 0.9f, 0.05f, "%.2f", 0, 0, "How sure the speech recognizer must be before it acts. Raise it if it picks answers you didn't say, lower it if it ignores you." },
     { SP_HUD, ST_FLOAT, "Dialogue size", "Display", "fDialogueScale2", &g_dlgScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view talking to people takes up - the box and its text shrink together." },
     { SP_HUD, ST_FLOAT, "Menu height", "Display", "fMenuHeight", &g_menuYOff, -0.5f, 0.5f, 0.02f, "%+.2f", 0, 0, "Moves pop-up menus (trading, companions, containers, messages) up (+) or down (-) to where you look straight ahead." },
     { SP_HUD, ST_FLOAT, "Menu size", "Display", "fMenuScale", &g_menuScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view pop-up menus (talking, trading, containers, messages) cover. Smaller = further away." },
@@ -12326,6 +12635,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         Move_Flush();
         Stim_Flush();
         Far_UiTick();
+        Voice_Tick();
         Holster_Tick();
         LootMenu_Tick(); Hud_Tick(); FireRate_Tick();
         if (g_seqWantAt > 0 && !g_seqTried && QpcMs() > g_seqWantAt) { Log("Menu Sequoia: loading the model"); Room_LoadSequoia(); }
