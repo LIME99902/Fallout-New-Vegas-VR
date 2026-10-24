@@ -1114,6 +1114,9 @@ static int PlayerWeaponType(void)
 }
 
 static void *PlayerWeaponForm(void);
+static bool Scr_Num(void *scr, void *arg, double *out);
+static volatile int g_animAction = -1;   /* the player's current action (game's GetAnimAction): -1 none, 0 equip, 1 unequip, 2-4 attack, 9 reload */
+static double g_animIdleSince = 0;      /* when the action last became "none" */
 /* An automatic weapon (the game's own "automatic" flag): for melee that's the chainsaw-type weapons. */
 static bool PlayerWeaponAutomatic(void) { char *w = (char *)PlayerWeaponForm(); return w && !IsBadReadPtr(w + 0x100, 1) && (*(BYTE *)(w + 0x100) & 2); }
 static void *PlayerWeaponForm(void)
@@ -1980,6 +1983,19 @@ static void VR_Tick(void)
     g_camOverride = false;
     g_frameHasHmdPose = false;
     StartSetup_Tick();
+    {   /* what the character is doing (reloading, equipping...) - read 10 times a second */
+        static double next = 0; static void *scr = NULL; static bool failed = false;
+        if (g_inGameplay && !failed && QpcMs() > next && g_scriptIntf && g_scriptIntf->CompileScript) {
+            next = QpcMs() + 100.0;
+            if (!scr) { scr = g_scriptIntf->CompileScript("ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to rWho.GetAnimAction\nSetFunctionValue iVal\nEnd\n");
+                if (!scr) { failed = true; Log("Arms: couldn't set up reading the reload state"); } }
+            double v = -1;
+            if (scr && Scr_Num(scr, GetPlayer(), &v)) {
+                int a = (int)v;
+                if (a != g_animAction) { if (a == -1) g_animIdleSince = QpcMs(); static int al = 0; if (al++ < 30) Log("Action: %d -> %d", g_animAction, a); g_animAction = a; }
+            }
+        }
+    }
     Controllers_Poll(IsMenuMode());
 
     TrackedDevicePose_t pose;
@@ -5714,7 +5730,9 @@ static const char *g_boneNames[2][B_COUNT] = {
 };
 static char *g_bones[2][B_COUNT];
 static char *g_bonesFor = NULL;          /* first-person node the bones were found in */
-static uint32_t g_fpGen = 1;              /* bumped when the first-person body is rebuilt in place: every cache below re-reads */
+static uint32_t g_fpGen = 1;
+static float g_lhT[3]; static M3 g_lhD; static bool g_lhOk = false;   /* left-handed: where the left hand is drawn this frame, and its turn */
+static float g_lhWeapL[12]; static char *g_lhWeapNode = NULL;          /* the gun's own placement, put back after drawing */              /* bumped when the first-person body is rebuilt in place: every cache below re-reads */
 static float g_boneSaved[2][B_COUNT][12];
 static bool  g_armsLogged = false;
 
@@ -5793,8 +5811,9 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
         if (g_weaponOutThisFrame && !pipAnim) {
             M3Mul(g_handRef[side], BhT, handWorld0); g_haveHandRef[side] = true;
             static double seenAt[2] = { 0, 0 }; static bool saved[2] = { false, false };
-            if (!seenAt[side]) seenAt[side] = QpcMs();
-            if (!saved[side] && QpcMs() - seenAt[side] > 1500.0) {   /* remember it for next time (and for a new game, before any weapon is drawn) */
+            if (g_animAction != -1) seenAt[side] = 0;   /* (only the plain holding pose - never mid-equip or mid-reload) */
+            else if (!seenAt[side]) seenAt[side] = QpcMs();
+            if (!saved[side] && seenAt[side] && QpcMs() - seenAt[side] > 1500.0) {   /* remember it for next time (and for a new game, before any weapon is drawn) */
                 saved[side] = true;
                 const float *m = &g_handRef[side][0][0]; char hb[256];
                 snprintf(hb, sizeof hb, "%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8]);
@@ -7664,6 +7683,42 @@ static bool Arms_Apply(char *player, char *cam)
         }
     }
 
+    {   /* Reloads (the Caravan Shotgun's shell-by-shell one above all) can leave the arms frozen in their last reload
+           pose - nothing poses them again afterwards. Keep each gun's normal pose while idle; put it back when a reload
+           ends; if the arms still look stuck a moment later, refresh them like holstering does. */
+        static float snap[2][B_COUNT][12]; static bool snapHave = false; static void *snapW = NULL; static int lastAct = -1, fixFrames = 0; static double checkAt = 0;
+        void *w = PlayerWeaponForm();
+        bool out = PlayerWeaponOut();
+        if (w != snapW || !out) { snapW = w; snapHave = false; }
+        bool pipNow2 = g_pipOpen || g_pipModeRaw != 0;
+        if (out && !pipNow2 && g_animAction == -1 && g_animIdleSince && QpcMs() - g_animIdleSince > 1000.0 && !fixFrames && !checkAt) {
+            for (int s2 = 0; s2 < 2; s2++) for (int b = 0; b < B_COUNT; b++) {
+                memcpy(snap[s2][b], g_bones[s2][b] + NIAV_LOCAL_ROTATE, 36); memcpy(snap[s2][b] + 9, g_bones[s2][b] + NIAV_LOCAL_TRANSLATE, 12); }
+            snapHave = true;
+        }
+        if (lastAct == 9 && g_animAction != 9 && snapHave && out) { fixFrames = 3; checkAt = QpcMs() + 600.0; }
+        lastAct = g_animAction;
+        if (fixFrames > 0) {
+            fixFrames--;
+            for (int s2 = 0; s2 < 2; s2++) for (int b = 0; b < B_COUNT; b++) {
+                memcpy(g_bones[s2][b] + NIAV_LOCAL_ROTATE, snap[s2][b], 36); memcpy(g_bones[s2][b] + NIAV_LOCAL_TRANSLATE, snap[s2][b] + 9, 12); }
+            NodeUpdate(node);
+            static int fl = 0; if (fl++ < 6 && fixFrames == 2) Log("Arms: reload finished - normal arm pose put back");
+        }
+        if (checkAt && QpcMs() > checkAt) {
+            checkAt = 0;
+            if (snapHave && out && g_animAction == -1) {   /* still far from the normal pose on its own: stuck */
+                float worst = 0;
+                for (int s2 = 0; s2 < 2; s2++) for (int b = 0; b < B_COUNT; b++) {
+                    const float *A = (const float *)(g_bones[s2][b] + NIAV_LOCAL_ROTATE), *B = snap[s2][b];
+                    float tr = 0; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) tr += A[i * 3 + j] * B[i * 3 + j];
+                    float c = fminf(fmaxf((tr - 1.0f) * 0.5f, -1.0f), 1.0f), ang = acosf(c) * RAD2DEG;
+                    if (ang > worst) worst = ang;
+                }
+                if (worst > 30.0f) { char why[80]; snprintf(why, sizeof why, "arms stuck %.0f deg off after a reload", worst); Arms_Heal(why); }
+            }
+        }
+    }
     /* Save the animation's pose so it can be put back after drawing. */
     for (int s = 0; s < 2; s++) for (int b = 0; b < B_COUNT; b++) {
         memcpy(g_boneSaved[s][b], g_bones[s][b] + NIAV_LOCAL_ROTATE, 9 * sizeof(float));
@@ -7695,6 +7750,7 @@ static bool Arms_Apply(char *player, char *cam)
         }
     }
     g_pipLockNow = g_pipLock && g_wristPip && g_pipOpen && (g_pipModeRaw == 2 || g_pipModeRaw == 3 || g_pipModeRaw == 5);
+    g_lhOk = false;
     for (int s = 0; s < 2; s++) {
         int hnd = s;   /* side 0 = left arm = left controller */
         if (!g_vrHandOk[hnd]) continue;
@@ -7775,6 +7831,7 @@ static bool Arms_Apply(char *player, char *cam)
             }
         }
         Arm_Reach(s, T, D, Bh);
+        if (s == 0) { memcpy(g_lhT, T, 12); memcpy(g_lhD, D, sizeof D); g_lhOk = true; }
         {   /* the drawn hand must end up where your hand is (when the arm can reach it): if it stays well off, repair */
             static double offSince[2] = { 0, 0 };
             const float *Hw = (const float *)(g_bones[s][B_HAND] + NIAV_WORLD_TRANSLATE), *Sw = (const float *)(g_bones[s][B_UPPER] + NIAV_WORLD_TRANSLATE);
@@ -7789,6 +7846,34 @@ static bool Arms_Apply(char *player, char *cam)
                 char why[96]; snprintf(why, sizeof why, "%s hand drawn %.0f units from your real hand", s ? "right" : "left", miss);
                 Arms_Heal(why);
             }
+        }
+    }
+
+    /* Left-handed: the game always holds the gun in its right hand - draw the gun in your LEFT hand instead, turned the
+       way the right hand would hold it if it were where your left hand is. Put back after drawing. */
+    g_lhWeapNode = NULL;
+    if (g_leftHanded && g_lhOk && g_weaponNode && g_weaponOutThisFrame && g_haveHandRef[1] && !g_pipOpen && g_pipModeRaw == 0) {
+        char *wn = g_weaponNode, *par = *(char **)(wn + NIAV_PARENT);
+        char *lh = g_bones[0][B_HAND];
+        if (par && lh && !IsBadReadPtr(par, 0x90)) {
+            M3 Hv, Rv; M3Mul(Hv, Bh, g_handRef[1]); M3Mul(Rv, g_lhD, Hv);   /* the right hand's grip, turned by your left controller */
+            const float *Pw = (const float *)(par + NIAV_WORLD_TRANSLATE), *Pr = (const float *)(par + NIAV_WORLD_ROTATE);
+            float ps = *(const float *)(par + NIAV_WORLD_SCALE); if (!(ps > 1e-4f)) ps = 1.0f;
+            float *Lr = (float *)(wn + NIAV_LOCAL_ROTATE), *Lt = (float *)(wn + NIAV_LOCAL_TRANSLATE);
+            memcpy(g_lhWeapL, Lr, 36); memcpy(g_lhWeapL + 9, Lt, 12); g_lhWeapNode = wn;
+            /* the gun's place relative to the hand that holds it */
+            M3 Lrm, Gr; memcpy(Lrm, Lr, 36);
+            M3Mul(Gr, Rv, Lrm);
+            float Gp[3], lw[3]; for (int i = 0; i < 3; i++) lw[i] = (Rv[i][0] * Lt[0] + Rv[i][1] * Lt[1] + Rv[i][2] * Lt[2]) * ps;
+            const float *Lw = (const float *)(lh + NIAV_WORLD_TRANSLATE);
+            for (int i = 0; i < 3; i++) Gp[i] = Lw[i] + lw[i];
+            /* back into the right hand's frame (the gun stays its child) */
+            M3 PrT, Pm, Nl; memcpy(Pm, Pr, 36); M3T(PrT, Pm); M3Mul(Nl, PrT, Gr);
+            memcpy(Lr, Nl, 36);
+            float d[3]; V3Sub(d, Gp, Pw);
+            for (int i = 0; i < 3; i++) Lt[i] = (PrT[i][0] * d[0] + PrT[i][1] * d[1] + PrT[i][2] * d[2]) / ps;
+            NodeUpdate(wn);
+            static int ll = 0; if (ll++ < 2) Log("Left-handed: the gun is drawn in your left hand");
         }
     }
 
@@ -7918,6 +8003,10 @@ static bool Arms_Apply(char *player, char *cam)
 
 static void Arms_Restore(void)
 {
+    if (g_lhWeapNode) {   /* left-handed: the gun back in the right hand's data */
+        memcpy(g_lhWeapNode + NIAV_LOCAL_ROTATE, g_lhWeapL, 36); memcpy(g_lhWeapNode + NIAV_LOCAL_TRANSLATE, g_lhWeapL + 9, 12);
+        NodeUpdate(g_lhWeapNode); g_lhWeapNode = NULL;
+    }
     PipOn_Restore();
     Fingers_Restore();
     if (g_weaponHidden && g_weaponNode) { *(uint32_t *)(g_weaponNode + 0x30) &= ~1u; g_weaponHidden = false; }
