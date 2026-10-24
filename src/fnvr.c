@@ -308,6 +308,47 @@ static void __attribute__((thiscall)) Hook_EvalPkg(void *actor, int a, int b)
     if (actor && actor == (void *)g_dlgKeepActor) { InterlockedIncrement(&g_dlgBlocked); return; }   /* (no switching to another AI package mid-conversation) */
     ((EvalPkg_t)0x008A6CE0)(actor, a, b);
 }
+/* The talking person's AI task ("procedure") is set through two slots of their process's function table.
+   While you talk, changes to it are held off (and logged with where they came from), so they stay on the
+   conversation. Patched on the person's own table the first time it's needed. */
+static bool Rd(const void *p, size_t n);
+typedef void (__attribute__((thiscall)) *SetProc_t)(void *proc, int v);
+typedef struct { void **vt; SetProc_t o284, o238; } VtHook;
+static VtHook g_vtH[6]; static int g_vtN = 0;
+static char * volatile g_dlgKeepProc = NULL;
+static volatile LONG g_procBlocked = 0;
+static VtHook *VtH_For(void *proc) { void **vt = *(void ***)proc; for (int i = 0; i < g_vtN; i++) if (g_vtH[i].vt == vt) return &g_vtH[i]; return NULL; }
+static void ProcLog(const char *slot, int v, void *ret)
+{
+    static int n = 0; if (n++ < 40) Log("Talking: their task change (%s -> %d) from %p held off", slot, v, ret);
+}
+static void __attribute__((thiscall, noinline)) Hook_SetProc284(void *proc, int v)
+{
+    VtHook *h = VtH_For(proc);
+    if (proc == (void *)g_dlgKeepProc) { InterlockedIncrement(&g_procBlocked); ProcLog("A", v, __builtin_return_address(0)); return; }
+    if (h && h->o284) h->o284(proc, v);
+}
+static void __attribute__((thiscall, noinline)) Hook_SetProc238(void *proc, int v)
+{
+    VtHook *h = VtH_For(proc);
+    if (proc == (void *)g_dlgKeepProc) { InterlockedIncrement(&g_procBlocked); ProcLog("B", v, __builtin_return_address(0)); return; }
+    if (h && h->o238) h->o238(proc, v);
+}
+static void Keep_HookProcess(char *proc)
+{
+    if (!Rd(proc, 8)) return;
+    void **vt = *(void ***)proc;
+    if (!Rd(vt, 0x290) || VtH_For(proc) || g_vtN >= 6) return;
+    VtHook *h = &g_vtH[g_vtN];
+    h->vt = vt; h->o284 = (SetProc_t)vt[0x284 / 4]; h->o238 = (SetProc_t)vt[0x238 / 4];
+    DWORD old;
+    if (VirtualProtect(&vt[0x238 / 4], 0x50, PAGE_EXECUTE_READWRITE, &old)) {
+        vt[0x284 / 4] = (void *)Hook_SetProc284; vt[0x238 / 4] = (void *)Hook_SetProc238;
+        VirtualProtect(&vt[0x238 / 4], 0x50, old, &old);
+        g_vtN++;
+        Log("Talking: task keeper on process table %p (slots %p %p)", (void *)vt, (void *)h->o284, (void *)h->o238);
+    }
+}
 static void InstallKeepTalking(void)
 {
     static const DWORD sites[9] = { 0x00574300, 0x005C9593, 0x005C9603, 0x00886696, 0x008D0EF9, 0x008E11D3, 0x009684E1, 0x00968519, 0x00968533 };
@@ -11357,7 +11398,9 @@ static void Dialogue_Tick(void)
         if (Rd(who, 0x40)) {
             double was = 1; if (hold) Scr_Num(hold, who, &was);
             ref = who; refId = *(uint32_t *)(who + 0x0C); weRestrained = was == 0.0;
-            { uint8_t ft = *(uint8_t *)(who + 4); if (ft == 0x3B || ft == 0x3C) { InterlockedExchange(&g_dlgBlocked, 0); g_dlgKeepActor = who; } }
+            { uint8_t ft = *(uint8_t *)(who + 4); if (ft == 0x3B || ft == 0x3C) { InterlockedExchange(&g_dlgBlocked, 0); g_dlgKeepActor = who;
+                char *proc = *(char **)(who + 0x68);
+                if (Rd(proc, 0x30) && *(uint8_t *)(proc + 0x28) == 0) { Keep_HookProcess(proc); InterlockedExchange(&g_procBlocked, 0); g_dlgKeepProc = proc; } } }
             Log("Talking: %08X held still while you talk%s", refId, weRestrained ? "" : " (was already held)");
         } else { ref = NULL; Log("Talking: couldn't tell who you're talking to"); }
     }
@@ -11373,7 +11416,7 @@ static void Dialogue_Tick(void)
         }
     }
     if (!talking && active) {
-        if (g_dlgKeepActor) { Log("Talking: their AI kept on the conversation (%ld package changes held off)", (long)g_dlgBlocked); g_dlgKeepActor = NULL; }
+        if (g_dlgKeepActor) { Log("Talking: their AI kept on the conversation (%ld package changes, %ld task changes held off)", (long)g_dlgBlocked, (long)g_procBlocked); g_dlgKeepActor = NULL; g_dlgKeepProc = NULL; }
         if (undo && ref && Rd(ref, 0x40) && *(uint32_t *)(ref + 0x0C) == refId && g_scriptIntf->CallFunctionAlt) {
             g_scriptIntf->CallFunctionAlt(undo, GetPlayer(), 2, ref, weRestrained ? 1 : 0);
             Log("Talking: %08X free to move again", refId);
@@ -11381,7 +11424,7 @@ static void Dialogue_Tick(void)
         active = false; ref = NULL; openAt = 0;
     }
     if (!talking) openAt = 0;
-    if (!active && g_dlgKeepActor) g_dlgKeepActor = NULL;
+    if (!active && g_dlgKeepActor) { g_dlgKeepActor = NULL; g_dlgKeepProc = NULL; }
 }
 /* ---- HUD parts on/off ----------------------------------------------------------------------------
    The game's HUD in the headset: each part can be hidden ([HUD] in FNVR.ini, or the VR settings). The parts
