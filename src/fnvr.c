@@ -349,8 +349,26 @@ static void Keep_HookProcess(char *proc)
         Log("Talking: task keeper on process table %p (slots %p %p)", (void *)vt, (void *)h->o284, (void *)h->o238);
     }
 }
+/* The conversation menu's own per-frame step (it plays each line, waits for the person to finish, then shows
+   your answers). Watched here: how often the game runs it while the world keeps going, and what it waits on. */
+typedef void (__attribute__((thiscall)) *MenuUpd_t)(void *menu);
+static MenuUpd_t o_DlgUpdate = NULL;
+static volatile LONG g_dlgUpdCalls = 0;
+static void __attribute__((thiscall)) Hook_DlgUpdate(void *menu)
+{
+    InterlockedIncrement(&g_dlgUpdCalls);
+    if (o_DlgUpdate) o_DlgUpdate(menu);
+}
+static void InstallDlgUpdateWatch(void)
+{
+    void **slot = (void **)(0x0107257C + 11 * 4);
+    if (!Rd(slot, 4) || *slot != (void *)0x00762950) { Log("Talking: conversation menu step not where expected (%p) - not watched", Rd(slot, 4) ? *slot : NULL); return; }
+    DWORD old;
+    if (VirtualProtect(slot, 4, PAGE_EXECUTE_READWRITE, &old)) { o_DlgUpdate = (MenuUpd_t)*slot; *slot = (void *)Hook_DlgUpdate; VirtualProtect(slot, 4, old, &old); Log("Talking: conversation menu step watched"); }
+}
 static void InstallKeepTalking(void)
 {
+    InstallDlgUpdateWatch();
     static const DWORD sites[9] = { 0x00574300, 0x005C9593, 0x005C9603, 0x00886696, 0x008D0EF9, 0x008E11D3, 0x009684E1, 0x00968519, 0x00968533 };
     int ok = 0;
     for (int i = 0; i < 9; i++) {
@@ -11194,7 +11212,11 @@ static bool Vc_RunWinRT(void)
         RecOp *op = NULL;
         if (FAILED(hr = rec->lpVtbl->RecognizeAsync(rec, &op)) || !op) { if (errs++ < 5) Log("Voice: Windows speech couldn't listen (0x%08lX)", (unsigned long)hr); Sleep(1000); continue; }
         LONG built = g_vcRtBuilt;
+        static int nListen = 0, nSilence = 0, nOther = 0, nErr = 0, nCancel = 0; static double sumAt = 0;
+        nListen++;
+        if (QpcMs() > sumAt) { if (sumAt) Log("Voice: listened %d times (silence %d, cancelled for new answers %d, other %d, errors %d)", nListen, nSilence, nCancel, nOther, nErr); sumAt = QpcMs() + 15000.0; }
         AsyncStatus st = Vc_Wait((IUnknown *)op, 0, Vc_PhrasesChanged);
+        if (st == Canceled) nCancel++; else if (st == Error) nErr++;
         if (st == Completed) {
             Res *res = NULL;
             if (SUCCEEDED(op->lpVtbl->GetResults(op, &res)) && res) {
@@ -11209,7 +11231,9 @@ static bool Vc_RunWinRT(void)
                         int r = Vc_RuleFor(txt, ph, rule, np);
                         Vc_Heard(txt, r, cf == 0 ? 1 : cf == 1 ? 0 : -1, cf == 0 ? 0.9f : cf == 1 ? 0.6f : 0.3f, built);
                     } else if (txt[0]) { static int rl = 0; if (rl++ < 20) Log("Voice: heard \"%s\" but too unsure (rejected)", txt); }
-                } else if (s != 7 /* (just silence) */ && s != 5) { static int sl = 0; if (sl++ < 10) Log("Voice: Windows speech result status %d%s", (int)s, s == 10 ? " (microphone unavailable)" : s == 4 ? " (poor audio)" : ""); if (s == 10) Sleep(2000); }
+                } else if (s == 7) nSilence++;
+                if (s != 0 && s != 7) nOther++;
+                if (s != 0 && s != 7 /* (just silence) */ && s != 5) { static int sl = 0; if (sl++ < 10) Log("Voice: Windows speech result status %d%s", (int)s, s == 10 ? " (microphone unavailable)" : s == 4 ? " (poor audio)" : ""); if (s == 10) Sleep(2000); }
                 res->lpVtbl->Release(res);
             }
         } else if (st == Error) Sleep(1500);
@@ -11414,6 +11438,26 @@ static void Dialogue_Tick(void)
             uint32_t pid = Rd(p, 0x10) ? *(uint32_t *)(p + 0x0C) : 0;
             if (pid != lastPk || (int)v != lastPr) { lastPk = pid; lastPr = (int)v; Log("Talking: %08X AI package %08X (type %d), procedure %d", refId, pid, Rd(p, 0x40) ? (int)*(uint8_t *)(p + 0x1C) : -1, (int)v); }
         }
+    }
+    {   /* the conversation menu: is the game running its per-frame step? (if not, run it here) */
+        static LONG lastCalls = 0; static double nl = 0; static int selfRuns = 0, idleTicks = 0;
+        const volatile bool *vv = (const volatile bool *)0x011F308F;
+        char **arr = Rd((void *)0x011F350C, 4) ? *(char ***)0x011F350C : NULL;
+        char *tm = (arr && Rd(arr + 8, 4)) ? arr[8] : NULL;
+        char *dm = Rd(tm, 0x40) ? *(char **)(tm + 0x3C) : NULL;
+        if (vv[1009] && g_liveMenuNow && g_menuFlagCleared && Rd(dm, 0x140) && *(void **)dm == (void *)0x0107257C) {
+            LONG c = g_dlgUpdCalls;
+            if (c == lastCalls) { if (++idleTicks >= 2 && o_DlgUpdate) { o_DlgUpdate(dm); selfRuns++; } }
+            else idleTicks = 0;
+            lastCalls = g_dlgUpdCalls;
+            if (QpcMs() > nl) {
+                nl = QpcMs() + 700.0;
+                char *sp = *(char **)(dm + 0x80);
+                Log("Talking: menu step %ld runs by the game, %d by FNVR | state %d, timer %.2f | speaker %08X done-flag %d/%d/%d",
+                    (long)c, selfRuns, *(int *)(dm + 0x28), *(float *)(dm + 0x108), Rd(sp, 0x90) ? *(uint32_t *)(sp + 0x0C) : 0,
+                    Rd(sp, 0x90) ? *(uint8_t *)(sp + 0x7C) : -1, Rd(sp, 0x90) ? *(uint8_t *)(sp + 0x7F) : -1, Rd(sp, 0x90) ? *(uint8_t *)(sp + 0x80) : -1);
+            }
+        } else { idleTicks = 0; lastCalls = g_dlgUpdCalls; }
     }
     if (!talking && active) {
         if (g_dlgKeepActor) { Log("Talking: their AI kept on the conversation (%ld package changes, %ld task changes held off)", (long)g_dlgBlocked, (long)g_procBlocked); g_dlgKeepActor = NULL; g_dlgKeepProc = NULL; }
