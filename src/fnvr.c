@@ -277,6 +277,7 @@ static bool  g_grapOn = true, g_grapSafe = true;   /* INI [Grapple] bEnabled, bS
 static bool  g_grapHand[2] = { true, false };      /* INI [Grapple] bLeftHand, bRightHand */
 static bool  g_grapRope = true, g_grapRumble = true, g_grapActors = true;   /* INI [Grapple] bShowRope, bRumble, bHookActors */
 static float g_foreDirW[2][3]; static double g_foreDirAt[2];   /* the drawn forearm's direction (elbow -> wrist), last frame */
+static float g_grapLocal[2][3]; static bool g_grapLocalOk[2];   /* INI [Grapple] sAimL/sAimR: the forearm's direction in the controller's own axes (learned with no weapon out) */
 static float g_grapAimUp = 0.0f, g_grapAimRight = 0.0f;   /* INI [Grapple] fAimUp, fAimRight (degrees): fine-tuning where the line goes */
 static bool  g_grapYank = true;   /* INI [Grapple] bPullPeople: hooking a person pulls THEM to you (and knocks them down on arrival) */
 static float g_grapRange = 40.0f, g_grapSpeed = 28.0f, g_grapLaunch = 1.0f;   /* INI [Grapple] fRange (m), fTopSpeed (m/s), fLaunch (x) */
@@ -554,6 +555,8 @@ static void LoadSettings(void)
     g_grapRumble = GetPrivateProfileIntA("Grapple", "bRumble", 1, g_iniPath) != 0;
     g_grapActors = GetPrivateProfileIntA("Grapple", "bHookActors", 1, g_iniPath) != 0;
     g_grapYank = GetPrivateProfileIntA("Grapple", "bPullPeople", 1, g_iniPath) != 0;
+    for (int s_ = 0; s_ < 2; s_++) { char ab[96]; GetPrivateProfileStringA("Grapple", s_ ? "sAimR" : "sAimL", "", ab, sizeof ab, g_iniPath);
+        float *v = g_grapLocal[s_]; g_grapLocalOk[s_] = sscanf(ab, "%f %f %f", &v[0], &v[1], &v[2]) == 3 && fabsf(V3Len(v) - 1.0f) < 0.2f; }
     { char gb[32]; GetPrivateProfileStringA("Grapple", "fAimUp", "0", gb, sizeof gb, g_iniPath); g_grapAimUp = (float)atof(gb);
       GetPrivateProfileStringA("Grapple", "fAimRight", "0", gb, sizeof gb, g_iniPath); g_grapAimRight = (float)atof(gb); }
     g_ltBullet = GetPrivateProfileIntA("Controls", "bLeftTriggerBulletTime", 1, g_iniPath) != 0;
@@ -9845,6 +9848,26 @@ static bool Grap_HandFree(int h)
 }
 static void Grapple_Update(char *player, char *cam, float dt)
 {
+    {   /* learn where your forearm points relative to the controller while no weapon is out (the aim that feels right),
+           so a gun in your hands - which changes the drawn arm's pose - doesn't move where the line goes */
+        static double learnSince[2] = { 0, 0 }; static bool saved[2] = { false, false }; static float acc[2][3];
+        bool noWeap = !g_weaponOutThisFrame || PlayerWeaponType() == -1;
+        for (int k = 0; k < 2; k++) {
+            if (!noWeap || !g_handWOk[k] || QpcMs() - g_foreDirAt[k] > 150.0 || g_holding[k] || g_climb[k] || g_pipOpen) { learnSince[k] = 0; continue; }
+            float loc[3]; for (int j = 0; j < 3; j++) loc[j] = g_handWR[k][0][j] * g_foreDirW[k][0] + g_handWR[k][1][j] * g_foreDirW[k][1] + g_handWR[k][2][j] * g_foreDirW[k][2];
+            if (!learnSince[k]) { learnSince[k] = QpcMs(); memcpy(acc[k], loc, 12); }
+            else for (int j = 0; j < 3; j++) acc[k][j] += (loc[j] - acc[k][j]) * 0.05f;
+            if (QpcMs() - learnSince[k] > 1500.0) {
+                float l = V3Len(acc[k]);
+                if (l > 0.5f) { for (int j = 0; j < 3; j++) g_grapLocal[k][j] = acc[k][j] / l; g_grapLocalOk[k] = true; }
+                if (!saved[k] && g_grapLocalOk[k]) {
+                    saved[k] = true; char b[96]; snprintf(b, sizeof b, "%.4f %.4f %.4f", g_grapLocal[k][0], g_grapLocal[k][1], g_grapLocal[k][2]);
+                    WritePrivateProfileStringA("Grapple", k ? "sAimR" : "sAimL", b, g_iniPath);
+                    Log("Grapple: %s hand's aim learned (%s)", k ? "right" : "left", b);
+                }
+            }
+        }
+    }
     char *proc = *(char **)(player + 0x68);
     char *ctrl = (proc && *(uint8_t *)(proc + 0x28) <= 1) ? *(char **)(proc + 0x138) : NULL;
     float *P = (float *)(player + 0x30);
@@ -9968,7 +9991,8 @@ static void Grapple_Update(char *player, char *cam, float dt)
     /* fire: straight out from where the hand points */
     /* along your forearm as it's drawn (elbow -> wrist): where your arm points with a fist */
     float d[3];
-    if (QpcMs() - g_foreDirAt[h] < 150.0) memcpy(d, g_foreDirW[h], 12);
+    if (g_grapLocalOk[h]) for (int i = 0; i < 3; i++) d[i] = g_handWR[h][i][0] * g_grapLocal[h][0] + g_handWR[h][i][1] * g_grapLocal[h][1] + g_handWR[h][i][2] * g_grapLocal[h][2];
+    else if (QpcMs() - g_foreDirAt[h] < 150.0) memcpy(d, g_foreDirW[h], 12);
     else for (int i = 0; i < 3; i++) d[i] = -g_handWR[h][i][2];
     if (g_grapAimUp != 0.0f || g_grapAimRight != 0.0f) {   /* fine-tuning: turn it up/down and left/right */
         float hz = sqrtf(d[0] * d[0] + d[1] * d[1]);
