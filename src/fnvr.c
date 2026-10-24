@@ -301,7 +301,7 @@ static bool  g_chestPause = true; static float g_chestDown = 0.32f, g_chestFwd =
 static bool  g_stimOn = true;                   /* INI [Stimpak] bChestStimpak */
 static bool  g_voiceOn = true;          /* INI [Voice] bVoiceControl */
 static bool  g_dlgCamStuck = false;     /* the view didn't follow your head in a paused conversation: keep the world running instead */
-static bool  g_liveDlgWorld = false;    /* INI [Display] bLiveDialogueWorld: the world keeps running while you talk (lip sync can stop) */
+static bool  g_liveDlgWorld = true;     /* INI [Display] bLiveDialogueWorld: the world keeps running while you talk (lip sync can stop) */
 static bool  g_dlgHold = true;          /* INI [Display] bDialogueHoldStill: the person you talk to stands still */
 static float g_voiceConf = 0.30f;       /* INI [Voice] fMinConfidence: how sure the recognizer must be (0-1) */
 static bool  g_voiceGreet = true;       /* INI [Voice] bGreetToTalk */
@@ -482,7 +482,7 @@ static void LoadSettings(void)
     g_stimOn = GetPrivateProfileIntA("Stimpak", "bChestStimpak", 1, g_iniPath) != 0;
     g_voiceOn = GetPrivateProfileIntA("Voice", "bVoiceControl", 1, g_iniPath) != 0;
     g_dlgHold = GetPrivateProfileIntA("Display", "bDialogueHoldStill", 1, g_iniPath) != 0;
-    g_liveDlgWorld = GetPrivateProfileIntA("Display", "bLiveDialogueWorld", 0, g_iniPath) != 0;
+    g_liveDlgWorld = GetPrivateProfileIntA("Display", "bLiveDialogueWorld", 1, g_iniPath) != 0;
     g_voiceGreet = GetPrivateProfileIntA("Voice", "bGreetToTalk", 1, g_iniPath) != 0;
     { char vb[32]; GetPrivateProfileStringA("Voice", "fMinConfidence", "0.30", vb, sizeof vb, g_iniPath); g_voiceConf = fminf(fmaxf((float)atof(vb), 0.0f), 0.95f);
       GetPrivateProfileStringA("Voice", "sMicName", "", g_voiceMic, sizeof g_voiceMic, g_iniPath); }
@@ -11305,6 +11305,17 @@ static void Dialogue_Tick(void)
             Log("Talking: %08X held still while you talk%s", refId, weRestrained ? "" : " (was already held)");
         } else { ref = NULL; Log("Talking: couldn't tell who you're talking to"); }
     }
+    if (talking && active && ref && Rd(ref, 0x40) && *(uint32_t *)(ref + 0x0C) == refId) {   /* log what their AI is doing (changes only) */
+        static void *pk = NULL, *pr = NULL; static double nx = 0; static uint32_t lastPk = 0; static int lastPr = -99;
+        if (!pk) { pk = g_scriptIntf->CompileScript("ref r\nref p\nBegin Function { r }\nset p to r.GetCurrentAIPackage\nSetFunctionValue p\nEnd\n");
+                   pr = g_scriptIntf->CompileScript("ref r\nint i\nBegin Function { r }\nset i to r.GetCurrentAIProcedure\nSetFunctionValue i\nEnd\n"); }
+        if (pk && pr && QpcMs() > nx) {
+            nx = QpcMs() + 300.0;
+            char *p = Scr_Ref(pk, ref); double v = -1; Scr_Num(pr, ref, &v);
+            uint32_t pid = Rd(p, 0x10) ? *(uint32_t *)(p + 0x0C) : 0;
+            if (pid != lastPk || (int)v != lastPr) { lastPk = pid; lastPr = (int)v; Log("Talking: %08X AI package %08X (type %d), procedure %d", refId, pid, Rd(p, 0x40) ? (int)*(uint8_t *)(p + 0x1C) : -1, (int)v); }
+        }
+    }
     if (!talking && active) {
         if (ref && Rd(ref, 0x40) && *(uint32_t *)(ref + 0x0C) == refId && g_scriptIntf->CallFunctionAlt) {
             g_scriptIntf->CallFunctionAlt(undo, GetPlayer(), 2, ref, weRestrained ? 1 : 0);
@@ -11977,7 +11988,7 @@ static const SetOpt g_setOpts[] = {
     { SP_HUD, ST_FLOAT, "Look away to close menus", "Display", "fLookAwayClose", &g_lookAwayDeg, 0.0f, 180.0f, 5.0f, "%.0f deg", 0, 0, "With live menus: turn your head this far away from a menu and it closes. 0 = never." },
     { SP_DISPLAY, ST_BOOL, "Game menus on the big screen", "Display", "bMenusOnScreen", &g_farGameMenus, 0, 0, 0, 0, 0, 0, "Pause menu, messages, containers and other in-game menus on the same screen." },
     { SP_HUD, ST_FLOAT, "HUD size", "Display", "fUIScale", &g_uiScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view the HUD covers. Smaller = health, AP and compass come in from the edges where you can see them." },
-    { SP_HUD, ST_BOOL, "Talking: world keeps running", "Display", "bLiveDialogueWorld", &g_liveDlgWorld, 0, 0, 0, 0, 0, 0, "OFF (best): while you talk the game runs the conversation its own way - lips stay in sync and every line plays; the rest of the world waits, as in the base game. ON: everything keeps moving, but people may stop mid-conversation." },
+    { SP_HUD, ST_BOOL, "Talking: world keeps running", "Display", "bLiveDialogueWorld", &g_liveDlgWorld, 0, 0, 0, 0, 0, 0, "ON: everything keeps moving while you talk. OFF: the game runs the conversation its own way and the rest of the world waits, as in the base game." },
     { SP_HUD, ST_BOOL, "Talking: they stand still", "Display", "bDialogueHoldStill", &g_dlgHold, 0, 0, 0, 0, 0, 0, "ON: the person you're talking to stays in place and looks at you while you talk (no shuffling or head snapping). Let go as soon as the conversation ends." },
     { SP_HUD, ST_BOOL, "Voice: say your answers", "Voice", "bVoiceControl", &g_voiceOn, 0, 0, 0, 0, 0, 0, "ON: the headset's microphone listens in conversations - say an answer (its first few words are enough) or \"option two\". Uses Windows' own speech recognition, offline." },
     { SP_HUD, ST_BOOL, "Voice: say hello to talk", "Voice", "bGreetToTalk", &g_voiceGreet, 0, 0, 0, 0, 0, 0, "ON: look at someone and say \"hey\", \"hello\" or \"excuse me\" to start talking to them." },
