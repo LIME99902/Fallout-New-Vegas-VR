@@ -300,6 +300,27 @@ static bool  g_chestPause = true; static float g_chestDown = 0.32f, g_chestFwd =
    forearm or your chest to use it. Let go without stabbing and it goes back. */
 static bool  g_stimOn = true;                   /* INI [Stimpak] bChestStimpak */
 static bool  g_voiceOn = true;          /* INI [Voice] bVoiceControl */
+static char * volatile g_dlgKeepActor = NULL;   /* the person you're talking to: their AI stays on the conversation until it's over */
+static volatile LONG g_dlgBlocked = 0;
+typedef void (__attribute__((thiscall)) *EvalPkg_t)(void *actor, int a, int b);
+static void __attribute__((thiscall)) Hook_EvalPkg(void *actor, int a, int b)
+{
+    if (actor && actor == (void *)g_dlgKeepActor) { InterlockedIncrement(&g_dlgBlocked); return; }   /* (no switching to another AI package mid-conversation) */
+    ((EvalPkg_t)0x008A6CE0)(actor, a, b);
+}
+static void InstallKeepTalking(void)
+{
+    static const DWORD sites[9] = { 0x00574300, 0x005C9593, 0x005C9603, 0x00886696, 0x008D0EF9, 0x008E11D3, 0x009684E1, 0x00968519, 0x00968533 };
+    int ok = 0;
+    for (int i = 0; i < 9; i++) {
+        BYTE *p = (BYTE *)sites[i];
+        if (p[0] != 0xE8 || (DWORD)(sites[i] + 5 + *(int32_t *)(p + 1)) != 0x008A6CE0) continue;
+        DWORD old; VirtualProtect(p, 5, PAGE_EXECUTE_READWRITE, &old);
+        *(int32_t *)(p + 1) = (int32_t)((uintptr_t)Hook_EvalPkg - (sites[i] + 5));
+        VirtualProtect(p, 5, old, &old); FlushInstructionCache(GetCurrentProcess(), p, 5); ok++;
+    }
+    Log("Talking: conversation keeper installed at %d of 9 places", ok);
+}
 static bool  g_dlgCamStuck = false;     /* the view didn't follow your head in a paused conversation: keep the world running instead */
 static bool  g_liveDlgWorld = true;     /* INI [Display] bLiveDialogueWorld: the world keeps running while you talk (lip sync can stop) */
 static bool  g_dlgHold = true;          /* INI [Display] bDialogueHoldStill: the person you talk to stands still */
@@ -11286,7 +11307,7 @@ static void Dialogue_Tick(void)
     if (!failed && !find && g_inGameplay && !vis[1007] && g_scriptIntf && g_scriptIntf->CompileScript) {
         find = g_scriptIntf->CompileScript("ref r\nref rFound\nBegin Function { }\nset r to GetFirstRef 200 1\nwhile r != 0\nif r.IsInDialogueWithPlayer\nset rFound to r\nendif\nset r to GetNextRef\nloop\nSetFunctionValue rFound\nEnd\n");
         hold = g_scriptIntf->CompileScript("ref r\nint iWas\nBegin Function { r }\nset iWas to r.GetRestrained\nif iWas == 0\nr.SetRestrained 1\nendif\nr.Look player\nSetFunctionValue iWas\nEnd\n");
-        undo = g_scriptIntf->CompileScript("ref r\nint iUn\nBegin Function { r, iUn }\nif iUn\nr.SetRestrained 0\nendif\nr.StopLook\nEnd\n");
+        undo = g_scriptIntf->CompileScript("ref r\nint iUn\nBegin Function { r, iUn }\nif iUn\nr.SetRestrained 0\nendif\nr.StopLook\nr.EvaluatePackage\nEnd\n");
         if (!find || !hold || !undo) { if (++tries >= 3) failed = true; find = NULL; Log("Talking: couldn't set up holding the person still (try %d)", tries); }
     }
     if (failed || !find) return;
@@ -11302,6 +11323,7 @@ static void Dialogue_Tick(void)
         if (Rd(who, 0x40)) {
             double was = 1; Scr_Num(hold, who, &was);
             ref = who; refId = *(uint32_t *)(who + 0x0C); weRestrained = was == 0.0;
+            { uint8_t ft = *(uint8_t *)(who + 4); if (ft == 0x3B || ft == 0x3C) { InterlockedExchange(&g_dlgBlocked, 0); g_dlgKeepActor = who; } }
             Log("Talking: %08X held still while you talk%s", refId, weRestrained ? "" : " (was already held)");
         } else { ref = NULL; Log("Talking: couldn't tell who you're talking to"); }
     }
@@ -11317,6 +11339,7 @@ static void Dialogue_Tick(void)
         }
     }
     if (!talking && active) {
+        if (g_dlgKeepActor) { Log("Talking: their AI kept on the conversation (%ld package changes held off)", (long)g_dlgBlocked); g_dlgKeepActor = NULL; }
         if (ref && Rd(ref, 0x40) && *(uint32_t *)(ref + 0x0C) == refId && g_scriptIntf->CallFunctionAlt) {
             g_scriptIntf->CallFunctionAlt(undo, GetPlayer(), 2, ref, weRestrained ? 1 : 0);
             Log("Talking: %08X free to move again", refId);
@@ -11324,6 +11347,7 @@ static void Dialogue_Tick(void)
         active = false; ref = NULL; openAt = 0;
     }
     if (!talking) openAt = 0;
+    if (!active && g_dlgKeepActor) g_dlgKeepActor = NULL;
 }
 /* ---- HUD parts on/off ----------------------------------------------------------------------------
    The game's HUD in the headset: each part can be hidden ([HUD] in FNVR.ini, or the VR settings). The parts
@@ -12657,6 +12681,7 @@ static void Settings_Frame(void)
 
 static void InstallRealTimePipBoy(void)
 {
+    InstallKeepTalking();
     {   /* drawing dispatch call in the main loop */
         BYTE *p = (BYTE *)0x0086E8FD;
         if (p[0] == 0xE8 && (DWORD)(0x0086E8FD + 5 + *(int32_t *)(p + 1)) == 0x0086F450) {
