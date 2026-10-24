@@ -10997,7 +10997,8 @@ static void Vc_Snapshot(int *mode, int *n, char opt[][VC_TXT], LONG *v)
 }
 static void Vc_Heard(const char *txt, int rule, int conf3, float conf, LONG built)
 {   /* conf3: 1 high, 0 normal/medium, -1 low */
-    bool ok = rule >= 0 && (conf >= g_voiceConf || conf3 > 0 || (conf3 == 0 && g_voiceConf <= 0.6f) || (conf3 < 0 && g_voiceConf <= 0.15f));
+    bool ok = rule >= 0 && (conf >= g_voiceConf || conf3 > 0 || (conf3 == 0 && g_voiceConf <= 0.6f) || (conf3 < 0 && g_voiceConf <= 0.15f) ||
+                            (rule >= 100 && g_voiceConf <= 0.6f));   /* (an answer on screen: only those can be heard, so even a low-sure match counts) */
     Log("Voice: heard \"%s\" (sure %.2f, %s) -> %s", txt, conf, conf3 > 0 ? "high" : conf3 < 0 ? "low" : "medium", rule < 0 ? "not on the list" : ok ? "used" : "ignored (not sure enough)");
     if (ok) { InterlockedExchange(&g_vcHitRule, rule); InterlockedExchange(&g_vcHitVer, built); }
 }
@@ -11230,7 +11231,7 @@ static bool Vc_RunWinRT(void)
                     if (txt[0] && cf != 3) {
                         int r = Vc_RuleFor(txt, ph, rule, np);
                         Vc_Heard(txt, r, cf == 0 ? 1 : cf == 1 ? 0 : -1, cf == 0 ? 0.9f : cf == 1 ? 0.6f : 0.3f, built);
-                    } else if (txt[0]) { static int rl = 0; if (rl++ < 20) Log("Voice: heard \"%s\" but too unsure (rejected)", txt); }
+                    } else { static int rl = 0; if (rl++ < 30) Log("Voice: heard something (\"%s\") but Windows rejected it as not matching", txt); }
                 } else if (s == 7) nSilence++;
                 if (s != 0 && s != 7) nOther++;
                 if (s != 0 && s != 7 /* (just silence) */ && s != 5) { static int sl = 0; if (sl++ < 10) Log("Voice: Windows speech result status %d%s", (int)s, s == 10 ? " (microphone unavailable)" : s == 4 ? " (poor audio)" : ""); if (s == 10) Sleep(2000); }
@@ -11450,6 +11451,27 @@ static void Dialogue_Tick(void)
             if (c == lastCalls) { if (++idleTicks >= 2 && o_DlgUpdate) { o_DlgUpdate(dm); selfRuns++; } }
             else idleTicks = 0;
             lastCalls = g_dlgUpdCalls;
+            {   /* The menu waits for the person's "finished speaking" mark, which the game sets when their voice line
+                   ends - with the world running it never gets set, so the conversation stalls after the first line.
+                   Set it here when their voice has really stopped (the voice sound in their process, +0x314). */
+                static int lastSt = -1; static double stSince = 0, quietSince = 0; static bool everPlayed = false; static int unsticks = 0;
+                char *sp = *(char **)(dm + 0x80); int st = *(int *)(dm + 0x28); double now = QpcMs();
+                if (st != lastSt) { lastSt = st; stSince = now; quietSince = 0; everPlayed = false; }
+                if ((st == 3 || st == 1) && Rd(sp, 0x90) && *(uint8_t *)(sp + 0x7C) == 0) {
+                    char *proc = *(char **)(sp + 0x68);
+                    bool playing = false;
+                    if (Rd(proc, 0x320) && *(uint8_t *)(proc + 0x28) == 0) {
+                        typedef bool (__attribute__((thiscall)) *SndPlaying_t)(void *snd);
+                        playing = ((SndPlaying_t)0x00AD8CE0)(proc + 0x314);
+                    }
+                    if (playing) { everPlayed = true; quietSince = 0; }
+                    else if (!quietSince) quietSince = now;
+                    if (!playing && quietSince && now - quietSince > 350.0 && (everPlayed || now - stSince > 3000.0)) {
+                        *(uint8_t *)(sp + 0x7C) = 1; quietSince = 0; everPlayed = false; stSince = now;
+                        if (unsticks++ < 40) Log("Talking: their line has finished (state %d) - on to the next", st);
+                    }
+                } else { quietSince = 0; }
+            }
             if (QpcMs() > nl) {
                 nl = QpcMs() + 700.0;
                 char *sp = *(char **)(dm + 0x80);
