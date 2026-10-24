@@ -11055,7 +11055,8 @@ static HSTRING Vc_HStr(const WCHAR *w) { HSTRING h = NULL; WindowsCreateString(w
 static AsyncStatus Vc_Wait(IUnknown *op, int maxMs, bool (*cancelIf)(void))
 {
     IAsyncInfo *ai = NULL; AsyncStatus st = Error;
-    HRESULT qh = op->lpVtbl->QueryInterface(op, &IID_IAsyncInfo, (void **)&ai);
+    static const GUID kIID_IAsyncInfo = { 0x00000036, 0x0000, 0x0000, { 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46 } };
+    HRESULT qh = op->lpVtbl->QueryInterface(op, &kIID_IAsyncInfo, (void **)&ai);
     if (FAILED(qh) || !ai) { static int ql = 0; if (ql++ < 5) Log("Voice: Windows speech: no progress info (0x%08lX)", (unsigned long)qh); return Error; }
     bool cancelled = false;
     for (int t = 0; ; t += 30) {
@@ -11258,7 +11259,7 @@ static void Voice_Tick(void)
             if (lastPerson && now - lastPersonAt < 1500.0 && Rd(lastPerson, 0x28)) {
                 static void *scr = NULL; static bool failed = false;
                 if (!scr && !failed && g_scriptIntf && g_scriptIntf->CompileScript && g_scriptIntf->CallFunctionAlt) {
-                    scr = g_scriptIntf->CompileScript("ref r\nBegin Function { r }\nif r.GetDead == 0\nr.Activate player 1\nendif\nEnd\n");
+                    scr = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nif rWho.GetDead == 0\nrWho.Activate player 1\nendif\nEnd\n");
                     if (!scr) { failed = true; Log("Voice: greeting script didn't compile"); }
                 }
                 if (scr) { Log("Voice: greeting %p - starting the conversation", (void *)lastPerson); g_scriptIntf->CallFunctionAlt(scr, GetPlayer(), 1, lastPerson); }
@@ -11315,19 +11316,22 @@ static void Dialogue_Tick(void)
         static bool findTried = false;
         if (!findTried) {   /* who you're talking to: anyone near in a conversation with you (crosshair if this can't be made) */
             findTried = true;
-            find = g_scriptIntf->CompileScript("ref r\nref rFound\nBegin Function { }\nset r to GetFirstRef 200 1\nwhile r != 0\nif r.IsInDialogueWithPlayer\nset rFound to r\nendif\nset r to GetNextRef\nloop\nSetFunctionValue rFound\nEnd\n");
-            if (!find) find = g_scriptIntf->CompileScript("ref r\nref rFound\nBegin Function { }\nset r to GetFirstRef 200 1\nLabel 1\nif r\nif r.IsInDialogueWithPlayer\nset rFound to r\nendif\nset r to GetNextRef\nGoto 1\nendif\nSetFunctionValue rFound\nEnd\n");
+            find = g_scriptIntf->CompileScript("ref rWho\nref rFound\nBegin Function { }\nset rWho to GetFirstRef 200 1\nwhile rWho != 0\nif rWho.IsInDialogueWithPlayer\nset rFound to rWho\nendif\nset rWho to GetNextRef\nloop\nSetFunctionValue rFound\nEnd\n");
+            if (!find) find = g_scriptIntf->CompileScript("ref rWho\nref rFound\nBegin Function { }\nset rWho to GetFirstRef 200 1\nLabel 1\nif rWho\nif rWho.IsInDialogueWithPlayer\nset rFound to rWho\nendif\nset rWho to GetNextRef\nGoto 1\nendif\nSetFunctionValue rFound\nEnd\n");
             Log("Talking: who-you're-talking-to search %s", find ? "ready" : "not available - using what you're looking at");
             if (!find) find = (void *)1;
         }
-        if (!hold) { hold = g_scriptIntf->CompileScript("ref r\nint iWas\nBegin Function { r }\nset iWas to r.GetRestrained\nif iWas == 0\nr.SetRestrained 1\nendif\nr.Look player\nSetFunctionValue iWas\nEnd\n");
-                     if (!hold) hold = g_scriptIntf->CompileScript("ref r\nint iWas\nBegin Function { r }\nset iWas to r.GetRestrained\nif iWas == 0\nr.SetRestrained 1\nendif\nSetFunctionValue iWas\nEnd\n"); }
-        if (!undo) { undo = g_scriptIntf->CompileScript("ref r\nint iUn\nBegin Function { r, iUn }\nif iUn\nr.SetRestrained 0\nendif\nr.StopLook\nr.EvaluatePackage\nEnd\n");
-                     if (!undo) undo = g_scriptIntf->CompileScript("ref r\nint iUn\nBegin Function { r, iUn }\nif iUn\nr.SetRestrained 0\nendif\nr.EvaluatePackage\nEnd\n"); }
+        if (!hold) { hold = g_scriptIntf->CompileScript("ref rWho\nint iWas\nBegin Function { rWho }\nset iWas to rWho.GetRestrained\nif iWas == 0\nrWho.SetRestrained 1\nendif\nrWho.Look player\nSetFunctionValue iWas\nEnd\n");
+                     if (!hold) { Log("Talking: hold script 1 refused"); hold = g_scriptIntf->CompileScript("ref rWho\nint iWas\nBegin Function { rWho }\nset iWas to rWho.GetRestrained\nif iWas == 0\nrWho.SetRestrained 1\nendif\nSetFunctionValue iWas\nEnd\n"); }
+                     if (!hold) { Log("Talking: hold script 2 refused"); hold = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nrWho.SetRestrained 1\nSetFunctionValue 0\nEnd\n"); }
+                     if (!hold) { Log("Talking: hold script 3 refused"); hold = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nSetFunctionValue 1\nEnd\n"); } }
+        if (!undo) { undo = g_scriptIntf->CompileScript("ref rWho\nint iUn\nBegin Function { rWho, iUn }\nif iUn\nrWho.SetRestrained 0\nendif\nrWho.StopLook\nrWho.EvaluatePackage\nEnd\n");
+                     if (!undo) { Log("Talking: release script 1 refused"); undo = g_scriptIntf->CompileScript("ref rWho\nint iUn\nBegin Function { rWho, iUn }\nif iUn\nrWho.SetRestrained 0\nendif\nrWho.EvaluatePackage\nEnd\n"); }
+                     if (!undo) { Log("Talking: release script 2 refused"); undo = g_scriptIntf->CompileScript("ref rWho\nint iUn\nBegin Function { rWho, iUn }\nrWho.EvaluatePackage\nEnd\n"); } }
         if (!hold || !undo) { if (++tries >= 3) failed = true; Log("Talking: couldn't set up holding the person still (hold %d, release %d, try %d)", hold != NULL, undo != NULL, tries); }
         else if (!failed) { static bool said = false; if (!said) { said = true; Log("Talking: holding the person still is ready"); } }
     }
-    if (failed || !find || !hold || !undo) return;
+    if (!find) return;   /* (keeping their AI on the conversation works even if holding them still can't be set up) */
     if (talking && !active && g_dlgHold) {
         if (!openAt) openAt = QpcMs();
         if (QpcMs() - openAt < 150.0) return;   /* (a moment for the conversation to be set up) */
@@ -11338,7 +11342,7 @@ static void Dialogue_Tick(void)
             if (find != (void *)1 && g_scriptIntf->CallFunction && ((CallFn_t)g_scriptIntf->CallFunction)(find, GetPlayer(), NULL, &res, 0) && res.type == 2) who = (char *)res.u.form; }
         if (!Rd(who, 0x40)) { char *c = NULL; if (Loot_CrossKind(&c) == 2) who = c; }
         if (Rd(who, 0x40)) {
-            double was = 1; Scr_Num(hold, who, &was);
+            double was = 1; if (hold) Scr_Num(hold, who, &was);
             ref = who; refId = *(uint32_t *)(who + 0x0C); weRestrained = was == 0.0;
             { uint8_t ft = *(uint8_t *)(who + 4); if (ft == 0x3B || ft == 0x3C) { InterlockedExchange(&g_dlgBlocked, 0); g_dlgKeepActor = who; } }
             Log("Talking: %08X held still while you talk%s", refId, weRestrained ? "" : " (was already held)");
@@ -11346,8 +11350,8 @@ static void Dialogue_Tick(void)
     }
     if (talking && active && ref && Rd(ref, 0x40) && *(uint32_t *)(ref + 0x0C) == refId) {   /* log what their AI is doing (changes only) */
         static void *pk = NULL, *pr = NULL; static double nx = 0; static uint32_t lastPk = 0; static int lastPr = -99;
-        if (!pk) { pk = g_scriptIntf->CompileScript("ref r\nref p\nBegin Function { r }\nset p to r.GetCurrentAIPackage\nSetFunctionValue p\nEnd\n");
-                   pr = g_scriptIntf->CompileScript("ref r\nint i\nBegin Function { r }\nset i to r.GetCurrentAIProcedure\nSetFunctionValue i\nEnd\n"); }
+        if (!pk) { pk = g_scriptIntf->CompileScript("ref rWho\nref rPkg\nBegin Function { rWho }\nset rPkg to rWho.GetCurrentAIPackage\nSetFunctionValue rPkg\nEnd\n");
+                   pr = g_scriptIntf->CompileScript("ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to rWho.GetCurrentAIProcedure\nSetFunctionValue iVal\nEnd\n"); }
         if (pk && pr && QpcMs() > nx) {
             nx = QpcMs() + 300.0;
             char *p = Scr_Ref(pk, ref); double v = -1; Scr_Num(pr, ref, &v);
@@ -11357,7 +11361,7 @@ static void Dialogue_Tick(void)
     }
     if (!talking && active) {
         if (g_dlgKeepActor) { Log("Talking: their AI kept on the conversation (%ld package changes held off)", (long)g_dlgBlocked); g_dlgKeepActor = NULL; }
-        if (ref && Rd(ref, 0x40) && *(uint32_t *)(ref + 0x0C) == refId && g_scriptIntf->CallFunctionAlt) {
+        if (undo && ref && Rd(ref, 0x40) && *(uint32_t *)(ref + 0x0C) == refId && g_scriptIntf->CallFunctionAlt) {
             g_scriptIntf->CallFunctionAlt(undo, GetPlayer(), 2, ref, weRestrained ? 1 : 0);
             Log("Talking: %08X free to move again", refId);
         }
