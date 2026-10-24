@@ -300,6 +300,7 @@ static bool  g_chestPause = true; static float g_chestDown = 0.32f, g_chestFwd =
    forearm or your chest to use it. Let go without stabbing and it goes back. */
 static bool  g_stimOn = true;                   /* INI [Stimpak] bChestStimpak */
 static bool  g_voiceOn = true;          /* INI [Voice] bVoiceControl */
+static bool  g_dlgHold = true;          /* INI [Display] bDialogueHoldStill: the person you talk to stands still */
 static float g_voiceConf = 0.30f;       /* INI [Voice] fMinConfidence: how sure the recognizer must be (0-1) */
 static bool  g_voiceGreet = true;       /* INI [Voice] bGreetToTalk */
 static char  g_voiceMic[128] = "";      /* INI [Voice] sMicName: part of the microphone's name (empty: the headset's, else Windows' default) */
@@ -477,6 +478,7 @@ static void LoadSettings(void)
     g_startSetup = GetPrivateProfileIntA("Startup", "bShowSetup", 1, g_iniPath) != 0;
     g_stimOn = GetPrivateProfileIntA("Stimpak", "bChestStimpak", 1, g_iniPath) != 0;
     g_voiceOn = GetPrivateProfileIntA("Voice", "bVoiceControl", 1, g_iniPath) != 0;
+    g_dlgHold = GetPrivateProfileIntA("Display", "bDialogueHoldStill", 1, g_iniPath) != 0;
     g_voiceGreet = GetPrivateProfileIntA("Voice", "bGreetToTalk", 1, g_iniPath) != 0;
     { char vb[32]; GetPrivateProfileStringA("Voice", "fMinConfidence", "0.30", vb, sizeof vb, g_iniPath); g_voiceConf = fminf(fmaxf((float)atof(vb), 0.0f), 0.95f);
       GetPrivateProfileStringA("Voice", "sMicName", "", g_voiceMic, sizeof g_voiceMic, g_iniPath); }
@@ -11021,6 +11023,48 @@ static void Voice_Tick(void)
     memcpy(ans, a, sizeof a); nAns = n;
     if (mode == 2) { static int dl = 0; if (dl++ < 30) { Log("Voice: %d answers on screen:", n); for (int i = 0; i < n; i++) Log("  %d. \"%s\" (piece %s, id %d)", i + 1, a[i].text, Tile_Name(a[i].tile), (int)Tile_Value(a[i].tile, 0xFAA, -1.0f)); } }
 }
+/* ---- Conversations with the world running (live menus): the person you talk to stands still ----------
+   With the world still running, the person's own AI keeps going while they talk: they kept trying to walk and
+   re-face you (a little shuffle dance) and their head snapped between looking at you and where they were going.
+   While you talk they're held in place (SetRestrained - they still talk, animate and look at you) and told to
+   look at you; both are undone the moment the conversation closes. [Display] bDialogueHoldStill. */
+static void Dialogue_Tick(void)
+{
+    static char *ref = NULL; static uint32_t refId = 0; static bool weRestrained = false, active = false; static double openAt = 0;
+    static void *find = NULL, *hold = NULL, *undo = NULL; static bool failed = false;
+    const volatile bool *vis = (const volatile bool *)0x011F308F;
+    bool talking = vis[1009] && g_liveMenuNow && g_inGameplay && !vis[1007];
+    if (!failed && !find && g_scriptIntf && g_scriptIntf->CompileScript) {
+        find = g_scriptIntf->CompileScript("ref r\nref rFound\nBegin Function { }\nset r to GetFirstRef 200 1\nwhile r != 0\nif r.IsInDialogueWithPlayer\nset rFound to r\nendif\nset r to GetNextRef\nloop\nSetFunctionValue rFound\nEnd\n");
+        hold = g_scriptIntf->CompileScript("ref r\nint iWas\nBegin Function { r }\nset iWas to r.GetRestrained\nif iWas == 0\nr.SetRestrained 1\nendif\nr.Look player\nSetFunctionValue iWas\nEnd\n");
+        undo = g_scriptIntf->CompileScript("ref r\nint iUn\nBegin Function { r, iUn }\nif iUn\nr.SetRestrained 0\nendif\nr.StopLook\nEnd\n");
+        if (!find || !hold || !undo) { failed = true; Log("Talking: couldn't set up holding the person still"); }
+    }
+    if (failed) return;
+    if (talking && !active && g_dlgHold) {
+        if (!openAt) openAt = QpcMs();
+        if (QpcMs() - openAt < 150.0) return;   /* (a moment for the conversation to be set up) */
+        active = true;
+        char *who = NULL;
+        {   typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+            struct { union { double num; void *form; } u; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+            if (g_scriptIntf->CallFunction && ((CallFn_t)g_scriptIntf->CallFunction)(find, GetPlayer(), NULL, &res, 0) && res.type == 2) who = (char *)res.u.form; }
+        if (!Rd(who, 0x40)) { char *c = NULL; if (Loot_CrossKind(&c) == 2) who = c; }
+        if (Rd(who, 0x40)) {
+            double was = 1; Scr_Num(hold, who, &was);
+            ref = who; refId = *(uint32_t *)(who + 0x0C); weRestrained = was == 0.0;
+            Log("Talking: %08X held still while you talk%s", refId, weRestrained ? "" : " (was already held)");
+        } else { ref = NULL; Log("Talking: couldn't tell who you're talking to"); }
+    }
+    if (!talking && active) {
+        if (ref && Rd(ref, 0x40) && *(uint32_t *)(ref + 0x0C) == refId && g_scriptIntf->CallFunctionAlt) {
+            g_scriptIntf->CallFunctionAlt(undo, GetPlayer(), 2, ref, weRestrained ? 1 : 0);
+            Log("Talking: %08X free to move again", refId);
+        }
+        active = false; ref = NULL; openAt = 0;
+    }
+    if (!talking) openAt = 0;
+}
 /* ---- HUD parts on/off ----------------------------------------------------------------------------
    The game's HUD in the headset: each part can be hidden ([HUD] in FNVR.ini, or the VR settings). The parts
    are found by name on the HUD, so HUD mods that rename them may need a look at the log (HUD parts are listed). */
@@ -11684,6 +11728,7 @@ static const SetOpt g_setOpts[] = {
     { SP_HUD, ST_FLOAT, "Look away to close menus", "Display", "fLookAwayClose", &g_lookAwayDeg, 0.0f, 180.0f, 5.0f, "%.0f deg", 0, 0, "With live menus: turn your head this far away from a menu and it closes. 0 = never." },
     { SP_DISPLAY, ST_BOOL, "Game menus on the big screen", "Display", "bMenusOnScreen", &g_farGameMenus, 0, 0, 0, 0, 0, 0, "Pause menu, messages, containers and other in-game menus on the same screen." },
     { SP_HUD, ST_FLOAT, "HUD size", "Display", "fUIScale", &g_uiScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view the HUD covers. Smaller = health, AP and compass come in from the edges where you can see them." },
+    { SP_HUD, ST_BOOL, "Talking: they stand still", "Display", "bDialogueHoldStill", &g_dlgHold, 0, 0, 0, 0, 0, 0, "ON: the person you're talking to stays in place and looks at you while you talk (no shuffling or head snapping). Let go as soon as the conversation ends." },
     { SP_HUD, ST_BOOL, "Voice: say your answers", "Voice", "bVoiceControl", &g_voiceOn, 0, 0, 0, 0, 0, 0, "ON: the headset's microphone listens in conversations - say an answer (its first few words are enough) or \"option two\". Uses Windows' own speech recognition, offline." },
     { SP_HUD, ST_BOOL, "Voice: say hello to talk", "Voice", "bGreetToTalk", &g_voiceGreet, 0, 0, 0, 0, 0, 0, "ON: look at someone and say \"hey\", \"hello\" or \"excuse me\" to start talking to them." },
     { SP_HUD, ST_FLOAT, "Voice: how sure", "Voice", "fMinConfidence", &g_voiceConf, 0.0f, 0.9f, 0.05f, "%.2f", 0, 0, "How sure the speech recognizer must be before it acts. Raise it if it picks answers you didn't say, lower it if it ignores you." },
@@ -12636,6 +12681,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         Stim_Flush();
         Far_UiTick();
         Voice_Tick();
+        Dialogue_Tick();
         Holster_Tick();
         LootMenu_Tick(); Hud_Tick(); FireRate_Tick();
         if (g_seqWantAt > 0 && !g_seqTried && QpcMs() > g_seqWantAt) { Log("Menu Sequoia: loading the model"); Room_LoadSequoia(); }
