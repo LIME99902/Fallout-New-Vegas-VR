@@ -211,6 +211,9 @@ static float g_aimPitchOffsetDeg = -60.0f;/* tilt of the aiming direction relati
 static bool  g_leftHanded = false;
 static WORD  g_runScancode = 0x2A;      /* keyboard Run key (Left Shift) */
 static bool  g_meleeSwings = true;
+static bool  g_freeArmOwn = true;      /* INI [Arms] bFreeArmOwnPose */
+static void ArmBase_Load(void);
+static bool  g_meleeNoAnim = true;     /* INI [Controls] bMeleeStill: swords, sledges etc. stay as you hold them during the attack (no game swing animation in the hand) */
 static bool  g_meleeTrigger = false;   /* INI [Controls] bMeleeTrigger: the right trigger attacks with melee weapons and fists too */
 static bool  g_fingerTracking = true;
 static int   g_fingerAxis = 2;           /* local axis fingers bend around (0 X, 1 Y, 2 Z) */
@@ -553,6 +556,9 @@ static void LoadSettings(void)
     g_leftHanded = GetPrivateProfileIntA("Controls", "bLeftHanded", 0, g_iniPath) != 0;
     g_meleeSwings = GetPrivateProfileIntA("Controls", "bMeleeSwings", 1, g_iniPath) != 0;
     g_meleeTrigger = GetPrivateProfileIntA("Controls", "bMeleeTrigger", 0, g_iniPath) != 0;
+    g_meleeNoAnim = GetPrivateProfileIntA("Controls", "bMeleeStill", 1, g_iniPath) != 0;
+    g_freeArmOwn = GetPrivateProfileIntA("Arms", "bFreeArmOwnPose", 1, g_iniPath) != 0;
+    ArmBase_Load();
     g_fingerTracking = GetPrivateProfileIntA("Controls", "bFingerTracking", 1, g_iniPath) != 0;
     g_fingerAxis = (int)GetPrivateProfileIntA("Controls", "iFingerBendAxis", 2, g_iniPath) % 3;
     g_fingerSign = GetPrivateProfileIntA("Controls", "bFingerBendReverse", 0, g_iniPath) ? -1.0f : 1.0f;
@@ -5895,9 +5901,89 @@ static M3   g_handRef[2];
 static bool g_haveHandRef[2] = { false, false };
 static bool g_weaponOutThisFrame;
 
+/* ---- The free (support) arm keeps its own pose -----------------------------------------------------
+   Two-handed weapon animations (shotguns, rifles, reloads) pose the left arm, wrist and fingers for holding
+   the gun, which looks wrong in VR when your left hand is somewhere else. The arm's everyday pose (taken while
+   no weapon is out: shoulder, arm, wrist, fingers) is put back on it every frame while that hand isn't holding
+   the gun - so it moves only with your own hand, the same with or without a weapon. [Arms] bFreeArmOwnPose */
+#define AB_MAX 48
+static int   g_abN[2]; static char g_abName[2][AB_MAX][40]; static float g_abRot[2][AB_MAX][9]; static bool g_abOk[2];
+static char *g_abNode[2][AB_MAX]; static int g_abNodeN[2]; static char *g_abFor[2]; static uint32_t g_abGen[2];
+static void AB_Walk(char *n, int side, int depth)
+{
+    if (!n || depth > 12 || g_abNodeN[side] >= AB_MAX) return;
+    g_abNode[side][g_abNodeN[side]++] = n;
+    if (!AsNode(n)) return;
+    char **kids = *(char ***)(n + 0xA0); unsigned cnt = *(uint16_t *)(n + 0xA6);
+    for (unsigned i = 0; kids && i < cnt && i < 64; i++) {
+        char *k = kids[i]; const char *nm = k ? *(const char **)(k + 0x08) : NULL;
+        if (nm && !_strnicmp(nm, "Bip01", 5)) AB_Walk(k, side, depth + 1);   /* (skeleton bones only - not the Pip-Boy or the gun) */
+    }
+}
+static void ArmBase_Load(void)
+{
+    for (int side = 0; side < 2; side++) {
+        char key[16], buf[8192]; snprintf(key, sizeof key, "sFreePose%c", side ? 'R' : 'L');
+        GetPrivateProfileStringA("Arms", key, "", buf, sizeof buf, g_iniPath);
+        g_abN[side] = 0; char *p = buf;
+        while (*p && g_abN[side] < AB_MAX) {
+            char *bar = strchr(p, '|'); if (bar) *bar = 0;
+            char *eq = strchr(p, '=');
+            if (eq) { *eq = 0; float *r = g_abRot[side][g_abN[side]];
+                if (sscanf(eq + 1, "%f %f %f %f %f %f %f %f %f", &r[0], &r[1], &r[2], &r[3], &r[4], &r[5], &r[6], &r[7], &r[8]) == 9) {
+                    snprintf(g_abName[side][g_abN[side]], 40, "%s", p); g_abN[side]++; } }
+            if (!bar) break; p = bar + 1;
+        }
+        g_abOk[side] = g_abN[side] > 3;
+    }
+}
+static void ArmBase_Save(int side)
+{
+    static char buf[8192]; buf[0] = 0; size_t L = 0;
+    for (int i = 0; i < g_abN[side]; i++) {
+        const float *r = g_abRot[side][i];
+        L += (size_t)snprintf(buf + L, sizeof buf - L, "%s%s=%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", i ? "|" : "", g_abName[side][i], r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8]);
+        if (L >= sizeof buf - 8) break;
+    }
+    char key[16]; snprintf(key, sizeof key, "sFreePose%c", side ? 'R' : 'L');
+    WritePrivateProfileStringA("Arms", key, buf, g_iniPath);
+}
+static bool g_meleeHoldPose = false;   /* a melee swing: the game's attack animation doesn't turn the hand or weapon */
+static void ArmBase_Do(int side, bool supportFree, bool pipAnim)
+{
+    if (side != (g_leftHanded ? 0 : 1) && !(side == (g_leftHanded ? 1 : 0))) return;
+    if (side != (g_leftHanded ? 1 : 0)) return;   /* (only the free / support arm) */
+    if (!g_bonesFor) return;
+    if (g_abFor[side] != g_bonesFor || g_abGen[side] != g_fpGen) {
+        g_abFor[side] = g_bonesFor; g_abGen[side] = g_fpGen; g_abNodeN[side] = 0;
+        char *cl = FindBone(g_bonesFor, side ? "Bip01 R Clavicle" : "Bip01 L Clavicle", 0);
+        if (cl) AB_Walk(cl, side, 0);
+    }
+    if (g_abNodeN[side] < 4) return;
+    static double idleSince[2] = { 0, 0 }, lastCap[2] = { 0, 0 }; static bool savedOnce[2] = { false, false };
+    double now = QpcMs();
+    bool idle = !g_weaponOutThisFrame && !pipAnim && g_animAction == -1 && !g_holding[side] && !g_climb[side] && !g_grapPulling;
+    if (!idle) idleSince[side] = 0; else if (!idleSince[side]) idleSince[side] = now;
+    if (idle && now - idleSince[side] > 1500.0 && now - lastCap[side] > 3000.0) {   /* the everyday pose, refreshed while idle */
+        lastCap[side] = now; int n = 0;
+        for (int i = 0; i < g_abNodeN[side] && n < AB_MAX; i++) {
+            char *b = g_abNode[side][i]; const char *nm = *(const char **)(b + 0x08); if (!nm) continue;
+            snprintf(g_abName[side][n], 40, "%s", nm); memcpy(g_abRot[side][n], b + NIAV_LOCAL_ROTATE, 36); n++;
+        }
+        g_abN[side] = n; g_abOk[side] = n > 3;
+        if (!savedOnce[side] && g_abOk[side]) { savedOnce[side] = true; ArmBase_Save(side); Log("Arms: %s arm's own pose taken (%d bones) - used whenever that hand isn't on the gun", side ? "right" : "left", n); }
+    }
+    if (!g_freeArmOwn || !g_abOk[side] || !g_weaponOutThisFrame || !supportFree || pipAnim) return;
+    for (int i = 0; i < g_abNodeN[side]; i++) {
+        char *b = g_abNode[side][i]; const char *nm = *(const char **)(b + 0x08); if (!nm) continue;
+        for (int k = 0; k < g_abN[side]; k++) if (!strcmp(g_abName[side][k], nm)) { memcpy(b + NIAV_LOCAL_ROTATE, g_abRot[side][k], 36); break; }
+    }
+    NodeUpdate(g_abNode[side][0]);
+}
 static char *g_twistBone[2]; static float g_twistSaved[2][3]; static bool g_twistScaled[2];   /* forearm twist bones moved with the arm length */
 static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
 {
+    ArmBase_Do(side, side != (g_leftHanded ? 0 : 1) && !g_twoHand && !g_twoHandWant, g_pipOpen || g_pipModeRaw != 0);
     char *up = g_bones[side][B_UPPER], *fo = g_bones[side][B_FORE], *ha = g_bones[side][B_HAND];
     const float *S = (const float *)(up + NIAV_WORLD_TRANSLATE);
     {   /* Arm length. With your body calibrated, the in-game arm is as long as yours (your arm straight =
@@ -5945,6 +6031,7 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
            which differs for every weapon) - so the drawn arm, and the grapple along it, don't change with the weapon */
         bool supportFree = side != (g_leftHanded ? 0 : 1) && !g_twoHand && !g_twoHandWant;
         if (supportFree && g_handRefIniOk[side]) { memcpy(g_handRef[side], g_handRefIni[side], 36); g_haveHandRef[side] = true; M3Mul(handWorld0, Bh, g_handRef[side]); }
+        else if (g_meleeHoldPose && side == (g_leftHanded ? 0 : 1) && g_haveHandRef[side]) M3Mul(handWorld0, Bh, g_handRef[side]);   /* (mid-swing: the hand as it was) */
         else if (g_weaponOutThisFrame && !pipAnim) {
             M3Mul(g_handRef[side], BhT, handWorld0); g_haveHandRef[side] = true;
             static double seenAt[2] = { 0, 0 }; static bool saved[2] = { false, false };
@@ -6078,7 +6165,7 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
         M3T(FT, Wfn);  M3Mul(R1n, FT, Wh);             /* now: hand relative to the turned forearm */
         /* the Pip-Boy animation changes the arm's own pose; keep using the everyday wrist/forearm relation */
         static M3 R0Base[2]; static bool R0Have[2] = { false, false };
-        if (g_pipModeRaw == 0 && !g_pipOpen) { memcpy(R0Base[side], R0, sizeof R0); R0Have[side] = true; }
+        if (g_pipModeRaw == 0 && !g_pipOpen && !(g_meleeHoldPose && side == (g_leftHanded ? 0 : 1))) { memcpy(R0Base[side], R0, sizeof R0); R0Have[side] = true; }
         else if (R0Have[side]) memcpy(R0, R0Base[side], sizeof R0);
         /* How far the wrist has turned around the forearm since the everyday pose: the twist part of
            (now x everyday^-1), measured with a quaternion so bending the wrist doesn't read as turning. */
@@ -7869,6 +7956,12 @@ static bool Arms_Apply(char *player, char *cam)
     M3T(BhT, Bh);
 
     g_weaponOutThisFrame = PlayerWeaponOut();
+    {   /* swinging a sword, sledge or other melee weapon (not fists, power fists or automatic ones): the game's attack
+           animation would swing the weapon round in your hand - it stays as you hold it instead */
+        int wtm = PlayerWeaponType();
+        g_meleeHoldPose = g_meleeNoAnim && g_weaponOutThisFrame && (wtm == 1 || wtm == 2) && !PlayerWeaponAutomatic() &&
+                          ((g_animAction >= 2 && g_animAction <= 4) || GetTickCount() - g_lastSwing < 1400);
+    }
     {
         static int shoulderLogs = 0;
         if (shoulderLogs < 2) {
@@ -11285,6 +11378,71 @@ static bool Vc_RunWinRT(void)
     }
     return true;
 }
+/* -- Offline speech (Vosk), run by a small 64-bit helper next to the plugin (FNVR\voice\FNVR_Voice.exe with
+      libvosk.dll and an English model in voice\model). It listens to the headset's microphone itself (whatever
+      Windows' default is) and only for the phrases sent to it. -- */
+static bool Vc_RunVosk(void)
+{
+    char dir[MAX_PATH], exe[MAX_PATH], dll[MAX_PATH], mdl[MAX_PATH];
+    snprintf(dir, sizeof dir, "%s", g_iniPath); char *sl = strrchr(dir, '\\'); if (!sl) return false;
+    snprintf(sl, (size_t)(dir + sizeof dir - sl), "\\voice");
+    snprintf(exe, sizeof exe, "%s\\FNVR_Voice.exe", dir); snprintf(dll, sizeof dll, "%s\\libvosk.dll", dir); snprintf(mdl, sizeof mdl, "%s\\model\\am", dir);
+    if (GetFileAttributesA(exe) == INVALID_FILE_ATTRIBUTES || GetFileAttributesA(dll) == INVALID_FILE_ATTRIBUTES || GetFileAttributesA(mdl) == INVALID_FILE_ATTRIBUTES) {
+        Log("Voice: offline speech add-on not installed (%s) - using Windows speech", dir); return false; }
+    SECURITY_ATTRIBUTES sa = { sizeof sa, NULL, TRUE };
+    HANDLE inR, inW, outR, outW;
+    if (!CreatePipe(&inR, &inW, &sa, 0) || !CreatePipe(&outR, &outW, &sa, 0)) return false;
+    SetHandleInformation(inW, HANDLE_FLAG_INHERIT, 0); SetHandleInformation(outR, HANDLE_FLAG_INHERIT, 0);
+    STARTUPINFOA si; memset(&si, 0, sizeof si); si.cb = sizeof si; si.dwFlags = STARTF_USESTDHANDLES; si.hStdInput = inR; si.hStdOutput = outW; si.hStdError = outW;
+    PROCESS_INFORMATION pi; char cmd[1024]; snprintf(cmd, sizeof cmd, "\"%s\" \"%s\" \"%s\"", exe, dir, g_voiceMic);
+    HANDLE job = CreateJobObjectA(NULL, NULL);
+    if (job) { JOBOBJECT_EXTENDED_LIMIT_INFORMATION li; memset(&li, 0, sizeof li); li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE; SetInformationJobObject(job, JobObjectExtendedLimitInformation, &li, sizeof li); }
+    if (!CreateProcessA(NULL, cmd, NULL, NULL, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED, NULL, dir, &si, &pi)) {
+        Log("Voice: offline speech helper didn't start (error %lu)", GetLastError()); CloseHandle(inR); CloseHandle(inW); CloseHandle(outR); CloseHandle(outW); return false; }
+    if (job) AssignProcessToJobObject(job, pi.hProcess);   /* (it closes with the game) */
+    ResumeThread(pi.hThread); CloseHandle(pi.hThread); CloseHandle(inR); CloseHandle(outW);
+    Log("Voice: offline speech helper started");
+    static char ph[VC_MAXPH][VC_TXT]; static int rule[VC_MAXPH]; int np = 0, builtMode = -1; LONG built = -1;
+    static char line[4096]; int ll = 0; bool ready = false; double startAt = QpcMs();
+    for (;;) {
+        if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0) {
+            DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);
+            Log("Voice: offline speech helper stopped (code %lu)%s", code, ready ? "" : " - using Windows speech");
+            CloseHandle(pi.hProcess); CloseHandle(inW); CloseHandle(outR);
+            return false;
+        }
+        if (g_vcVer != built) {
+            int mode, n; LONG v; static char opt[VC_MAXOPT][VC_TXT];
+            Vc_Snapshot(&mode, &n, opt, &v);
+            np = Vc_MakePhrases(mode, opt, n, ph, rule);
+            static char js[VC_MAXPH * (VC_TXT + 4) + 16]; size_t L = 0; js[L++] = 'G'; js[L++] = ' '; js[L++] = '[';
+            for (int i = 0; i < np; i++) L += (size_t)snprintf(js + L, sizeof js - L, "%s\"%s\"", i ? "," : "", ph[i]);
+            L += (size_t)snprintf(js + L, sizeof js - L, "]\n");
+            DWORD w; WriteFile(inW, js, (DWORD)L, &w, NULL);
+            if (mode != builtMode || mode == 2) Log("Voice: now listening for %s (%d phrases)", mode == 2 ? "dialogue answers" : mode == 1 ? "greetings" : "nothing", np);
+            builtMode = mode; built = v;
+        }
+        DWORD avail = 0;
+        if (PeekNamedPipe(outR, NULL, 0, NULL, &avail, NULL) && avail > 0) {
+            DWORD got = 0;
+            if (ReadFile(outR, line + ll, (DWORD)(sizeof line - 1 - ll), &got, NULL)) {
+                ll += (int)got; line[ll] = 0;
+                char *nl;
+                while ((nl = strchr(line, '\n'))) {
+                    *nl = 0; if (nl > line && nl[-1] == '\r') nl[-1] = 0;
+                    if (line[0] == 'L') { Log("Voice: %s", line + 2); if (strstr(line, "listening on")) { ready = true; InterlockedExchange(&g_vcState, 1); } }
+                    else if (line[0] == 'R' && line[1] == ' ') {
+                        int r = Vc_RuleFor(line + 2, ph, rule, np);
+                        Vc_Heard(line + 2, r, 1, 0.9f, built);
+                    }
+                    int used = (int)(nl - line) + 1; memmove(line, line + used, (size_t)(ll - used + 1)); ll -= used;
+                }
+                if (ll >= (int)sizeof line - 1) ll = 0;
+            }
+        } else Sleep(20);
+        if (!ready && QpcMs() - startAt > 30000.0) { Log("Voice: offline speech helper didn't get ready - using Windows speech"); TerminateProcess(pi.hProcess, 0); }
+    }
+}
 /* Which microphone Windows uses by default (the Windows speech engine listens on that one), and whether
    Windows' online speech (needed for free speech) is allowed. Written to the log. */
 static void Vc_LogMics(void)
@@ -11322,6 +11480,7 @@ static DWORD WINAPI Vc_Thread(LPVOID unused)
     (void)unused;
     HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED); (void)hr;
     Vc_LogMics();
+    if ((g_voiceEngine == 0 || g_voiceEngine == 3) && Vc_RunVosk()) return 0;
     if (g_voiceEngine != 2 && Vc_RunSapi()) return 0;
     if (g_voiceEngine != 1 && Vc_RunWinRT()) return 0;
     Log("Voice: no speech recognition could start - voice control off");
@@ -12275,6 +12434,8 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Melee weapon tilt (this weapon)", 0, 0, &g_melA[0], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (first axis). Hold the weapon out and adjust until it sits straight. Saved for that weapon." },
     { SP_WEAPONS, ST_FLOAT, "Melee weapon turn (this weapon)", 0, 0, &g_melA[1], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (second axis). Saved for that weapon." },
     { SP_WEAPONS, ST_FLOAT, "Melee weapon roll (this weapon)", 0, 0, &g_melA[2], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (third axis). Saved for that weapon." },
+    { SP_WEAPONS, ST_BOOL, "Melee weapons stay in your hand", "Controls", "bMeleeStill", &g_meleeNoAnim, 0, 0, 0, 0, 0, 0, "ON: swords, machetes, sledgehammers and other melee weapons stay exactly as you hold them when you swing (the game's swing animation doesn't turn them). Fists, power fists and automatic weapons are unchanged." },
+    { SP_WEAPONS, ST_BOOL, "Free arm keeps its own pose", "Arms", "bFreeArmOwnPose", &g_freeArmOwn, 0, 0, 0, 0, 0, 0, "ON: your free arm (left, or right when left-handed) looks the same with or without a weapon - two-handed weapon animations don't bend its wrist and fingers. It only takes the gun's grip while that hand holds the gun." },
     { SP_WEAPONS, ST_BOOL, "Melee swings", "Controls", "bMeleeSwings", &g_meleeSwings, 0, 0, 0, 0, 0, 0, "Swing a melee weapon or punch with a real swing of your hand." },
     { SP_WEAPONS, ST_BOOL, "Right trigger attacks with melee", "Controls", "bMeleeTrigger", &g_meleeTrigger, 0, 0, 0, 0, 0, 0, "ON: the right trigger attacks with melee weapons and fists too (as well as swinging). Automatic melee weapons like the chainsaw always use the trigger." },
     { SP_WEAPONS, ST_FLOAT, "Scope picture height (this gun)", "ScopeHeightCm", g_scopeKey, &g_scopeOffY, -30.0f, 30.0f, 0.5f, "%+.1f cm", 0, 0, "Moves the picture in the scope up (+) or down (-) for the gun in your hand. Saved for that gun only. Hold the gun out once so it's known." },
