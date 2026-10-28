@@ -11957,25 +11957,61 @@ static char *Scr_Ref(void *scr, void *arg)
     return (char *)res.u.form;
 }
 /* ---- stimpaks (main loop side: inventory and using) ---- */
-static const char *const g_stimNames[2] = { "Stimpak", "SuperStimpak" };
+static const char *const g_stimNames[2] = { "Stimpak", "Super Stimpak" };
+/* The two items, found by their in-game names among the game's aid items (a Super Stimpak's editor name isn't the
+   same in every version) - then every script gets the item itself. */
+static void *g_stimForm[2];
+static void Stim_FindForms(void)
+{
+    static bool done = false; if (done) return; done = true;
+    char *map = *(char **)FORMMAP_PTR_ADDR; if (!map) return;
+    uint32_t n = *(uint32_t *)(map + 4); char **buckets = *(char ***)(map + 8);
+    if (!n || !buckets || n > 4000000) return;
+    for (uint32_t bk = 0; bk < n; bk++)
+        for (char *e = buckets[bk]; e && !IsBadReadPtr(e, 12); e = *(char **)e) {
+            char *f = *(char **)(e + 8);
+            if (!f || IsBadReadPtr(f, 0x40) || *(uint8_t *)(f + 4) != 0x2F /* aid item */) continue;
+            const char *nm = *(const char **)(f + 0x34);
+            if (!nm || IsBadReadPtr(nm, 2)) continue;
+            for (int i = 0; i < 2; i++) if (!_stricmp(nm, g_stimNames[i]) && (!g_stimForm[i] || *(uint32_t *)(f + 0x0C) < *(uint32_t *)((char *)g_stimForm[i] + 0x0C))) g_stimForm[i] = f;
+        }
+    {   /* (not found by name - by their editor names instead) */
+        static const char *ed[2][4] = { { "Stimpak", NULL }, { "SuperStimpak", "StimpakSuper", "SuperStimPak", NULL } };
+        for (int i = 0; i < 2; i++) for (int k = 0; !g_stimForm[i] && ed[i][k]; k++) {
+            char b[160]; snprintf(b, sizeof b, "ref rItem\nBegin Function { }\nset rItem to %s\nSetFunctionValue rItem\nEnd\n", ed[i][k]);
+            void *sc = g_scriptIntf && g_scriptIntf->CompileScript ? g_scriptIntf->CompileScript(b) : NULL;
+            if (!sc) continue;
+            typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+            struct { union { double num; void *form; } u; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+            if (((CallFn_t)g_scriptIntf->CallFunction)(sc, GetPlayer(), NULL, &res, 0) && res.type == 2 && res.u.form) g_stimForm[i] = res.u.form;
+        }
+    }
+    for (int i = 0; i < 2; i++) Log("Stimpak: '%s' %s%08X", g_stimNames[i], g_stimForm[i] ? "found, form " : "NOT found", g_stimForm[i] ? *(uint32_t *)((char *)g_stimForm[i] + 0x0C) : 0);
+}
 static int Stim_Pick(void)
 {   /* which one to pull out: a Stimpak if you have one, else a Super Stimpak; -1 = none */
-    static void *cnt[2]; static bool tried = false;
+    static void *cnt = NULL; static bool tried = false;
+    Stim_FindForms();
     if (!tried) { tried = true;
-        for (int i = 0; i < 2; i++) { char b[200]; snprintf(b, sizeof b, "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to rWho.GetItemCount %s\nSetFunctionValue iVal\nEnd\n", g_stimNames[i]);
-            cnt[i] = g_scriptIntf && g_scriptIntf->CompileScript ? g_scriptIntf->CompileScript(b) : NULL;
-            if (!cnt[i]) Log("Stimpak: couldn't set up counting %s", g_stimNames[i]); } }
-    for (int i = 0; i < 2; i++) { double v = 0; if (cnt[i] && Scr_Num(cnt[i], GetPlayer(), &v) && v >= 1.0) return i; }
+        cnt = g_scriptIntf && g_scriptIntf->CompileScript ? g_scriptIntf->CompileScript("ref rWho\nref rItem\nint iVal\nBegin Function { rWho, rItem }\nset iVal to rWho.GetItemCount rItem\nSetFunctionValue iVal\nEnd\n") : NULL;
+        if (!cnt) Log("Stimpak: couldn't set up counting"); }
+    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+    for (int i = 0; i < 2; i++) {
+        if (!cnt || !g_stimForm[i]) continue;
+        struct { double num; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+        if (((CallFn_t)g_scriptIntf->CallFunction)(cnt, GetPlayer(), NULL, &res, 2, GetPlayer(), g_stimForm[i]) && res.type == 1 && res.num >= 1.0) return i;
+    }
     return -1;
 }
 static bool Stim_Begin(int h, int type)
 {   /* take one out of your inventory and put it in the world, to be held in your hand */
-    static void *place[2]; static bool tried = false;
+    static void *place = NULL; static bool tried = false;
     if (!tried) { tried = true;
-        for (int i = 0; i < 2; i++) { char b[260]; snprintf(b, sizeof b, "ref rWho\nref rNew\nBegin Function { rWho }\nrWho.RemoveItem %s 1 1\nset rNew to rWho.PlaceAtMe %s 1\nSetFunctionValue rNew\nEnd\n", g_stimNames[i], g_stimNames[i]);
-            place[i] = g_scriptIntf && g_scriptIntf->CompileScript ? g_scriptIntf->CompileScript(b) : NULL; } }
-    if (type < 0 || type > 1 || !place[type]) return false;
-    char *ref = Scr_Ref(place[type], GetPlayer());
+        place = g_scriptIntf && g_scriptIntf->CompileScript ? g_scriptIntf->CompileScript("ref rWho\nref rItem\nref rNew\nBegin Function { rWho, rItem }\nrWho.RemoveItem rItem 1 1\nset rNew to rWho.PlaceAtMe rItem 1\nSetFunctionValue rNew\nEnd\n") : NULL; }
+    if (type < 0 || type > 1 || !place || !g_stimForm[type]) return false;
+    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+    struct { union { double num; void *form; } u; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+    char *ref = (((CallFn_t)g_scriptIntf->CallFunction)(place, GetPlayer(), NULL, &res, 2, GetPlayer(), g_stimForm[type]) && res.type == 2) ? (char *)res.u.form : NULL;
     if (!ref) { Log("Stimpak: couldn't take one out"); return false; }
     g_stimRef = ref; g_stimRefID = *(uint32_t *)(ref + 0x0C); g_stimType = type; g_stimHand = h; g_stimAt = QpcMs(); g_stimHeld = false;
     Log("Stimpak: %s pulled out with the %s hand (ref %08X)", type ? "Super Stimpak" : "Stimpak", h ? "right" : "left", g_stimRefID);
@@ -11985,20 +12021,18 @@ static void Stim_Flush(void)
 {   /* use it (stabbed) or put it back (let go) - removing the one held in the world either way */
     int what = g_stimDo; if (!what) return;
     g_stimDo = 0;
-    static void *useS[2], *backS[2], *backNoRef[2]; static bool tried = false;
+    static void *useS, *backS, *backNoRef; static bool tried = false;
     if (!tried) { tried = true;
-        for (int i = 0; i < 2; i++) { char b[300];
-            snprintf(b, sizeof b, "ref rWho\nref rStim\nBegin Function { rWho, rStim }\nrStim.Disable\nrStim.MarkForDelete\nrWho.AddItem %s 1 1\nrWho.EquipItem %s 0 1\nEnd\n", g_stimNames[i], g_stimNames[i]);
-            useS[i] = g_scriptIntf->CompileScript(b);
-            snprintf(b, sizeof b, "ref rWho\nref rStim\nBegin Function { rWho, rStim }\nrStim.Disable\nrStim.MarkForDelete\nrWho.AddItem %s 1 1\nEnd\n", g_stimNames[i]);
-            backS[i] = g_scriptIntf->CompileScript(b);
-            snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nrWho.AddItem %s 1 1\nEnd\n", g_stimNames[i]);
-            backNoRef[i] = g_scriptIntf->CompileScript(b); } }
-    int t = g_stimDoType & 1; char *pl = (char *)GetPlayer();
+        useS = g_scriptIntf->CompileScript("ref rWho\nref rStim\nref rItem\nBegin Function { rWho, rStim, rItem }\nrStim.Disable\nrStim.MarkForDelete\nrWho.AddItem rItem 1 1\nrWho.EquipItem rItem 0 1\nEnd\n");
+        backS = g_scriptIntf->CompileScript("ref rWho\nref rStim\nref rItem\nBegin Function { rWho, rStim, rItem }\nrStim.Disable\nrStim.MarkForDelete\nrWho.AddItem rItem 1 1\nEnd\n");
+        backNoRef = g_scriptIntf->CompileScript("ref rWho\nref rItem\nBegin Function { rWho, rItem }\nrWho.AddItem rItem 1 1\nEnd\n");
+        if (!useS || !backS || !backNoRef) Log("Stimpak: use/put-back scripts: use %d, back %d, back-no-ref %d", useS != NULL, backS != NULL, backNoRef != NULL); }
+    int t = g_stimDoType & 1; char *pl = (char *)GetPlayer(); void *item = g_stimForm[t];
+    if (!item) return;
     bool refOk = g_stimDoRef && LookupForm(g_stimDoID) == (void *)g_stimDoRef;
-    if (what == 1 && refOk && useS[t]) { g_scriptIntf->CallFunctionAlt(useS[t], pl, 2, pl, g_stimDoRef); Log("Stimpak: used (%s)", t ? "Super Stimpak" : "Stimpak"); }
-    else if (refOk && backS[t]) { g_scriptIntf->CallFunctionAlt(backS[t], pl, 2, pl, g_stimDoRef); Log("Stimpak: put back"); }
-    else if (backNoRef[t]) { g_scriptIntf->CallFunctionAlt(backNoRef[t], pl, 1, pl); Log("Stimpak: put back (the one in your hand was gone)"); }
+    if (what == 1 && refOk && useS) { g_scriptIntf->CallFunctionAlt(useS, pl, 3, pl, g_stimDoRef, item); Log("Stimpak: used (%s)", t ? "Super Stimpak" : "Stimpak"); }
+    else if (refOk && backS) { g_scriptIntf->CallFunctionAlt(backS, pl, 3, pl, g_stimDoRef, item); Log("Stimpak: put back"); }
+    else if (backNoRef) { g_scriptIntf->CallFunctionAlt(backNoRef, pl, 2, pl, item); Log("Stimpak: put back (the one in your hand was gone)"); }
     g_stimDoRef = NULL;
 }
 static void FireRate_Tick(void)
