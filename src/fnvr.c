@@ -203,6 +203,7 @@ static int  g_pixelDensityPct = 0;    /* 0 = auto: match the game resolution */
 static bool g_matchHeadsetFov = true;
 static bool g_asyncCapture;
 static bool  g_stereo = true;
+static bool  g_stereoFull = false;   /* INI [Stereo] bFullStereo: both eyes drawn every frame (real 3D, twice the drawing) */
 static float g_unitsPerMeter = 70.0f;   /* game units per real-world meter (world scale) */
 static float g_menuScreenFov = 90.0f;
 static bool  g_motionControls = true;   /* Touch controllers act as an Xbox controller */
@@ -552,6 +553,7 @@ static void LoadSettings(void)
     g_matchHeadsetFov = GetPrivateProfileIntA("Display", "bMatchHeadsetFOV", 1, g_iniPath) != 0;
     g_asyncCapture = GetPrivateProfileIntA("Display", "bAsyncCapture", 1, g_iniPath) != 0;
     g_stereo = GetPrivateProfileIntA("Stereo", "bStereo", 0, g_iniPath) != 0;
+    g_stereoFull = GetPrivateProfileIntA("Stereo", "bFullStereo", 0, g_iniPath) != 0;
     g_motionControls = GetPrivateProfileIntA("Controls", "bMotionControls", 1, g_iniPath) != 0;
     g_handAim = GetPrivateProfileIntA("Controls", "bHandAim", 1, g_iniPath) != 0;
     g_leftHanded = GetPrivateProfileIntA("Controls", "bLeftHanded", 0, g_iniPath) != 0;
@@ -2904,6 +2906,24 @@ static void Capture_Upload(CapSlot *slot)
 {
     static const float black[4] = { 0, 0, 0, 1 };
     if (slot->eyes < 1 || !slot->sys[0]) return;
+    if (slot->targetEye == 2) {   /* full 3D: both eyes drawn this frame */
+        if (slot->eyes < 2 || !slot->sys[1]) { slot->targetEye = -1; }
+        else {
+            for (int e = 0; e < 2; e++) {
+                D3DLOCKED_RECT lr;
+                HRESULT hr = IDirect3DSurface9_LockRect(slot->sys[e], &lr, NULL, D3DLOCK_READONLY);
+                if (FAILED(hr)) { DisplayFail("LockRect", hr); return; }
+                ID3D11DeviceContext_ClearRenderTargetView(g_d11ctx, g_eyeRTV[e], black);
+                D3D11_BOX box = { slot->dx, slot->dy, 0, slot->dx + slot->dw, slot->dy + slot->dh, 1 };
+                ID3D11DeviceContext_UpdateSubresource(g_d11ctx, (ID3D11Resource *)g_eyeTex[e], 0, &box, lr.pBits, (UINT)lr.Pitch, 0);
+                IDirect3DSurface9_UnlockRect(slot->sys[e]);
+                g_eyePose[e] = slot->pose;
+            }
+            ID3D11DeviceContext_Flush(g_d11ctx);
+            g_monoImage = false; g_haveEye[0] = g_haveEye[1] = true; g_haveEyeImage = true;
+            return;
+        }
+    }
     int dst = slot->targetEye < 0 ? 0 : slot->targetEye;
     D3DLOCKED_RECT lr;
     HRESULT hr = IDirect3DSurface9_LockRect(slot->sys[0], &lr, NULL, D3DLOCK_READONLY);
@@ -10619,7 +10639,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
     g_renderCallsSinceLog++;
     uintptr_t ret = (uintptr_t)__builtin_return_address(0);
     if (ret == 0x008721A9) g_renderCallsResize++; else if (ret == 0x00879179) g_renderCallsMain++; else g_renderCallsOther = ret;
-    bool doStereo = g_stereo && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11;
+    bool doStereo = g_stereo && !g_stereoFull && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11;
     if (g_inGameplay && !g_menuCached && cam && player) {   /* the character's standing eye height: the most common height above its feet */
         static unsigned hist[201]; static double histAt = 0;
         float e = ((const float *)(cam + NIAV_WORLD_TRANSLATE))[2] - ((const float *)((char *)player + 0x30))[2];
@@ -10687,6 +10707,50 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         if (!armsDone) g_capWant = false;
         Trk_Update();
         g_capCount = 0; g_inRenderFrame = true;
+        bool full = g_stereoFull && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11 && !g_pipOpen;
+        if (full) {
+            /* Full 3D: the frame is drawn twice, from the left eye and then the right (the camera moved along its own
+               right-hand side by half your eye distance each way). Each eye gets its own Pip-Boy screen and rope; the
+               scope picture goes in your aiming eye only, like a real scope. */
+            float *T = (float *)(cam + NIAV_WORLD_TRANSLATE), *L = (float *)(cam + NIAV_LOCAL_TRANSLATE);
+            char *parent = *(char **)(cam + NIAV_PARENT);
+            const float *Cw = (const float *)(cam + NIAV_WORLD_ROTATE);
+            float rgt[3] = { Cw[2], Cw[5], Cw[8] }; float rl = V3Len(rgt);
+            if (!(rl > 0.5f)) { float hd = *PlayerRotZ(player); rgt[0] = cosf(hd); rgt[1] = -sinf(hd); rgt[2] = 0; rl = 1.0f; }
+            for (int k = 0; k < 3; k++) rgt[k] /= rl;
+            float savedT[3] = { T[0], T[1], T[2] }, savedL[3] = { L[0], L[1], L[2] };
+            float half = 0.5f * g_ipdMeters * g_unitsPerMeter;
+            int aimEye = g_leftHanded ? 0 : 1;
+            bool ropeOn = g_rope.on; bool ok0 = false, ok1 = false;
+            double te[2] = { 0, 0 };
+            for (int eye = 0; eye < 2; eye++) {
+                float side = eye == 0 ? -1.0f : 1.0f, w[3], l[3];
+                for (int k = 0; k < 3; k++) w[k] = rgt[k] * side * half;
+                memcpy(l, w, sizeof l);
+                if (parent) {
+                    const float *R = (const float *)(parent + NIAV_WORLD_ROTATE); float sc = *(const float *)(parent + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
+                    for (int k = 0; k < 3; k++) l[k] = (R[0 * 3 + k] * w[0] + R[1 * 3 + k] * w[1] + R[2 * 3 + k] * w[2]) / sc;
+                }
+                for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }
+                if (armsDone && grabVis) {
+                    if (eye == aimEye && QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam); else { g_scope.active = false; g_capWant = false; }
+                    PipScr_Prepare((char *)player, cam);
+                }
+                double tr = QpcMs();
+                o_DoRenderFrame(osGlobals, renderer, a, b);
+                te[eye] = QpcMs() - tr;
+                for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }   /* (in case the game moved it while drawing) */
+                if (eye == aimEye) Scope_Draw(dev); else g_scope.active = false;
+                PipScr_Draw(dev);
+                g_rope.on = ropeOn; Rope_Draw(dev);
+                if (eye == 0) ok0 = Capture_Eye(dev, 0); else ok1 = ok0 && Capture_Eye(dev, 1);
+            }
+            for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
+            if (ok0 && ok1 && g_fillSlot) g_fillSlot->targetEye = 2;
+            g_stereoCapturedThisFrame = ok0;
+            {   static int fl = 0; static double nl = 0;
+                if (QpcMs() > nl) { nl = QpcMs() + 10000.0; if (fl++ < 30) Log("Full 3D: left eye drawn in %.1f ms, right eye %.1f ms (%s)", te[0], te[1], ok0 && ok1 ? "both captured" : "capture failed"); } }
+        } else
         o_DoRenderFrame(osGlobals, renderer, a, b);
         g_inRenderFrame = false;
         t4 = QpcMs(); g_tGame += t4 - t3;
@@ -12470,6 +12534,7 @@ static const SetOpt g_setOpts[] = {
 
     { SP_DISPLAY, ST_BOOL, "US units (feet & inches)", "Display", "bUSUnits", &g_imperial, 0, 0, 0, 0, 0, 0, "ON: heights, reaches and distances in this panel are shown in feet and inches (speeds in mph) instead of metres." },
     { SP_DISPLAY, ST_BOOL, "Game in the headset", "Display", "bHeadsetDisplay", &g_headsetDisplay, 0, 0, 0, 0, SF_RESTART, 0, "OFF: head tracking only, the game stays on the monitor. Takes effect after a restart." },
+    { SP_DISPLAY, ST_BOOL, "Full 3D (both eyes every frame)", "Stereo", "bFullStereo", &g_stereoFull, 0, 0, 0, 0, 0, 0, "ON: real 3D - the world is drawn twice every frame, once from each eye, so near things (your hands, guns, the Pip-Boy) have true depth. Costs about twice the drawing time. Overrides the alternating mode below." },
     { SP_DISPLAY, ST_BOOL, "3D depth (experimental)", "Stereo", "bStereo", &g_stereo, 0, 0, 0, 0, 0, 0, "ON: real 3D depth - the game is drawn from your left and right eye in turn (each eye gets a new picture every other frame, so fast movement can shimmer). OFF: the same picture in both eyes. Ctrl+F10 toggles it too." },
     { SP_DISPLAY, ST_BOOL, "Match headset field of view", "Display", "bMatchHeadsetFOV", &g_matchHeadsetFov, 0, 0, 0, 0, SF_FOV, 0, "Widen the game's view so it fills your headset (F9 toggles it too)." },
     { SP_DISPLAY, ST_INT, "Sharpness", "Display", "iPixelDensityPercent", &g_pixelDensityPct, 0, 200, 5, "%.0f %%", SF_RESTART, 0, "Headset sharpness. 0 = automatic (matches the game's resolution, recommended). Restart to apply." },
