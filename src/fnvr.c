@@ -39,6 +39,7 @@
 static int g_nearCount;
 static unsigned g_shHits = 0, g_shMisses = 0; static double g_shMissMs = 0;
 static double g_tGrab, g_tArms, g_tVis, g_tGame, g_tTick, g_tHead; static unsigned g_tFrames;
+static double g_tmCap = 0, g_tmSubmit = 0, g_tmDisp = 0, g_tmRender = 0; static int g_tmN = 0;   /* frame cost breakdown (log) */
 static double QpcMs(void) { static LARGE_INTEGER f; LARGE_INTEGER c; if (!f.QuadPart) QueryPerformanceFrequency(&f); QueryPerformanceCounter(&c); return (double)c.QuadPart * 1000.0 / (double)f.QuadPart; }
 /* ---- small vector / 3x3 matrix helpers ---- */
 typedef float M3[3][3];
@@ -3064,7 +3065,9 @@ static bool ScreenModeNow(void)
 }
 
 /* Copy what's currently in the backbuffer as the image for one eye (eye 0 starts a new frame). */
-static bool Capture_Eye(IDirect3DDevice9 *dev, int eye)
+static bool Capture_Eye_(IDirect3DDevice9 *dev, int eye);
+static bool Capture_Eye(IDirect3DDevice9 *dev, int eye) { double t = QpcMs(); bool r = Capture_Eye_(dev, eye); g_tmCap += QpcMs() - t; return r; }
+static bool Capture_Eye_(IDirect3DDevice9 *dev, int eye)
 {
     if (!g_vrCompositor || g_displayFailed) return false;
 
@@ -3164,7 +3167,9 @@ static bool Capture_Eye(IDirect3DDevice9 *dev, int eye)
 
 /* All images for this frame have been captured: start the background copy and send the newest
    finished frame to the headset. */
-static void Capture_FinishAndSubmit(IDirect3DDevice9 *dev)
+static void Capture_FinishAndSubmit_(IDirect3DDevice9 *dev);
+static void Capture_FinishAndSubmit(IDirect3DDevice9 *dev) { double t = QpcMs(); Capture_FinishAndSubmit_(dev); g_tmSubmit += QpcMs() - t; }
+static void Capture_FinishAndSubmit_(IDirect3DDevice9 *dev)
 {
     CapSlot *slot = g_fillSlot;
     g_fillSlot = NULL;
@@ -5124,7 +5129,9 @@ static long TF_Count2(IDirect3DDevice9 *dev)
     return n;
 }
 
-static void Display_Frame(IDirect3DDevice9 *dev)
+static void Display_Frame_(IDirect3DDevice9 *dev);
+static void Display_Frame(IDirect3DDevice9 *dev) { double t = QpcMs(); Display_Frame_(dev); g_tmDisp += QpcMs() - t; g_tmN++; }
+static void Display_Frame_(IDirect3DDevice9 *dev)
 {
     UI_Present(dev);
     Settings_Frame();
@@ -5171,6 +5178,9 @@ static void Display_WaitForNextFrame(void)
             double avg = sumWork / n;
             Log("Frame pacing: game+FNVR work %.1f ms per frame (worst %.1f), waiting for the headset %.1f ms | headset %.0f Hz -> fits %s",
                 avg, maxWork, sumWait / n, hz, hz > 1 && avg < 1000.0 / hz * 0.92 ? "every refresh" : "every 2nd refresh");
+            if (g_tmN > 0) { Log("Frame cost: copying pictures for the headset %.1f ms (of which sending %.1f ms), FNVR's end-of-frame work %.1f ms per frame%s",
+                                 g_tmCap / g_tmN + g_tmSubmit / g_tmN, g_tmSubmit / g_tmN, g_tmDisp / g_tmN, g_stereoFull ? " (full 3D on)" : "");
+                             g_tmCap = g_tmSubmit = g_tmDisp = 0; g_tmN = 0; }
             sumWork = sumWait = maxWork = 0; n = 0;
         }
     }
