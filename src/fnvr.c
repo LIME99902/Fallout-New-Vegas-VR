@@ -4315,6 +4315,8 @@ static void Room_LoadSequoia(void)
     if (!path || !*path || !loader) { Log("Menu Sequoia: weapon or model path not found - using the stand-in revolver"); return; }
     char *root = (char *)((LoadModel_t)0x00447080)(loader, path, 0, true, 0, false, true);
     if (!root) { Log("Menu Sequoia: couldn't load %s - using the stand-in revolver", path); return; }
+    InterlockedIncrement((volatile LONG *)(root + 4));   /* keep our own hold on the model: loading a save clears the game's model cache, and a model
+                                                            nobody holds can be freed while the game's loader thread still has work queued on it */
     float I[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 }, Z0[3] = { 0, 0, 0 };
     char **kids = AsNode(root) ? *(char ***)(root + 0xA0) : NULL; uint16_t nk = kids ? *(uint16_t *)(root + 0xA6) : 0;
     g_seqTmpN = 0;
