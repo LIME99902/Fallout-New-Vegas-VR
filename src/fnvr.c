@@ -12391,6 +12391,7 @@ static const SetOpt g_setOpts[] = {
 
     { SP_DISPLAY, ST_BOOL, "US units (feet & inches)", "Display", "bUSUnits", &g_imperial, 0, 0, 0, 0, 0, 0, "ON: heights, reaches and distances in this panel are shown in feet and inches (speeds in mph) instead of metres." },
     { SP_DISPLAY, ST_BOOL, "Game in the headset", "Display", "bHeadsetDisplay", &g_headsetDisplay, 0, 0, 0, 0, SF_RESTART, 0, "OFF: head tracking only, the game stays on the monitor. Takes effect after a restart." },
+    { SP_DISPLAY, ST_BOOL, "3D depth (experimental)", "Stereo", "bStereo", &g_stereo, 0, 0, 0, 0, 0, 0, "ON: real 3D depth - the game is drawn from your left and right eye in turn (each eye gets a new picture every other frame, so fast movement can shimmer). OFF: the same picture in both eyes. Ctrl+F10 toggles it too." },
     { SP_DISPLAY, ST_BOOL, "Match headset field of view", "Display", "bMatchHeadsetFOV", &g_matchHeadsetFov, 0, 0, 0, 0, SF_FOV, 0, "Widen the game's view so it fills your headset (F9 toggles it too)." },
     { SP_DISPLAY, ST_INT, "Sharpness", "Display", "iPixelDensityPercent", &g_pixelDensityPct, 0, 200, 5, "%.0f %%", SF_RESTART, 0, "Headset sharpness. 0 = automatic (matches the game's resolution, recommended). Restart to apply." },
     { SP_DISPLAY, ST_BOOL, "Copy frames in background", "Display", "bAsyncCapture", &g_asyncCapture, 0, 0, 0, 0, SF_RESTART, 0, "Faster frame copying to the headset. Restart to apply." },
