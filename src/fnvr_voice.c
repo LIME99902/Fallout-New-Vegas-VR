@@ -29,6 +29,7 @@ static int (*p_accept_s)(VoskRecognizer *, const short *, int);
 static const char *(*p_result)(VoskRecognizer *);
 static void (*p_reset)(VoskRecognizer *);
 static void (*p_log_level)(int);
+static void (*p_rec_free)(VoskRecognizer *);
 
 static const GUID kFloatFmt = { 0x00000003, 0x0000, 0x0010, { 0x80, 0x00, 0x00, 0xaa, 0x00, 0x38, 0x9b, 0x71 } };
 static CRITICAL_SECTION g_cs; static char *g_pendingGrm = NULL; static volatile LONG g_quit = 0;
@@ -119,7 +120,7 @@ int main(int argc, char **argv)
     p_model_new = (void *)GetProcAddress(v, "vosk_model_new"); p_find_word = (void *)GetProcAddress(v, "vosk_model_find_word");
     p_rec_new_grm = (void *)GetProcAddress(v, "vosk_recognizer_new_grm"); p_set_grm = (void *)GetProcAddress(v, "vosk_recognizer_set_grm");
     p_accept_s = (void *)GetProcAddress(v, "vosk_recognizer_accept_waveform_s"); p_result = (void *)GetProcAddress(v, "vosk_recognizer_result");
-    p_reset = (void *)GetProcAddress(v, "vosk_recognizer_reset"); p_log_level = (void *)GetProcAddress(v, "vosk_set_log_level");
+    p_reset = (void *)GetProcAddress(v, "vosk_recognizer_reset"); p_rec_free = (void *)GetProcAddress(v, "vosk_recognizer_free"); p_log_level = (void *)GetProcAddress(v, "vosk_set_log_level");
     if (!p_model_new || !p_rec_new_grm || !p_set_grm || !p_accept_s || !p_result || !p_find_word) { Out("L offline speech: libvosk.dll is missing functions"); return 3; }
     if (p_log_level) p_log_level(-1);
     VoskModel *m = p_model_new(model);
@@ -151,7 +152,11 @@ int main(int argc, char **argv)
         char *g = NULL; EnterCriticalSection(&g_cs); g = g_pendingGrm; g_pendingGrm = NULL; LeaveCriticalSection(&g_cs);
         if (g) {
             int kept, dropped; char *fg = FilterGrammar(m, g, &kept, &dropped);
-            p_set_grm(rec, fg); active = kept > 0;
+            active = kept > 0;
+            if (active) {   /* a fresh recognizer for each phrase list (changing it on a running one can stop the engine) */
+                VoskRecognizer *nr = p_rec_new_grm(m, 16000.0f, fg);
+                if (nr) { if (p_rec_free) p_rec_free(rec); rec = nr; } else { Out("L offline speech: phrase list refused"); active = false; }
+            }
             Out("L offline speech: listening for %d phrases%s", kept, dropped ? " (some had words it doesn't know)" : "");
             free(fg); free(g);
         }

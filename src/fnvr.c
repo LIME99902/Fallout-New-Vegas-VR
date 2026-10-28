@@ -5975,7 +5975,9 @@ static void ArmBase_Do(int side, bool supportFree, bool pipAnim)
         g_abN[side] = n; g_abOk[side] = n > 3;
         if (!savedOnce[side] && g_abOk[side]) { savedOnce[side] = true; ArmBase_Save(side); Log("Arms: %s arm's own pose taken (%d bones) - used whenever that hand isn't on the gun", side ? "right" : "left", n); }
     }
-    if (!g_freeArmOwn || !g_abOk[side] || !g_weaponOutThisFrame || !supportFree || pipAnim) return;
+    /* (not while the wrist is raised toward your face or the Pip-Boy is opening - the Pip-Boy keeps the game's own arm there) */
+    static double wristAt = 0; if (g_wristUp || g_pipOpen || QpcMs() < g_pipExpectUntil + 500.0) wristAt = QpcMs();
+    if (!g_freeArmOwn || !g_abOk[side] || !g_weaponOutThisFrame || !supportFree || pipAnim || QpcMs() - wristAt < 600.0) return;
     for (int i = 0; i < g_abNodeN[side]; i++) {
         char *b = g_abNode[side][i]; const char *nm = *(const char **)(b + 0x08); if (!nm) continue;
         for (int k = 0; k < g_abN[side]; k++) if (!strcmp(g_abName[side][k], nm)) { memcpy(b + NIAV_LOCAL_ROTATE, g_abRot[side][k], 36); break; }
@@ -9473,7 +9475,7 @@ static bool ScopeTopPart(char *weapNode, const float *up, const float *f, float 
 }
 /* Scope picture placement, per gun (saved by the gun's name): height in cm along the gun's "up" ([ScopeHeightCm],
    + = higher) and size ([ScopeSize], 1 = the lens as the model has it). */
-static float g_scopeOffY = 0.0f, g_scopeSize = 1.0f; static char g_scopeKey[96] = "-";
+static float g_scopeOffY = 0.0f, g_scopeSize = 1.0f, g_scopeOffZ = 0.0f; static char g_scopeKey[96] = "-";
 static void ScopeHeight_Load(char *weap)
 {
     const char *nm = (!IsBadReadPtr(weap + 0x34, 4) && *(const char **)(weap + 0x34) && !IsBadReadPtr(*(const char **)(weap + 0x34), 1)) ? *(const char **)(weap + 0x34) : "";
@@ -9490,8 +9492,12 @@ static void ScopeHeight_Load(char *weap)
     char d[32], b[48]; snprintf(d, sizeof d, "%.2f", def);
     GetPrivateProfileStringA("ScopeHeightCm", g_scopeKey, d, b, sizeof b, g_iniPath); g_scopeOffY = (float)atof(b);
     GetPrivateProfileStringA("ScopeSize", g_scopeKey, "1.0", b, sizeof b, g_iniPath); g_scopeSize = (float)atof(b);
+    {   /* along the gun: the Anti-Materiel Rifle's lens part sits mid-scope - its picture goes back to the eyepiece */
+        float defZ = (strstr(lowN, "anti-materi") || strstr(lowN, "anti materi") || strstr(low, "antimateriel")) ? -10.0f : 0.0f;
+        char dz[32]; snprintf(dz, sizeof dz, "%.2f", defZ);
+        GetPrivateProfileStringA("ScopeBackCm", g_scopeKey, dz, b, sizeof b, g_iniPath); g_scopeOffZ = (float)atof(b); }
     if (!(g_scopeSize >= 0.2f && g_scopeSize <= 5.0f)) g_scopeSize = 1.0f;
-    Log("Scope: '%s' (model %s) picture %+.1f cm high, size %.2f", nm, g_scopeKey, g_scopeOffY, g_scopeSize);
+    Log("Scope: '%s' (model %s) picture %+.1f cm high, %+.1f cm forward, size %.2f", nm, g_scopeKey, g_scopeOffY, g_scopeOffZ, g_scopeSize);
 }
 static void Scope_Prepare(char *player, char *cam)
 {
@@ -9585,7 +9591,8 @@ static void Scope_Prepare(char *player, char *cam)
     bool ok1, ok2;
     float cx = 0, cy = 0, sx = 0, sy = 0;
     {   static char *forW = NULL; if (forW != weap) { forW = weap; ScopeHeight_Load(weap); } }
-    float Eo[3]; { float k = g_scopeOffY * g_unitsPerMeter / 100.0f; for (int i = 0; i < 3; i++) Eo[i] = E[i] + up[i] * k; }   /* this gun's picture height */
+    float Eo[3]; { float k = g_scopeOffY * g_unitsPerMeter / 100.0f, kz = g_scopeOffZ * g_unitsPerMeter / 100.0f, fl = V3Len(f);
+                   for (int i = 0; i < 3; i++) Eo[i] = E[i] + up[i] * k + (fl > 1e-3f ? f[i] / fl : 0.0f) * kz; }   /* this gun's picture height and place along the gun */
     PROJ(Eo, cx, cy, ok1);
     float aimPt[3]; for (int i = 0; i < 3; i++) aimPt[i] = C[i] + f[i] * 20000.0f;
     PROJ(aimPt, sx, sy, ok2);
@@ -11383,24 +11390,24 @@ static bool Vc_RunWinRT(void)
 /* -- Offline speech (Vosk), run by a small 64-bit helper next to the plugin (FNVR\voice\FNVR_Voice.exe with
       libvosk.dll and an English model in voice\model). It listens to the headset's microphone itself (whatever
       Windows' default is) and only for the phrases sent to it. -- */
-static bool Vc_RunVosk(void)
+static int Vc_RunVosk(void)   /* -1 not installed/can't start, 0 stopped before it was ready, 1 stopped after working */
 {
     char dir[MAX_PATH], exe[MAX_PATH], dll[MAX_PATH], mdl[MAX_PATH];
-    snprintf(dir, sizeof dir, "%s", g_iniPath); char *sl = strrchr(dir, '\\'); if (!sl) return false;
+    snprintf(dir, sizeof dir, "%s", g_iniPath); char *sl = strrchr(dir, '\\'); if (!sl) return -1;
     snprintf(sl, (size_t)(dir + sizeof dir - sl), "\\voice");
     snprintf(exe, sizeof exe, "%s\\FNVR_Voice.exe", dir); snprintf(dll, sizeof dll, "%s\\libvosk.dll", dir); snprintf(mdl, sizeof mdl, "%s\\model\\am", dir);
     if (GetFileAttributesA(exe) == INVALID_FILE_ATTRIBUTES || GetFileAttributesA(dll) == INVALID_FILE_ATTRIBUTES || GetFileAttributesA(mdl) == INVALID_FILE_ATTRIBUTES) {
-        Log("Voice: offline speech add-on not installed (%s) - using Windows speech", dir); return false; }
+        Log("Voice: offline speech add-on not installed (%s) - using Windows speech", dir); return -1; }
     SECURITY_ATTRIBUTES sa = { sizeof sa, NULL, TRUE };
     HANDLE inR, inW, outR, outW;
-    if (!CreatePipe(&inR, &inW, &sa, 0) || !CreatePipe(&outR, &outW, &sa, 0)) return false;
+    if (!CreatePipe(&inR, &inW, &sa, 0) || !CreatePipe(&outR, &outW, &sa, 0)) return -1;
     SetHandleInformation(inW, HANDLE_FLAG_INHERIT, 0); SetHandleInformation(outR, HANDLE_FLAG_INHERIT, 0);
     STARTUPINFOA si; memset(&si, 0, sizeof si); si.cb = sizeof si; si.dwFlags = STARTF_USESTDHANDLES; si.hStdInput = inR; si.hStdOutput = outW; si.hStdError = outW;
     PROCESS_INFORMATION pi; char cmd[1024]; snprintf(cmd, sizeof cmd, "\"%s\" \"%s\" \"%s\"", exe, dir, g_voiceMic);
     HANDLE job = CreateJobObjectA(NULL, NULL);
     if (job) { JOBOBJECT_EXTENDED_LIMIT_INFORMATION li; memset(&li, 0, sizeof li); li.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE; SetInformationJobObject(job, JobObjectExtendedLimitInformation, &li, sizeof li); }
     if (!CreateProcessA(NULL, cmd, NULL, NULL, TRUE, CREATE_NO_WINDOW | CREATE_SUSPENDED, NULL, dir, &si, &pi)) {
-        Log("Voice: offline speech helper didn't start (error %lu)", GetLastError()); CloseHandle(inR); CloseHandle(inW); CloseHandle(outR); CloseHandle(outW); return false; }
+        Log("Voice: offline speech helper didn't start (error %lu)", GetLastError()); CloseHandle(inR); CloseHandle(inW); CloseHandle(outR); CloseHandle(outW); return -1; }
     if (job) AssignProcessToJobObject(job, pi.hProcess);   /* (it closes with the game) */
     ResumeThread(pi.hThread); CloseHandle(pi.hThread); CloseHandle(inR); CloseHandle(outW);
     Log("Voice: offline speech helper started");
@@ -11410,8 +11417,8 @@ static bool Vc_RunVosk(void)
         if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0) {
             DWORD code = 0; GetExitCodeProcess(pi.hProcess, &code);
             Log("Voice: offline speech helper stopped (code %lu)%s", code, ready ? "" : " - using Windows speech");
-            CloseHandle(pi.hProcess); CloseHandle(inW); CloseHandle(outR);
-            return false;
+            CloseHandle(pi.hProcess); CloseHandle(inW); CloseHandle(outR); if (job) CloseHandle(job);
+            return ready ? 1 : 0;
         }
         if (g_vcVer != built) {
             int mode, n; LONG v; static char opt[VC_MAXOPT][VC_TXT];
@@ -11435,6 +11442,7 @@ static bool Vc_RunVosk(void)
                     if (line[0] == 'L') { Log("Voice: %s", line + 2); if (strstr(line, "listening on")) { ready = true; InterlockedExchange(&g_vcState, 1); } }
                     else if (line[0] == 'R' && line[1] == ' ') {
                         int r = Vc_RuleFor(line + 2, ph, rule, np);
+                        if (r < 0) { int mode2, n2; LONG v2; static char opt2[VC_MAXOPT][VC_TXT]; Vc_Snapshot(&mode2, &n2, opt2, &v2); r = Vc_FuzzyRule(mode2, line + 2, opt2, n2); }
                         Vc_Heard(line + 2, r, 1, 0.9f, built);
                     }
                     int used = (int)(nl - line) + 1; memmove(line, line + used, (size_t)(ll - used + 1)); ll -= used;
@@ -11482,7 +11490,10 @@ static DWORD WINAPI Vc_Thread(LPVOID unused)
     (void)unused;
     HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED); (void)hr;
     Vc_LogMics();
-    if ((g_voiceEngine == 0 || g_voiceEngine == 3) && Vc_RunVosk()) return 0;
+    if (g_voiceEngine == 0 || g_voiceEngine == 3) {   /* offline speech first; if its helper stops after working, start it again (a few times) */
+        int r = Vc_RunVosk(), restarts = 0;
+        while (r == 1 && restarts < 5) { restarts++; Log("Voice: restarting the offline speech helper (%d)", restarts); InterlockedExchange(&g_vcState, 0); Sleep(500); r = Vc_RunVosk(); }
+    }
     if (g_voiceEngine != 2 && Vc_RunSapi()) return 0;
     if (g_voiceEngine != 1 && Vc_RunWinRT()) return 0;
     Log("Voice: no speech recognition could start - voice control off");
@@ -12442,6 +12453,7 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_BOOL, "Melee swings", "Controls", "bMeleeSwings", &g_meleeSwings, 0, 0, 0, 0, 0, 0, "Swing a melee weapon or punch with a real swing of your hand." },
     { SP_WEAPONS, ST_BOOL, "Right trigger attacks with melee", "Controls", "bMeleeTrigger", &g_meleeTrigger, 0, 0, 0, 0, 0, 0, "ON: the right trigger attacks with melee weapons and fists too (as well as swinging). Automatic melee weapons like the chainsaw always use the trigger." },
     { SP_WEAPONS, ST_FLOAT, "Scope picture height (this gun)", "ScopeHeightCm", g_scopeKey, &g_scopeOffY, -30.0f, 30.0f, 0.5f, "%+.1f cm", 0, 0, "Moves the picture in the scope up (+) or down (-) for the gun in your hand. Saved for that gun only. Hold the gun out once so it's known." },
+    { SP_WEAPONS, ST_FLOAT, "Scope picture forward/back (this gun)", "ScopeBackCm", g_scopeKey, &g_scopeOffZ, -40.0f, 40.0f, 0.5f, "%+.1f cm", 0, 0, "Moves the picture along the scope: back toward your eye (-) or forward (+), for the gun in your hand. Saved for that gun only." },
     { SP_WEAPONS, ST_FLOAT, "Scope picture size (this gun)", "ScopeSize", g_scopeKey, &g_scopeSize, 0.2f, 4.0f, 0.05f, "%.2fx", 0, 0, "Makes the picture in the scope bigger or smaller for the gun in your hand, to fill its lens. Saved for that gun only." },
     { SP_WEAPONS, ST_FLOAT, "Scope brightness", "Controls", "fScopeBrightness", &g_scopeBright, 0.1f, 4.0f, 0.1f, "%.1f", 0, 0, "How bright the view through the scope is." },
     { SP_WEAPONS, ST_FLOAT, "Scope zoom limit", "Controls", "fScopeMaxZoom", &g_scopeMaxZoom, 1.0f, 10.0f, 0.5f, "%.1fx", 0, 0, "The most a scope magnifies." },
