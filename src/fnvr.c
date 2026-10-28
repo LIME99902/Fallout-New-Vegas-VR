@@ -3833,6 +3833,7 @@ static RMesh g_meshGun, g_meshScreen, g_meshFloor, g_meshBox, g_meshFlash;
 static float g_scrBuiltW = 0, g_scrBuiltR = 0, g_scrBuiltH = 0;
 static double g_fireT = -1000;                 /* when the gun last fired (ms) */
 static volatile LONG g_ptrClickPending = 0;    /* trigger pulled: click in the main loop */
+static volatile double g_ptrClickAt = 0;
 static bool g_ptrOnScreen = false;
 
 /* -- little mesh builder (gun parts are boxes and cylinders: +X forward, +Y up, +Z right) -- */
@@ -4497,7 +4498,7 @@ static void Seq_TexTick(void)
 static void Far_UiTick(void)
 {
     Seq_TexTick();
-    if (!g_farActive2 || !g_mmPointer) return;
+    if (!g_farActive2 || !g_mmPointer) { InterlockedExchange(&g_ptrClickPending, 0); return; }
     char *im = *(char **)0x011D8A80;
     if (!im) return;
     static char *hover = NULL;
@@ -4514,7 +4515,7 @@ static void Far_UiTick(void)
         }
         hover = tile;
     }
-    if (InterlockedExchange(&g_ptrClickPending, 0)) {
+    if (InterlockedExchange(&g_ptrClickPending, 0) && QpcMs() - g_ptrClickAt < 400.0) {   /* (an old trigger pull from an earlier menu never fires later) */
         Far_PlayShot();
         if (tile) {
             char *menu = Tile_Menu(tile);
@@ -4617,7 +4618,7 @@ static bool Far_Frame(IDirect3DDevice9 *dev)
             float tr = cs.rAxis[1].x;
             if (!down && tr > 0.75f) {
                 down = true; g_fireT = now;
-                InterlockedExchange(&g_ptrClickPending, 1);
+                g_ptrClickAt = QpcMs(); InterlockedExchange(&g_ptrClickPending, 1);
                 g_vrSystem->TriggerHapticPulse(ri, 0, 3999);
             } else if (down && tr < 0.4f) down = false;
         }
@@ -11574,7 +11575,8 @@ static int Vc_Collect(char *t, int depth, char *clickT, VcAns *out, int n, int *
     if (vis && *vis == 0.0f && depth > 0) return n;   /* hidden branch */
     float *idv = Tile_Val(t, 0xFAA);
     if (depth > 0 && strstr(Tile_Name(t), "Speaker")) return n;   /* (what they say and their name - not your answers) */
-    if (depth > 0 && idv && *idv >= 0.0f) clickT = t;   /* the nearest clickable piece above (or on) the text */
+    if (depth > 0 && Tile_Val(t, 0xFAC /* listindex */)) clickT = t;   /* an item of a list (dialogue answers): the menu takes the item itself */
+    else if (depth > 0 && idv && *idv >= 0.0f && !(clickT && Tile_Val(clickT, 0xFAC))) clickT = t;   /* else the nearest clickable piece above (or on) the text */
     char **vals = *(char ***)(t + 0x14); uint32_t nv = *(uint32_t *)(t + 0x18);
     if (clickT && vals && nv < 4096 && Rd(vals, nv * 4))
         for (uint32_t i = 0; i < nv; i++) {
