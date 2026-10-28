@@ -203,7 +203,8 @@ static int  g_pixelDensityPct = 0;    /* 0 = auto: match the game resolution */
 static bool g_matchHeadsetFov = true;
 static bool g_asyncCapture;
 static bool  g_stereo = true;
-static bool  g_stereoFull = false;   /* INI [Stereo] bFullStereo: both eyes drawn every frame (real 3D, twice the drawing) */
+static bool  g_stereoFull = false;
+static bool  g_fullPipNow = false, g_fullPipSlow = false;   /* full 3D with the Pip-Boy open; it was too slow once */   /* INI [Stereo] bFullStereo: both eyes drawn every frame (real 3D, twice the drawing) */
 static float g_unitsPerMeter = 70.0f;   /* game units per real-world meter (world scale) */
 static float g_menuScreenFov = 90.0f;
 static bool  g_motionControls = true;   /* Touch controllers act as an Xbox controller */
@@ -10707,7 +10708,18 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         if (!armsDone) g_capWant = false;
         Trk_Update();
         g_capCount = 0; g_inRenderFrame = true;
-        bool full = g_stereoFull && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11 && !g_pipOpen;
+        bool full = g_stereoFull && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11 && !((const volatile bool *)0x011F308F)[1007];
+        {   /* the Pip-Boy: 3D once it's fully open and settled; one picture while it opens or closes (drawing the opening
+               twice stalls the game) and while other menus are up */
+            static double pipSteadySince = 0; static bool pipBad = false;
+            bool pipSteady = g_pipOpen && g_pipModeRaw == 3 && PipBoyMode() == 3;
+            if (!pipSteady) pipSteadySince = 0; else if (!pipSteadySince) pipSteadySince = QpcMs();
+            bool pipOk = pipSteady && !pipBad && QpcMs() - pipSteadySince > 700.0;
+            bool quiet = !g_pipOpen && !g_wristUp && g_pipModeRaw == 0 && PipBoyMode() == 0 && QpcMs() > g_pipExpectUntil + 300.0 && !g_liveMenuNow && !IsMenuMode();
+            if (!(pipOk || quiet)) full = false;
+            g_fullPipNow = full && pipSteady;
+            if (g_fullPipSlow) { g_fullPipSlow = false; if (!pipBad) { pipBad = true; Log("Full 3D: drawing the open Pip-Boy twice was too slow - one picture while it's open from now on"); } }
+        }
         if (full) {
             /* Full 3D: the frame is drawn twice, from the left eye and then the right (the camera moved along its own
                right-hand side by half your eye distance each way). Each eye gets its own Pip-Boy screen and rope; the
@@ -10739,6 +10751,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                 double tr = QpcMs();
                 o_DoRenderFrame(osGlobals, renderer, a, b);
                 te[eye] = QpcMs() - tr;
+                if (te[eye] > 250.0 && g_fullPipNow) g_fullPipSlow = true;
                 for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }   /* (in case the game moved it while drawing) */
                 if (eye == aimEye) Scope_Draw(dev); else g_scope.active = false;
                 PipScr_Draw(dev);
