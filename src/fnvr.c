@@ -213,6 +213,7 @@ static WORD  g_runScancode = 0x2A;      /* keyboard Run key (Left Shift) */
 static bool  g_meleeSwings = true;
 static bool  g_freeArmOwn = true;      /* INI [Arms] bFreeArmOwnPose */
 static void ArmBase_Load(void);
+static bool  g_meleeAlign = true;      /* INI [Controls] bMeleeAlign: melee weapons point along the controller */
 static bool  g_meleeNoAnim = true;     /* INI [Controls] bMeleeStill: swords, sledges etc. stay as you hold them during the attack (no game swing animation in the hand) */
 static bool  g_meleeTrigger = false;   /* INI [Controls] bMeleeTrigger: the right trigger attacks with melee weapons and fists too */
 static bool  g_fingerTracking = true;
@@ -557,6 +558,7 @@ static void LoadSettings(void)
     g_meleeSwings = GetPrivateProfileIntA("Controls", "bMeleeSwings", 1, g_iniPath) != 0;
     g_meleeTrigger = GetPrivateProfileIntA("Controls", "bMeleeTrigger", 0, g_iniPath) != 0;
     g_meleeNoAnim = GetPrivateProfileIntA("Controls", "bMeleeStill", 1, g_iniPath) != 0;
+    g_meleeAlign = GetPrivateProfileIntA("Controls", "bMeleeAlign", 1, g_iniPath) != 0;
     g_freeArmOwn = GetPrivateProfileIntA("Arms", "bFreeArmOwnPose", 1, g_iniPath) != 0;
     ArmBase_Load();
     g_fingerTracking = GetPrivateProfileIntA("Controls", "bFingerTracking", 1, g_iniPath) != 0;
@@ -8678,22 +8680,84 @@ static void MeleeAngle_Save(void)
     char b[96]; snprintf(b, sizeof b, "%.0f %.0f %.0f", g_melA[0], g_melA[1], g_melA[2]);
     WritePrivateProfileStringA("MeleeAngle", g_melKey, b, g_iniPath);
 }
+/* Melee weapons point where your hand points (like guns): the weapon's long axis (blade, handle-to-head) is found
+   from its model once, then turned each frame to lie along the controller's aim line. [Controls] bMeleeAlign */
+static float g_melMn[3], g_melMx[3]; static int g_melVerts;
+static void MelExt_Walk(char *n, const float Rp[9], const float Tp[3], int depth)
+{
+    if (!n || depth > 16 || IsBadReadPtr(n, 0xC0)) return;
+    const float *Lr = (const float *)(n + NIAV_LOCAL_ROTATE), *Lt = (const float *)(n + NIAV_LOCAL_TRANSLATE);
+    float R[9], T[3];
+    if (depth == 0) { for (int i = 0; i < 9; i++) R[i] = (i % 4 == 0) ? 1.0f : 0.0f; T[0] = T[1] = T[2] = 0; }   /* (in the weapon's own frame) */
+    else for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) R[i * 3 + j] = Rp[i * 3 + 0] * Lr[0 * 3 + j] + Rp[i * 3 + 1] * Lr[1 * 3 + j] + Rp[i * 3 + 2] * Lr[2 * 3 + j];
+        T[i] = Tp[i] + Rp[i * 3 + 0] * Lt[0] + Rp[i * 3 + 1] * Lt[1] + Rp[i * 3 + 2] * Lt[2];
+    }
+    if (*(uint32_t *)(n + 0x30) & 1) return;   /* hidden */
+    uintptr_t vt = *(uintptr_t *)n;
+    if (vt == 0x0109D454 || vt == 0x0109CD44) {
+        char *gd = *(char **)(n + 0xB8);
+        if (!gd || IsBadReadPtr(gd, 0x30)) return;
+        uint16_t nv = *(uint16_t *)(gd + 0x08); const float *V = *(const float **)(gd + 0x20);
+        if (!nv || !V || IsBadReadPtr(V, nv * 12)) return;
+        for (int q = 0; q < nv; q++) {
+            float p[3]; for (int i = 0; i < 3; i++) p[i] = T[i] + R[i * 3] * V[q * 3] + R[i * 3 + 1] * V[q * 3 + 1] + R[i * 3 + 2] * V[q * 3 + 2];
+            for (int i = 0; i < 3; i++) { if (p[i] < g_melMn[i]) g_melMn[i] = p[i]; if (p[i] > g_melMx[i]) g_melMx[i] = p[i]; }
+            g_melVerts++;
+        }
+        return;
+    }
+    if (!AsNode(n)) return;
+    char **kids = *(char ***)(n + 0xA0); unsigned cnt = *(uint16_t *)(n + 0xA6);
+    for (unsigned i = 0; kids && i < cnt && i < 64; i++) MelExt_Walk(kids[i], R, T, depth + 1);
+}
 static void MeleeAngle_Apply(void)
 {
     g_melNode = NULL;
     int wt = PlayerWeaponType();
     if (wt != 1 && wt != 2) return;
     char *w = (char *)PlayerWeaponForm();
-    static char *forW = NULL; if (w != forW) { forW = w; if (w) MeleeAngle_Load(w); }
-    if (!g_weaponNode || !w || (g_melA[0] == 0 && g_melA[1] == 0 && g_melA[2] == 0)) return;
+    static char *forW = NULL, *axisFor = NULL; static float axis[3]; static bool axisOk = false;
+    if (w != forW) { forW = w; if (w) MeleeAngle_Load(w); axisFor = NULL; }
+    if (!g_weaponNode || !w) return;
+    bool tilt = g_melA[0] != 0 || g_melA[1] != 0 || g_melA[2] != 0;
+    int aimH = g_leftHanded ? 0 : 1;
+    bool align = g_meleeAlign && g_vrHandOk[aimH] && !g_pipOpen && !PlayerWeaponAutomatic();
+    if (align && axisFor != g_weaponNode) {   /* the weapon's long axis, from its shape: away from the grip (the weapon's origin) */
+        axisFor = g_weaponNode; axisOk = false;
+        for (int i = 0; i < 3; i++) { g_melMn[i] = 1e9f; g_melMx[i] = -1e9f; } g_melVerts = 0;
+        MelExt_Walk(g_weaponNode, NULL, NULL, 0);
+        if (g_melVerts > 8) {
+            int A = 0; for (int i = 1; i < 3; i++) if (g_melMx[i] - g_melMn[i] > g_melMx[A] - g_melMn[A]) A = i;
+            float len = g_melMx[A] - g_melMn[A];
+            if (len > 1.0f) { axis[0] = axis[1] = axis[2] = 0; axis[A] = g_melMx[A] >= -g_melMn[A] ? 1.0f : -1.0f; axisOk = true; }
+            Log("Melee: weapon's long axis %c%c (%.0f units long, %d points) - it points where your hand points", axis[A] > 0 ? '+' : '-', "XYZ"[A], len, g_melVerts);
+        }
+    }
+    if (!tilt && !(align && axisOk)) return;
     float *L = (float *)(g_weaponNode + NIAV_LOCAL_ROTATE);
     memcpy(g_melSaved, L, sizeof g_melSaved);
-    M3 Rx, Ry, Rz, T1, T2, Lm, Out;
-    float vx[3] = { g_melA[0] / RAD2DEG, 0, 0 }, vy[3] = { 0, g_melA[1] / RAD2DEG, 0 }, vz[3] = { 0, 0, g_melA[2] / RAD2DEG };
-    VecRot(vx, Rx); VecRot(vy, Ry); VecRot(vz, Rz);
-    M3Mul(T1, Rx, Ry); M3Mul(T2, T1, Rz);
-    memcpy(Lm, L, sizeof Lm); M3Mul(Out, Lm, T2);   /* turned in the weapon's own frame */
-    memcpy(L, Out, sizeof Out);
+    if (align && axisOk) {
+        char *par = *(char **)(g_weaponNode + NIAV_PARENT);
+        if (par) {
+            M3 P, Wn, Pt, Rr, Wnew, Ln; memcpy(P, par + NIAV_WORLD_ROTATE, sizeof P); memcpy(Ln, L, sizeof Ln);
+            M3Mul(Wn, P, Ln);
+            float aw[3], d[3];
+            for (int i = 0; i < 3; i++) { aw[i] = Wn[i][0] * axis[0] + Wn[i][1] * axis[1] + Wn[i][2] * axis[2]; d[i] = -g_handWR[aimH][i][2]; }
+            if (V3Len(d) > 0.5f) {
+                RotBetween(Rr, aw, d); M3Mul(Wnew, Rr, Wn); M3T(Pt, P); M3Mul(Ln, Pt, Wnew);
+                memcpy(L, Ln, sizeof Ln);
+            }
+        }
+    }
+    if (tilt) {
+        M3 Rx, Ry, Rz, T1, T2, Lm, Out;
+        float vx[3] = { g_melA[0] / RAD2DEG, 0, 0 }, vy[3] = { 0, g_melA[1] / RAD2DEG, 0 }, vz[3] = { 0, 0, g_melA[2] / RAD2DEG };
+        VecRot(vx, Rx); VecRot(vy, Ry); VecRot(vz, Rz);
+        M3Mul(T1, Rx, Ry); M3Mul(T2, T1, Rz);
+        memcpy(Lm, L, sizeof Lm); M3Mul(Out, Lm, T2);   /* turned in the weapon's own frame */
+        memcpy(L, Out, sizeof Out);
+    }
     NodeUpdate(g_weaponNode); g_melNode = g_weaponNode;
 }
 static void MeleeAngle_Restore(void)
@@ -12448,6 +12512,7 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Melee weapon tilt (this weapon)", 0, 0, &g_melA[0], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (first axis). Hold the weapon out and adjust until it sits straight. Saved for that weapon." },
     { SP_WEAPONS, ST_FLOAT, "Melee weapon turn (this weapon)", 0, 0, &g_melA[1], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (second axis). Saved for that weapon." },
     { SP_WEAPONS, ST_FLOAT, "Melee weapon roll (this weapon)", 0, 0, &g_melA[2], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (third axis). Saved for that weapon." },
+    { SP_WEAPONS, ST_BOOL, "Melee weapons point where your hand points", "Controls", "bMeleeAlign", &g_meleeAlign, 0, 0, 0, 0, 0, 0, "ON: knives, swords, machetes and sledges line up with your controller the way guns do - point your hand forward and the blade points forward. The tilt/turn/roll settings below fine-tune it per weapon." },
     { SP_WEAPONS, ST_BOOL, "Melee weapons stay in your hand", "Controls", "bMeleeStill", &g_meleeNoAnim, 0, 0, 0, 0, 0, 0, "ON: swords, machetes, sledgehammers and other melee weapons stay exactly as you hold them when you swing (the game's swing animation doesn't turn them). Fists, power fists and automatic weapons are unchanged." },
     { SP_WEAPONS, ST_BOOL, "Free arm keeps its own pose", "Arms", "bFreeArmOwnPose", &g_freeArmOwn, 0, 0, 0, 0, 0, 0, "ON: your free arm (left, or right when left-handed) looks the same with or without a weapon - two-handed weapon animations don't bend its wrist and fingers. It only takes the gun's grip while that hand holds the gun." },
     { SP_WEAPONS, ST_BOOL, "Melee swings", "Controls", "bMeleeSwings", &g_meleeSwings, 0, 0, 0, 0, 0, 0, "Swing a melee weapon or punch with a real swing of your hand." },
