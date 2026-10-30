@@ -21,6 +21,16 @@
 #include <stdarg.h>
 
 typedef void VoskModel; typedef void VoskRecognizer;
+/* Vosk is linked normally (libvosk.dll sits next to this exe) */
+__declspec(dllimport) void *vosk_model_new(const char *);
+__declspec(dllimport) int vosk_model_find_word(void *, const char *);
+__declspec(dllimport) void *vosk_recognizer_new_grm(void *, float, const char *);
+__declspec(dllimport) void vosk_recognizer_set_grm(void *, const char *);
+__declspec(dllimport) int vosk_recognizer_accept_waveform_s(void *, const short *, int);
+__declspec(dllimport) const char *vosk_recognizer_result(void *);
+__declspec(dllimport) void vosk_recognizer_reset(void *);
+__declspec(dllimport) void vosk_set_log_level(int);
+__declspec(dllimport) void vosk_recognizer_free(void *);
 static VoskModel *(*p_model_new)(const char *);
 static int (*p_find_word)(VoskModel *, const char *);
 static VoskRecognizer *(*p_rec_new_grm)(VoskModel *, float, const char *);
@@ -112,16 +122,11 @@ int main(int argc, char **argv)
     g_out = GetStdHandle(STD_OUTPUT_HANDLE);
     InitializeCriticalSection(&g_cs);
     if (argc < 2) { Out("L usage: FNVR_Voice <folder> [mic]"); return 1; }
-    char dll[MAX_PATH], model[MAX_PATH];
-    snprintf(dll, sizeof dll, "%s\\libvosk.dll", argv[1]); snprintf(model, sizeof model, "%s\\model", argv[1]);
-    SetDllDirectoryA(argv[1]);
-    HMODULE v = LoadLibraryA(dll);
-    if (!v) { Out("L offline speech: libvosk.dll didn't load (error %lu)", GetLastError()); return 2; }
-    p_model_new = (void *)GetProcAddress(v, "vosk_model_new"); p_find_word = (void *)GetProcAddress(v, "vosk_model_find_word");
-    p_rec_new_grm = (void *)GetProcAddress(v, "vosk_recognizer_new_grm"); p_set_grm = (void *)GetProcAddress(v, "vosk_recognizer_set_grm");
-    p_accept_s = (void *)GetProcAddress(v, "vosk_recognizer_accept_waveform_s"); p_result = (void *)GetProcAddress(v, "vosk_recognizer_result");
-    p_reset = (void *)GetProcAddress(v, "vosk_recognizer_reset"); p_rec_free = (void *)GetProcAddress(v, "vosk_recognizer_free"); p_log_level = (void *)GetProcAddress(v, "vosk_set_log_level");
-    if (!p_model_new || !p_rec_new_grm || !p_set_grm || !p_accept_s || !p_result || !p_find_word) { Out("L offline speech: libvosk.dll is missing functions"); return 3; }
+    char model[MAX_PATH];
+    snprintf(model, sizeof model, "%s\\model", argv[1]);
+    p_model_new = vosk_model_new; p_find_word = vosk_model_find_word; p_rec_new_grm = vosk_recognizer_new_grm;
+    p_set_grm = vosk_recognizer_set_grm; p_accept_s = vosk_recognizer_accept_waveform_s; p_result = vosk_recognizer_result;
+    p_reset = vosk_recognizer_reset; p_rec_free = vosk_recognizer_free; p_log_level = vosk_set_log_level;
     if (p_log_level) p_log_level(-1);
     VoskModel *m = p_model_new(model);
     if (!m) { Out("L offline speech: the speech model in %s didn't load", model); return 4; }

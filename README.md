@@ -159,11 +159,20 @@ Pages:
 
 ## Building from source
 
-The whole plugin is one C file, `src/fnvr.c`, built as a 32-bit Windows DLL with [llvm-mingw](https://github.com/mstorsjo/llvm-mingw):
+Everything is built with [llvm-mingw](https://github.com/mstorsjo/llvm-mingw) (tested with release 20250528, ucrt, on Linux; the Windows release works the same way):
+
+- `src/fnvr.c` -> `FNVR.dll`, the 32-bit xNVSE plugin.
+- `src/fnvr_voice.c` (+ `fnvr_voice.rc`, `fnvr_voice.manifest`) -> `FNVR_Voice.exe`, the 64-bit offline voice helper used by the voice add-on. It captures the headset microphone with WASAPI, runs [Vosk](https://github.com/alphacep/vosk-api) speech recognition on it locally, and talks to FNVR.dll only through stdin/stdout pipes. No network access, no files written.
 
 ```sh
-TC=/path/to/llvm-mingw/bin ./build.sh   # -> out/FNVR.dll
+# 1. get llvm-mingw and unzip vosk-win64-0.3.45.zip from
+#    https://github.com/alphacep/vosk-api/releases/tag/v0.3.45
+# 2. build both:
+TC=/path/to/llvm-mingw/bin VOSK=/path/to/vosk-win64-0.3.45 ./build.sh
+#    -> out/FNVR.dll, out/FNVR_Voice.exe
 ```
+
+The voice add-on zip is `FNVR_Voice.exe` plus the unmodified `libvosk.dll`, `libstdc++-6.dll`, `libgcc_s_seh-1.dll`, `libwinpthread-1.dll` from vosk-win64-0.3.45, and the unmodified [vosk-model-small-en-us-0.15](https://alphacephei.com/vosk/models) speech model, all in `Data/NVSE/Plugins/FNVR/voice/` (model in `voice/model/`).
 
 `src/openvr_capi.h` is Valve's OpenVR C API header (BSD 3-Clause, © Valve Corporation). `src/nvse_api.h` is a minimal subset of the xNVSE plugin interface.
 
