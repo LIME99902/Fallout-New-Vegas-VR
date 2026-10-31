@@ -29,7 +29,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.2.1 (hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_STR    "2.2.1 (VR throwing: knives/spears with the trigger, dynamite lit with your other hand, grenades with a pin to pull; hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -222,6 +222,11 @@ static float g_hitStrength = 1.0f;     /* [Combat] fHitStrength: how far bodies 
 static bool  g_hitKnockdown = true;    /* [Combat] bKnockdown: very hard hits knock them over */
 static float g_hitKnockSpeed = 5.5f;   /* [Combat] fKnockdownSpeed: swing speed (m/s, x weapon weight) for a knockdown */
 static bool  g_hitKnockAnyone = false; /* [Combat] bKnockdownAnyone: also people who aren't fighting you */
+static struct { bool on, spawned; float pos[3], h, p, speed, timer; } g_launch;
+static void *Thr_Spawn(void *proj, void *shooter, void *cc, void *weap, void *target, uint32_t b1, uint32_t b2, float f1, float f2, uint32_t z);
+static bool  g_thrOn = true;          /* [Throwing] bVRThrowing */
+static float g_thrPower = 1.3f;       /* [Throwing] fThrowPower: thrown speed = your hand speed x this */
+static float g_fuseShort = 2.5f, g_fuseLong = 5.0f;   /* [Throwing] fFuseSeconds / fLongFuseSeconds */
 static bool  g_meleeNoAnim = true;     /* INI [Controls] bMeleeStill: swords, sledges etc. stay as you hold them during the attack (no game swing animation in the hand) */
 static bool  g_meleeTrigger = false;   /* INI [Controls] bMeleeTrigger: the right trigger attacks with melee weapons and fists too */
 static bool  g_fingerTracking = true;
@@ -569,6 +574,10 @@ static void LoadSettings(void)
     g_meleeNoAnim = GetPrivateProfileIntA("Controls", "bMeleeStill", 1, g_iniPath) != 0;
     g_meleeAlign = GetPrivateProfileIntA("Controls", "bMeleeAlign", 1, g_iniPath) != 0;
     g_hitReact = GetPrivateProfileIntA("Combat", "bHitReactions", 1, g_iniPath) != 0;
+    g_thrOn = GetPrivateProfileIntA("Throwing", "bVRThrowing", 1, g_iniPath) != 0;
+    { char b[32]; GetPrivateProfileStringA("Throwing", "fThrowPower", "1.3", b, sizeof b, g_iniPath); g_thrPower = fminf(fmaxf((float)atof(b), 0.3f), 4.0f);
+      GetPrivateProfileStringA("Throwing", "fFuseSeconds", "2.5", b, sizeof b, g_iniPath); g_fuseShort = fminf(fmaxf((float)atof(b), 0.5f), 15.0f);
+      GetPrivateProfileStringA("Throwing", "fLongFuseSeconds", "5.0", b, sizeof b, g_iniPath); g_fuseLong = fminf(fmaxf((float)atof(b), 0.5f), 30.0f); }
     g_hitKnockdown = GetPrivateProfileIntA("Combat", "bKnockdown", 1, g_iniPath) != 0;
     g_hitKnockAnyone = GetPrivateProfileIntA("Combat", "bKnockdownAnyone", 0, g_iniPath) != 0;
     { char b[32]; GetPrivateProfileStringA("Combat", "fHitStrength", "1.0", b, sizeof b, g_iniPath); g_hitStrength = fminf(fmaxf((float)atof(b), 0.0f), 3.0f);
@@ -1591,6 +1600,8 @@ static bool PipAdjust_Update(const VRControllerState_t *mv, const VRControllerSt
     return true;
 }
 
+static void Throw_Input(bool menu, bool *rGrip, bool rGripRaw, bool *lGrip, bool lGripRaw, XPad *p, float lTrig, float rTrig);
+static WORD g_throwPress; static double g_throwPressUntil;
 static void Controllers_Poll(bool menu)
 {
     if (!g_vrSystem) { g_padActive = false; return; }   /* (with motion controls off, the controllers still run the FNVR settings panel) */
@@ -1740,7 +1751,7 @@ static void Controllers_Poll(bool menu)
         {   /* weapon out: off-hand grip on the gun = two-handed aim, elsewhere = VATS */
             static bool twoMode = false;
             int wtNow = PlayerWeaponType();
-            bool gun = !noWeapon && (wtNow >= 3 || wtNow == 1 || wtNow == 2);   /* guns and melee weapons (not fists) */
+            bool gun = !noWeapon && ((wtNow >= 3 && wtNow <= 9) || wtNow == 1 || wtNow == 2);   /* guns and melee weapons (not fists) */
             if (gripNow[mvH] && !gripPrevTwo) twoMode = gun && !menu && g_twoHandCand;
             if (!gripNow[mvH] || !gun) twoMode = false;
             gripPrevTwo = gripNow[mvH];
@@ -1797,6 +1808,7 @@ static void Controllers_Poll(bool menu)
         if (!menu && g_autoScope && g_scopeAtEye && !noWeapon && PlayerWeaponScoped())
             p->bLeftTrigger = 255;   /* scope raised to the eye: aim through it (True Scopes draws the view) */
         if (!menu && g_adsActive && p->bLeftTrigger > 40) p->bLeftTrigger = 255;   /* no flicker on a half-pressed trigger */
+        Throw_Input(menu, &rGrip, rGripRaw, &lGrip, gripNow[mvH], p, mv->rAxis[1].x, am->rAxis[1].x);
         {   /* aiming down sights: the game's own sight picture, aimed with your head */
             bool ads = !menu && g_inGameplay && !noWeapon && PlayerWeaponType() >= 3 && p->bLeftTrigger > (g_adsActive ? 40 : 110);
             if (ads != g_adsActive) Log("Aim down sights: %s", ads ? "on (head aims, gun to the eye)" : "off");
@@ -1807,6 +1819,7 @@ static void Controllers_Poll(bool menu)
     (void)lY;   /* Pip-Boy button off: the Pip-Boy opens by looking at your wrist */
     if (g_pipPressMask && QpcMs() < g_pipPressUntil) b |= g_pipPressMask; else g_pipPressMask = 0;
     if (g_holsterPress && QpcMs() < g_holsterPressUntil) b |= g_holsterPress; else g_holsterPress = 0;
+    if (g_throwPress && QpcMs() < g_throwPressUntil) b |= g_throwPress; else g_throwPress = 0;
     if (g_chestPress && QpcMs() < g_chestPressUntil) b |= g_chestPress; else g_chestPress = 0;
     {   /* left trigger: the bullet-time key (C) - held briefly on each pull */
         static bool ltPrev = false;
@@ -5715,6 +5728,7 @@ static void Trk_Update(void)
 static void *__cdecl Hook_ProjSpawn(void *proj, void *shooter, void *cc, void *weap, float px, float py, float pz, float rotZ, float rotX,
                                     void *node, void *target, uint32_t b1, uint32_t b2, float f1, float f2, uint32_t z)
 {
+    if (g_launch.on && shooter && shooter == GetPlayer()) { (void)px; (void)py; (void)pz; (void)rotZ; (void)rotX; (void)node; return Thr_Spawn(proj, shooter, cc, weap, target, b1, b2, f1, f2, z); }
     if (shooter && shooter == GetPlayer() && g_handAimValid && !g_menuCached && !g_adsActive && QpcMs() >= g_weaponSettleUntil) {
         float h = g_handAimHeading + g_shotYawTrimDeg / RAD2DEG, pt = g_handAimPitch + g_shotPitchTrimDeg / RAD2DEG;
         float dz = remainderf(rotZ - h, 2.0f * PI_F), dx = rotX - pt;
@@ -9290,6 +9304,14 @@ static Probe g_hrPrev[2][PROBES_MAX]; static int g_hrPrevN[2];
 static double g_hrScanAt = 0, g_hrLastApply = 0;
 static void *g_hrStatusScr = NULL, *g_hrPushScr[3]; static int g_hrScrState = 0;   /* 0 not yet, 1 ok, -1 failed */
 
+static char *g_hrKnockRef = NULL; static uint32_t g_hrKnockId = 0; static int g_hrKnockLvl = 0;
+static void Hit_Flush(void)
+{
+    char *r = g_hrKnockRef; if (!r) return; g_hrKnockRef = NULL;
+    if (LookupForm(g_hrKnockId) != (void *)r || ((const volatile bool *)0x011F308F)[1007]) return;
+    void *s = g_hrPushScr[g_hrKnockLvl] ? g_hrPushScr[g_hrKnockLvl] : g_hrPushScr[0];
+    if (s && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(s, GetPlayer(), 1, r);
+}
 static void Hit_Clear(void)
 {
     for (int i = 0; i < HR_ACT; i++) g_hr[i].ref = NULL;
@@ -9391,8 +9413,7 @@ static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float 
     Hit_Buzz(h, I);
     if (knock) {
         int lvl = I >= g_hitKnockSpeed * 1.6f ? 2 : I >= g_hitKnockSpeed * 1.25f ? 1 : 0;
-        void *s = g_hrPushScr[lvl] ? g_hrPushScr[lvl] : g_hrPushScr[0];
-        if (s && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(s, GetPlayer(), 1, A->ref);
+        g_hrKnockRef = A->ref; g_hrKnockId = A->id; g_hrKnockLvl = lvl;   /* (done from the main loop) */
         A->knockUntil = now + 4000.0; A->knocked = true;
         memset(A->th, 0, sizeof A->th); memset(A->om, 0, sizeof A->om);
         return;
@@ -9526,6 +9547,211 @@ static void Hit_Restore(void)
         HrActor *A = &g_hr[a];
         if (!A->ref) continue;
         for (int b = HR_B - 1; b >= 0; b--) if (A->applied[b]) { memcpy(A->bone[b] + NIAV_LOCAL_ROTATE, A->saved[b], 36); A->applied[b] = false; }
+    }
+}
+
+/* ---- Throwing weapons, VR style --------------------------------------------------------------------------
+   Thrown melee weapons (throwing knives, spears, tomahawks): hold the trigger and let go during a throwing motion.
+   Fuse explosives (dynamite, long fuse dynamite, fire bombs, molotovs): squeeze the grip to hold it; your other hand is
+   the lighter - bring it to the explosive and pull its trigger to light the fuse; then throw by letting go of the grip
+   during a throw. Once lit you have a couple of seconds - hold on too long and it goes off in your hand.
+   Grenades (frag, plasma, pulse, incendiary, Nuka...): squeeze the grip to hold it, pull the pin with the other hand's
+   grip, then throw by letting go. Like a real grenade's lever, nothing happens until it leaves your hand.
+   The throw goes where your hand sends it, as fast as you throw. A quick tap of the grip still activates (doors, talking).
+   [Throwing] in FNVR.ini */
+enum { TH_NONE, TH_MELEE, TH_PIN, TH_FUSE };
+static struct {
+    void *weap; int cls; float fuse; char name[64];
+    bool held, armed, lit, lighter; double heldAt, litAt, lastBuzz;
+    bool fireReq, dropReq, boomReq; double releaseAt;
+    int countBefore; double countAt; void *countWeap;
+} g_thr;
+static struct { char *proj; float timer; double restoreAt; } g_thrTimer;
+static float g_thHist[24][3]; static double g_thHistT[24]; static int g_thHistI = 0, g_thHistN = 0;
+static void *g_thrCountScr = NULL, *g_thrRemoveScr = NULL; static bool g_thrLtPrev = false;
+
+static int Thr_Class(void)
+{
+    void *w = PlayerWeaponForm();
+    if (!w) { g_thr.weap = NULL; g_thr.cls = TH_NONE; return TH_NONE; }
+    if (w == g_thr.weap) return g_thr.cls;
+    memset(&g_thr, 0, sizeof g_thr); g_thr.weap = w;
+    int wt = PlayerWeaponType();
+    const char *nm = (!IsBadReadPtr((char *)w + 0x34, 4) && *(const char **)((char *)w + 0x34) && !IsBadStringPtrA(*(const char **)((char *)w + 0x34), 64)) ? *(const char **)((char *)w + 0x34) : "";
+    snprintf(g_thr.name, sizeof g_thr.name, "%s", nm);
+    char lo[64]; snprintf(lo, sizeof lo, "%s", nm); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
+    if (wt == 13) g_thr.cls = TH_MELEE;
+    else if (wt == 10) {
+        bool fuse = strstr(lo, "dynamite") || strstr(lo, "fire bomb") || strstr(lo, "firebomb") || strstr(lo, "molotov");
+        g_thr.cls = fuse ? TH_FUSE : TH_PIN;
+        g_thr.fuse = strstr(lo, "long fuse") ? g_fuseLong : g_fuseShort;
+    } else g_thr.cls = TH_NONE;
+    if (g_thr.cls) Log("Throwing: '%s' - %s", nm, g_thr.cls == TH_MELEE ? "hold the trigger, let go mid-throw" : g_thr.cls == TH_FUSE ? "grip to hold, light the fuse with the other hand's trigger, let go mid-throw" : "grip to hold, pull the pin with the other hand's trigger, let go mid-throw");
+    return g_thr.cls;
+}
+static void Thr_Buzz(int h, unsigned short us) { if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
+/* (controller polling) - the grips and triggers while a throwing weapon is out */
+static void Throw_Input(bool menu, bool *rGrip, bool rGripRaw, bool *lGrip, bool lGripRaw, XPad *p, float lTrig, float rTrig)
+{
+    int cls = (!menu && g_inGameplay && g_thrOn && PlayerWeaponOut() && !g_pipOpen) ? Thr_Class() : TH_NONE;
+    if (!cls) { if (g_thr.held && !g_thr.lit) g_thr.held = false; return; }
+    int amH = g_leftHanded ? 0 : 1, mvH = 1 - amH;
+    double now = QpcMs();
+    p->bRightTrigger = 0; p->bLeftTrigger = 0;   /* the game's own throw never runs */
+    static bool rPrev = false, lPrev = false, tPrev = false; (void)lPrev;
+    float hd = 1.0f;
+    if (g_vrHandOk[0] && g_vrHandOk[1]) { float d[3]; V3Sub(d, g_vrHandPos[0], g_vrHandPos[1]); hd = V3Len(d); }
+    bool handsNear = hd < 0.17f;
+    if (cls == TH_MELEE) {
+        bool t = rTrig > (tPrev ? 0.3f : 0.6f);
+        if (t && !tPrev) { g_thr.held = true; g_thr.heldAt = now; }
+        if (!t && tPrev && g_thr.held) { g_thr.held = false; g_thr.releaseAt = now; g_thr.fireReq = true; }
+        tPrev = t;
+        return;
+    }
+    /* explosives: the aim hand's grip holds it */
+    if (!g_thr.held && *rGrip && !rPrev) { g_thr.held = true; g_thr.heldAt = now; g_thr.armed = false; }
+    if (g_thr.held) {
+        *rGrip = false;
+        bool lt = lTrig > 0.6f, ltEdge = lt && !g_thrLtPrev; g_thrLtPrev = lt;
+        if (cls == TH_PIN && !g_thr.armed && ltEdge && handsNear) {
+            g_thr.armed = true; Thr_Buzz(mvH, 3999); Thr_Buzz(amH, 2500); Log("Throwing: pin pulled");
+        }
+        if (cls == TH_FUSE && !g_thr.lit) {
+            bool flick = lTrig > 0.6f;
+            if (flick && !g_thr.lighter) { g_thr.lighter = true; Thr_Buzz(mvH, 1500); }   /* lighter open */
+            if (!flick) g_thr.lighter = false;
+            if (g_thr.lighter && handsNear) { g_thr.lit = true; g_thr.armed = true; g_thr.litAt = now; Thr_Buzz(amH, 3999); Log("Throwing: fuse lit (%.1f s)", g_thr.fuse); }
+        }
+        if (lGripRaw || lTrig > 0.3f) *lGrip = false;   /* (no VATS while holding it) */
+        if (!rGripRaw) {   /* let go */
+            g_thr.held = false;
+            if (g_thr.armed) { g_thr.releaseAt = now; g_thr.fireReq = true; }
+            else if (now - g_thr.heldAt < 300.0) { g_throwPress = g_bindMask[BIND_ACTIVATE]; g_throwPressUntil = now + 120.0; }   /* a tap: activate */
+        }
+    } else if (cls == TH_FUSE || cls == TH_PIN) { if (lGripRaw && handsNear) *lGrip = false; }
+    rPrev = rGripRaw; lPrev = lGripRaw; (void)tPrev;
+}
+/* (render hook) the throwing hand's path, for the speed and direction at the moment you let go */
+static void Throw_Track(void)
+{
+    int amH = g_leftHanded ? 0 : 1;
+    if (!g_handWOk[amH]) return;
+    memcpy(g_thHist[g_thHistI], g_handW[amH], 12); g_thHistT[g_thHistI] = QpcMs();
+    g_thHistI = (g_thHistI + 1) % 24; if (g_thHistN < 24) g_thHistN++;
+}
+static bool Throw_Velocity(double at, float *pos, float *vel)
+{
+    int idx[24], n = 0;
+    for (int k = 0; k < g_thHistN; k++) { int i = (g_thHistI - 1 - k + 48) % 24; if (g_thHistT[i] <= at + 12.0) idx[n++] = i; if (n >= 24) break; }
+    if (n < 3) return false;
+    int last = idx[0]; memcpy(pos, g_thHist[last], 12);
+    int fi = -1; for (int k = 1; k < n; k++) { if (g_thHistT[last] - g_thHistT[idx[k]] >= 60.0) { fi = idx[k]; break; } fi = idx[k]; }
+    double dt = (g_thHistT[last] - g_thHistT[fi]) / 1000.0; if (dt < 0.005) return false;
+    float avg[3]; for (int i = 0; i < 3; i++) avg[i] = (g_thHist[last][i] - g_thHist[fi][i]) / (float)dt;
+    float peak = 0;
+    for (int k = 0; k + 1 < n; k++) {
+        int a = idx[k], b = idx[k + 1]; double d = (g_thHistT[a] - g_thHistT[b]) / 1000.0; if (d < 0.004 || g_thHistT[last] - g_thHistT[b] > 110.0) continue;
+        float v[3]; for (int i = 0; i < 3; i++) v[i] = (g_thHist[a][i] - g_thHist[b][i]) / (float)d; float s = V3Len(v); if (s > peak && s < 3000.0f) peak = s;
+    }
+    float s = V3Len(avg), want = fmaxf(s, peak * 0.85f);
+    for (int i = 0; i < 3; i++) vel[i] = s > 1e-3f ? avg[i] / s * want : 0.0f;
+    return true;
+}
+static int Thr_Count(void *w)
+{
+    if (!g_thrCountScr) g_thrCountScr = g_scriptIntf->CompileScript("ref rItem\nint iVal\nBegin Function { rItem }\nset iVal to player.GetItemCount rItem\nSetFunctionValue iVal\nEnd\n");
+    double v = -1; return Scr_Num(g_thrCountScr, w, &v) ? (int)v : -1;
+}
+/* (main loop) send it on its way: from pos, with velocity vel (game units/s); timer > 0 = seconds until it goes off */
+static void Thr_Fire(void *w, const float *pos, const float *vel, float timer)
+{
+    char *player = (char *)GetPlayer(); if (!player || !w || !o_FireWeapon) return;
+    float s = V3Len(vel);
+    g_launch.on = true; g_launch.spawned = false; memcpy(g_launch.pos, pos, 12);
+    g_launch.speed = s; g_launch.timer = timer;
+    g_launch.h = s > 1e-3f ? atan2f(vel[0], vel[1]) : *PlayerRotZ(player);
+    g_launch.p = s > 1e-3f ? -asinf(fminf(fmaxf(vel[2] / s, -1.0f), 1.0f)) : 1.4f;
+    g_thr.countBefore = Thr_Count(w); g_thr.countWeap = w; g_thr.countAt = QpcMs() + 200.0;
+    float *rx = PlayerRotX(player), *rz = PlayerRotZ(player); float sx = *rx, sz = *rz;
+    *rz = g_launch.h; *rx = g_launch.p;
+    o_FireWeapon(w, player);
+    *rx = sx; *rz = sz;
+    if (!g_launch.spawned) Log("Throwing: the game didn't create the thrown object");
+    g_launch.on = false;
+}
+/* (projectile spawn hook) a throw of ours: from the hand, along the throw, at the throw's speed */
+static void *Thr_Spawn(void *proj, void *shooter, void *cc, void *weap, void *target, uint32_t b1, uint32_t b2, float f1, float f2, uint32_t z)
+{
+    float *spd = (float *)((char *)proj + 0x68), *grv = (float *)((char *)proj + 0x64), *tmr = (float *)((char *)proj + 0x80);
+    bool okData = !IsBadReadPtr(proj, 0x88) && *spd > 50.0f && *spd < 50000.0f && *grv >= 0.0f && *grv < 20.0f;
+    float spd0 = okData ? *spd : 0;
+    static int dl = 0;
+    if (dl++ < 6) Log("Throwing: object data - speed %.0f, gravity %.2f, timer %.2f%s", okData ? *spd : -1.0f, okData ? *grv : -1.0f, okData ? *tmr : -1.0f, okData ? "" : " (not recognised - game speed used)");
+    float want = fminf(fmaxf(g_launch.speed * g_thrPower, 60.0f), 4000.0f);
+    if (okData) *spd = want;
+    if (okData && g_launch.timer > 0 && *tmr > 0.05f && *tmr < 60.0f) {   /* (a fuse already burning: what's left of it) */
+        if (!g_thrTimer.proj) { g_thrTimer.proj = proj; g_thrTimer.timer = *tmr; }
+        *tmr = g_launch.timer; g_thrTimer.restoreAt = QpcMs() + g_launch.timer * 1000.0 + 3000.0;
+    }
+    char *ref = (char *)o_ProjSpawn(proj, shooter, cc, weap, g_launch.pos[0], g_launch.pos[1], g_launch.pos[2], g_launch.h, g_launch.p, NULL, target, b1, b2, f1, f2, z);
+    if (okData) *spd = spd0;
+    g_launch.spawned = ref != NULL;
+    if (ref && !IsBadReadPtr(ref, 0x400)) {
+        *(float *)(ref + 0x24) = g_launch.p; *(float *)(ref + 0x2C) = g_launch.h;
+        float f[3] = { sinf(g_launch.h) * cosf(g_launch.p), cosf(g_launch.h) * cosf(g_launch.p), -sinf(g_launch.p) };
+        int nf = 0;
+        for (int off = 0x3C; off <= 0x3F0; off += 4) {   /* its stored velocity: along the throw, at the throw's speed */
+            float *v = (float *)(ref + off); float L = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+            if (!(L > 20.0f) || !isfinite(L) || L > 1e5f) continue;
+            float c = (v[0] * f[0] + v[1] * f[1] + v[2] * f[2]) / L;
+            if (c > 0.995f) { for (int k = 0; k < 3; k++) v[k] = f[k] * want; nf++; off += 8; }
+        }
+        static int tl = 0;
+        if (tl++ < 20) Log("Throwing: thrown at %.1f m/s (x%.1f = %.0f units/s), heading %.0f, %+.0f deg up; velocity values set: %d",
+                           g_launch.speed / g_unitsPerMeter, g_thrPower, want, g_launch.h * RAD2DEG, -g_launch.p * RAD2DEG, nf);
+    }
+    return ref;
+}
+/* (main loop) */
+static void Throw_Tick(void)
+{
+    double now = QpcMs();
+    if (g_thrTimer.proj && now > g_thrTimer.restoreAt) { *(float *)(g_thrTimer.proj + 0x80) = g_thrTimer.timer; g_thrTimer.proj = NULL; }
+    if (g_thr.countWeap && now > g_thr.countAt) {   /* one used up (the game's throw would have taken it) */
+        void *w = g_thr.countWeap; g_thr.countWeap = NULL;
+        int c = Thr_Count(w);
+        if (c >= 0 && g_thr.countBefore > 0 && c >= g_thr.countBefore) {
+            if (!g_thrRemoveScr) g_thrRemoveScr = g_scriptIntf->CompileScript("ref rItem\nBegin Function { rItem }\nplayer.RemoveItem rItem 1 1\nEnd\n");
+            if (g_thrRemoveScr) g_scriptIntf->CallFunctionAlt(g_thrRemoveScr, GetPlayer(), 1, w);
+        }
+    }
+    if (!g_inGameplay || !g_thr.weap) return;
+    int amH = g_leftHanded ? 0 : 1;
+    if (g_thr.weap != PlayerWeaponForm()) { memset(&g_thr, 0, sizeof g_thr); return; }
+    if (g_thr.lit) {
+        double left = g_thr.fuse * 1000.0 - (now - g_thr.litAt);
+        double gap = left > 1500 ? 400 : left > 700 ? 220 : 110;
+        if (g_thr.held && now - g_thr.lastBuzz > gap) { g_thr.lastBuzz = now; Thr_Buzz(amH, 900); }   /* the fuse burning */
+        if (g_thr.held && left <= 0) {   /* held too long */
+            Log("Throwing: the fuse ran out in your hand!");
+            float pos[3], vel[3] = { 0, 0, -60.0f }; memcpy(pos, g_handW[amH], 12);
+            Thr_Fire(g_thr.weap, pos, vel, 0.05f);
+            g_thr.held = g_thr.lit = g_thr.armed = false;
+            return;
+        }
+    }
+    if (g_thr.fireReq) {
+        g_thr.fireReq = false;
+        float pos[3], vel[3];
+        if (!Throw_Velocity(g_thr.releaseAt, pos, vel)) { memcpy(pos, g_handW[amH], 12); vel[0] = vel[1] = 0; vel[2] = -60.0f; }
+        float sp = V3Len(vel) / g_unitsPerMeter;
+        if (g_thr.cls == TH_MELEE && sp < 1.5f) { Log("Throwing: let go too gently (%.1f m/s) - not thrown", sp); return; }
+        if (sp < 1.0f) { vel[0] = vel[1] = 0; vel[2] = -60.0f; Log("Throwing: dropped at your feet"); }   /* (a live one let go of gently) */
+        float timer = g_thr.lit ? (float)(g_thr.fuse - (now - g_thr.litAt) / 1000.0) : 0.0f;
+        if (g_thr.lit && timer < 0.05f) timer = 0.05f;
+        Thr_Fire(g_thr.weap, pos, vel, timer);
+        g_thr.lit = g_thr.armed = false;
     }
 }
 
@@ -10711,6 +10937,7 @@ static void Grab_Update(char *player, char *cam)
     if ((scanTick++ % 3) == 0) Near_Scan(player, 160.0f);   /* the object search doesn't need every frame */
     Collide_Update(dt, !noWeapon);
     Hit_Update(dt, !noWeapon);
+    Throw_Track();
     Climb_Update(player, cam, dt, noWeapon);
     Grapple_Update(player, cam, dt);
     PowerArmor_NoFall(player);
@@ -12927,6 +13154,10 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Melee weapon turn (this weapon)", 0, 0, &g_melA[1], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (second axis). Saved for that weapon." },
     { SP_WEAPONS, ST_FLOAT, "Melee weapon roll (this weapon)", 0, 0, &g_melA[2], -180.0f, 180.0f, 5.0f, "%+.0f deg", SF_MELEE, 0, "Turns the melee weapon in your hand (third axis). Saved for that weapon." },
     { SP_WEAPONS, ST_BOOL, "Melee weapons point where your hand points", "Controls", "bMeleeAlign", &g_meleeAlign, 0, 0, 0, 0, 0, 0, "ON: knives, swords, machetes and sledges line up with your controller the way guns do - point your hand forward and the blade points forward. The tilt/turn/roll settings below fine-tune it per weapon." },
+    { SP_WEAPONS, ST_BOOL, "VR throwing", "Throwing", "bVRThrowing", &g_thrOn, 0, 0, 0, 0, 0, 0, "ON: throwing knives and spears: hold the trigger, let go mid-throw. Dynamite and fire bombs: grip to hold, light the fuse with your other hand's trigger next to it, let go mid-throw. Grenades: grip to hold, pull the pin with your other hand's trigger next to it, let go mid-throw. A quick grip tap still activates." },
+    { SP_WEAPONS, ST_FLOAT, "Throw power", "Throwing", "fThrowPower", &g_thrPower, 0.3f, 4.0f, 0.1f, "x%.1f", 0, 0, "How fast thrown things fly compared with your real throw." },
+    { SP_WEAPONS, ST_FLOAT, "Fuse time", "Throwing", "fFuseSeconds", &g_fuseShort, 0.5f, 15.0f, 0.5f, "%.1f s", 0, 0, "Dynamite and fire bombs: seconds from lighting the fuse until it goes off (in your hand if you're still holding it)." },
+    { SP_WEAPONS, ST_FLOAT, "Long fuse time", "Throwing", "fLongFuseSeconds", &g_fuseLong, 0.5f, 30.0f, 0.5f, "%.1f s", 0, 0, "Long fuse dynamite: seconds from lighting until it goes off." },
     { SP_WEAPONS, ST_BOOL, "Hit reactions", "Combat", "bHitReactions", &g_hitReact, 0, 0, 0, 0, 0, 0, "ON: people and creatures you strike with your fists, a melee weapon or a gun butt react where they were hit - the head snaps back, a gut hit folds them over, an arm is knocked aside - and spring back. Hard hits stagger them." },
     { SP_WEAPONS, ST_FLOAT, "Hit reaction strength", "Combat", "fHitStrength", &g_hitStrength, 0.2f, 3.0f, 0.1f, "x%.1f", 0, 0, "How far bodies move when you strike them." },
     { SP_WEAPONS, ST_BOOL, "Hard hits knock down", "Combat", "bKnockdown", &g_hitKnockdown, 0, 0, 0, 0, 0, 0, "ON: a very hard blow (a fast swing, more so with a heavy weapon) knocks the enemy over into a ragdoll." },
@@ -13858,6 +14089,8 @@ static void OnNVSEMessage(NVSEMessage *msg)
         Voice_Tick();
         Dialogue_Tick();
         Holster_Tick();
+        Throw_Tick();
+        Hit_Flush();
         LootMenu_Tick(); Hud_Tick(); FireRate_Tick();
         if (g_seqWantAt > 0 && !g_seqTried && QpcMs() > g_seqWantAt) { Log("Menu Sequoia: loading the model"); Room_LoadSequoia(); }
         InterlockedExchange(&g_inMainLoopWork, 0);
