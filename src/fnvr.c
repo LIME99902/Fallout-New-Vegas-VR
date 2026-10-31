@@ -11134,6 +11134,76 @@ static void LGA_Restore(void)
     }
 }
 
+
+/* ---- The dynamite's lighter in your other hand -----------------------------------------------------------------------
+   The first-person model of fuse explosives (dynamite, molotovs) comes with a lighter that the game's animation would put
+   in your left hand; with VR hands it was left floating next to the explosive. While one is out, the lighter is drawn in
+   your other hand's palm, standing up out of the fist, and that hand's trigger lights it: bring it to the fuse. */
+static char *g_ltFor = NULL, *g_ltNode = NULL; static float g_ltSaved[12], g_ltLong[3], g_ltSide[3], g_ltMid[3]; static bool g_ltApplied = false;
+static char *Lt_Find(char *n, int depth, char *names, size_t *L)
+{
+    if (!n || depth > 14 || IsBadReadPtr(n, 0xB0)) return NULL;
+    const char *nm = *(const char **)(n + 0x08); char *hit = NULL;
+    if (nm && !IsBadStringPtrA(nm, 64) && nm[0]) {
+        if (*L < 900) *L += (size_t)snprintf(names + *L, 1024 - *L, "%s%s", *L ? ", " : "", nm);
+        char lo[64]; snprintf(lo, sizeof lo, "%s", nm); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
+        if ((strstr(lo, "lighter") || strstr(lo, "zippo")) && AsNode(n)) hit = n;
+    }
+    if (!AsNode(n)) return NULL;
+    char **kids = *(char ***)(n + 0xA0); unsigned kc = *(uint16_t *)(n + 0xA6);
+    for (unsigned i = 0; kids && i < kc && i < 64; i++) { char *r = Lt_Find(kids[i], depth + 1, names, L); if (r && !hit) hit = r; }
+    return hit;
+}
+static void Lighter_Apply(char *player)
+{
+    g_ltApplied = false;
+    if (!g_thrOn || g_leftHanded || !Thr_ExplosiveOut() || g_thr.cls != TH_FUSE || !g_weaponNode) return;
+    int h = 0;
+    char *hb = g_bones[h][B_HAND]; if (!hb || !g_handWOk[h] || g_holding[h] || g_lg.on) return;
+    if (g_ltFor != g_weaponNode) {
+        g_ltFor = g_weaponNode; g_ltNode = NULL;
+        static char names[1024]; size_t L = 0; names[0] = 0;
+        char *fp = player ? *(char **)(player + PLAYER_NODE_1ST_PERSON) : NULL;
+        g_ltNode = Lt_Find(g_weaponNode, 0, names, &L);
+        if (!g_ltNode && fp) { size_t L2 = 0; static char n2[1024]; n2[0] = 0; g_ltNode = Lt_Find(fp, 0, n2, &L2); }
+        if (g_ltNode) {   /* its shape: the long way stands up out of the fist */
+            g_lgPtN = 0; LG_PtsWalk(g_ltNode, NULL, NULL, 0);
+            float mn[3] = { 1e9f, 1e9f, 1e9f }, mx[3] = { -1e9f, -1e9f, -1e9f };
+            for (int k = 0; k < g_lgPtN; k++) for (int i = 0; i < 3; i++) { if (g_lgPts[k][i] < mn[i]) mn[i] = g_lgPts[k][i]; if (g_lgPts[k][i] > mx[i]) mx[i] = g_lgPts[k][i]; }
+            if (g_lgPtN < 4) { for (int i = 0; i < 3; i++) { mn[i] = -1; mx[i] = 1; } }
+            int A = 0; for (int i = 1; i < 3; i++) if (mx[i] - mn[i] > mx[A] - mn[A]) A = i;
+            int C = -1; for (int i = 0; i < 3; i++) if (i != A && (C < 0 || mx[i] - mn[i] < mx[C] - mn[C])) C = i;
+            memset(g_ltLong, 0, 12); memset(g_ltSide, 0, 12); g_ltLong[A] = 1; g_ltSide[C] = 1;
+            for (int i = 0; i < 3; i++) g_ltMid[i] = (mn[i] + mx[i]) * 0.5f;
+        }
+        Log("Throwing: lighter in the explosive's model: %s (parts: %s)", g_ltNode ? *(const char **)(g_ltNode + 0x08) : "NOT FOUND", names);
+    }
+    char *n = g_ltNode; if (!n || IsBadReadPtr(n, 0xB0)) return;
+    char *par = *(char **)(n + NIAV_PARENT); if (!par) return;
+    /* the hand: up out of the fist, its right, its back (controller axes) */
+    float up[3], rt[3], bk[3]; for (int i = 0; i < 3; i++) { rt[i] = g_handWR[h][i][0]; up[i] = g_handWR[h][i][1]; bk[i] = g_handWR[h][i][2]; }
+    float cl[3]; V3Cross(cl, g_ltLong, g_ltSide);
+    M3 W; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) W[i][j] = up[i] * g_ltLong[j] + rt[i] * g_ltSide[j] + bk[i] * cl[j];
+    float palm[3]; Gun_Palm(h, palm);
+    const float *Hb = (const float *)(hb + NIAV_WORLD_TRANSLATE);
+    for (int i = 0; i < 3; i++) palm[i] += Hb[i] - g_handW[h][i];
+    float org[3]; for (int i = 0; i < 3; i++) org[i] = palm[i] + up[i] * 1.0f - (W[i][0] * g_ltMid[0] + W[i][1] * g_ltMid[1] + W[i][2] * g_ltMid[2]);
+    float *Lr = (float *)(n + NIAV_LOCAL_ROTATE), *Lt = (float *)(n + NIAV_LOCAL_TRANSLATE);
+    memcpy(g_ltSaved, Lr, 36); memcpy(g_ltSaved + 9, Lt, 12);
+    M3 P, PT, Lm; memcpy(P, par + NIAV_WORLD_ROTATE, sizeof P); M3T(PT, P);
+    float sc = *(const float *)(par + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
+    float d[3]; V3Sub(d, org, (const float *)(par + NIAV_WORLD_TRANSLATE));
+    M3Mul(Lm, PT, W); memcpy(Lr, Lm, 36);
+    for (int i = 0; i < 3; i++) Lt[i] = (PT[i][0] * d[0] + PT[i][1] * d[1] + PT[i][2] * d[2]) / sc;
+    NodeUpdate(n);
+    g_ltApplied = true;
+}
+static void Lighter_Restore(void)
+{
+    if (!g_ltApplied || !g_ltNode) return;
+    g_ltApplied = false;
+    memcpy(g_ltNode + NIAV_LOCAL_ROTATE, g_ltSaved, 36); memcpy(g_ltNode + NIAV_LOCAL_TRANSLATE, g_ltSaved + 9, 12);
+}
 /* ---- Fingers behind the other hand's weapon are hidden by it -----------------------------------------------------------
    The game draws your arms and hands in a pass of their own after the world, starting with a fresh depth buffer, so they
    come out in front of everything in the world - including a gun held in your other hand: the fingers wrapped behind it
@@ -13237,6 +13307,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             Grab_Visual();
             LG_Visual();
             if (armsDone) MeleeAngle_Apply();
+            if (armsDone) Lighter_Apply((char *)player);   /* (the dynamite's lighter in your other hand) */
             if (armsDone) RG_Capture();
             if (g_hitReact) Hit_Apply();
             Holster_Models((char *)player);
@@ -13316,7 +13387,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         } else { Lgd_FrameBegin(); o_DoRenderFrame(osGlobals, renderer, a, b); Lgd_FrameEnd(); }
         g_inRenderFrame = false; g_lgdWant = false;
         t4 = QpcMs(); g_tGame += t4 - t3;
-        MeleeAngle_Restore();
+        MeleeAngle_Restore(); Lighter_Restore();
         Hit_Restore();
         if (g_bodyHidden) { *(uint32_t *)(g_bodyHidden + 0x30) &= ~1u; g_bodyHidden = NULL; }
         if (grabVis) { LG_VisualRestore(); Grab_VisualRestore(); }
