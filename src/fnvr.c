@@ -10534,7 +10534,7 @@ static bool LG_AttachTo(char *node, char *child)
 {
     if (!node || IsBadReadPtr(node, 0xB0) || !AsNode(node)) return false;
     char **data = *(char ***)(node + 0xA0); uint16_t cap = *(uint16_t *)(node + 0xA4), ff = *(uint16_t *)(node + 0xA6), sz = *(uint16_t *)(node + 0xA8);
-    if (!data || cap > 512 || ff > cap || sz > ff || IsBadReadPtr(data, cap * 4)) return false;
+    if (!data || cap > 4096 || ff > cap || sz > ff || IsBadReadPtr(data, cap * 4)) return false;
     int slot = -1;
     for (int i = 0; i < ff; i++) if (!data[i]) { slot = i; break; }
     if (slot < 0 && ff < cap) { slot = ff; *(uint16_t *)(node + 0xA6) = ff + 1; }
@@ -10553,8 +10553,7 @@ static char *LG_FindRoom(char *n, int depth)
         if (ff < cap) return n;
         for (int i = 0; i < ff; i++) if (!data[i]) return n;
     }
-    for (int i = 0; data && i < ff && i < 64; i++) { char *k = data[i]; const char *nm = k ? *(const char **)(k + 0x08) : NULL;
-        if (nm && !_strnicmp(nm, "Bip01", 5)) { char *r = LG_FindRoom(k, depth + 1); if (r) return r; } }
+    for (int i = 0; data && i < ff && i < 64; i++) { char *k = data[i]; if (k && AsNode(k)) { char *r = LG_FindRoom(k, depth + 1); if (r) return r; } }
     return NULL;
 }
 static void LG_ModelTick(char *player)
@@ -10581,8 +10580,22 @@ static void LG_ModelTick(char *player)
         m->node = root; g_lgPar = NULL; g_lgSlot = -1;
     }
     if (!g_lgPar) {
-        char *room = LG_FindRoom(fp, 0);
-        if (!room || !LG_AttachTo(room, m->node)) { static int fl = 0; if (fl++ < 3) Log("Dual wield: no place in your arms' skeleton to hang the other hand's weapon"); return; }
+        /* where: the node the game hangs your body on (it holds the people and things around you, so it has room), else
+           anywhere in your arms */
+        char *room = NULL;
+        {   char *rs = *(char **)(player + 0x64); char *proot = rs && !IsBadReadPtr(rs, 0x18) ? *(char **)(rs + 0x14) : NULL;
+            for (char *p = proot ? *(char **)(proot + NIAV_PARENT) : NULL; p && !room && !IsBadReadPtr(p, 0xB0); p = *(char **)(p + NIAV_PARENT)) {
+                uint16_t cap = *(uint16_t *)(p + 0xA4), ff = *(uint16_t *)(p + 0xA6); char **data = *(char ***)(p + 0xA0);
+                if (AsNode(p) && data && cap <= 4096 && ff <= cap) { if (ff < cap) room = p; else for (int i = 0; i < ff; i++) if (!data[i]) { room = p; break; } }
+            } }
+        if (!room) room = LG_FindRoom(fp, 0);
+        if (!room || !LG_AttachTo(room, m->node)) {
+            static int fl = 0;
+            if (fl++ < 3) { char *rs = *(char **)(player + 0x64); char *proot = rs ? *(char **)(rs + 0x14) : NULL; char *pp = proot ? *(char **)(proot + NIAV_PARENT) : NULL;
+                Log("Dual wield: no place to hang the other hand's weapon (body's node %p: %u/%u/%u, arms %p: %u/%u/%u)", (void *)pp,
+                    pp ? *(uint16_t *)(pp + 0xA8) : 0, pp ? *(uint16_t *)(pp + 0xA6) : 0, pp ? *(uint16_t *)(pp + 0xA4) : 0,
+                    (void *)fp, *(uint16_t *)(fp + 0xA8), *(uint16_t *)(fp + 0xA6), *(uint16_t *)(fp + 0xA4)); }
+            return; }
         const char *pn = *(const char **)(room + 0x08);
         Log("Dual wield: other hand's weapon model %s shown (hung on %s)", m->path, pn && !IsBadStringPtrA(pn, 64) ? pn : "?");
     }
