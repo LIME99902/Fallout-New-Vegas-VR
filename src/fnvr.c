@@ -10582,7 +10582,9 @@ static void Gun_Input(bool menu, bool gripNow, bool gripEdge, bool offGrip, bool
         *rGrip = false;   /* (not activate) */
         if (!gripNow) {
             int amH = g_leftHanded ? 0 : 1;
-            if (g_keepWeapons && g_gun.on && g_handSpeed[amH] <= g_keepThrowSpeed && !Holster_Zone()) {   /* (not thrown: it stays your equipped weapon) */
+            int mvH = 1 - amH; float a[3], b[3], d[3]; Gun_Palm(mvH, a); Gun_Palm(amH, b); V3Sub(d, a, b);
+            bool handOver = g_dualOn && g_lgGrip && !g_lg.on && !g_holding[mvH] && (g_twoHandWant || g_twoHand || V3Len(d) < 14.0f);   /* (the other hand is taking it) */
+            if (g_keepWeapons && g_gun.on && g_handSpeed[amH] <= g_keepThrowSpeed && !Holster_Zone() && !handOver) {   /* (not thrown: it stays your equipped weapon) */
                 g_gun.holding = false; g_gun.on = false;
                 static int kl = 0; if (kl++ < 5) Log("Weapons: let go of the grip - the weapon stays in your hand (throw it to let it fly)");
             } else { g_gun.holding = false; g_gun.releaseAt = QpcMs(); g_gun.dropReq = true; }
@@ -10983,6 +10985,12 @@ enum { LGP_SLIDE = 1, LGP_BOLT, LGP_CYL, LGP_MAG, LGP_HAMMER, LGP_TRIGGER, LGP_S
 #define LGP_MAX 16
 typedef struct { char *node; int kind; float L[12]; float dir[3], sid[3], piv[3]; bool hid; } LGPart;
 static struct { char *forRoot; void *forBase; LGPart p[LGP_MAX]; int n; float cylFrom, cylTo; double cylAt; bool applied; } g_lga;
+static uint32_t g_lgaRef = 0;   /* (the gun the parts were found on - a new gun's model can reuse an old one's memory) */
+static bool LGA_Under(char *n, char *top)   /* (still a part of this gun?) */
+{
+    for (int i = 0; i < 16 && n && !IsBadReadPtr(n, 0x20); i++) { if (n == top) return true; n = *(char **)(n + NIAV_PARENT); }
+    return false;
+}
 static void LGA_Walk(char *n, int depth, char *names, size_t *L, int *cnt)
 {
     if (!n || depth > 10 || IsBadReadPtr(n, 0xB0)) return;
@@ -11091,14 +11099,14 @@ static void LGA_Apply(void)
     g_lga.applied = false;
     if (!g_lgMotion || !g_lg.on || g_lg.melee) return;
     char *top = LG_Root(g_lg.ref); if (!top) return;
-    if (top != g_lga.forRoot || g_lg.base != g_lga.forBase) LGA_Find(top);
+    if (top != g_lga.forRoot || g_lg.base != g_lga.forBase || g_lg.id != g_lgaRef) { g_lgaRef = g_lg.id; LGA_Find(top); }
     if (!g_lga.n) return;
     double now = QpcMs();
     float ts = g_lgKickAt > 0 ? (float)(now - g_lgKickAt) : 1e9f;
     bool reloading = g_lg.reloadAt > 0; float rt = reloading ? (float)(LG_RELOAD_MS - (g_lg.reloadAt - now)) : -1.0f;
     for (int i = 0; i < g_lga.n; i++) {
         LGPart *q = &g_lga.p[i]; char *n = q->node; q->hid = false;
-        if (!n || IsBadReadPtr(n, 0xB0)) continue;
+        if (!n || IsBadReadPtr(n, 0xB0) || !*(void **)n || !LGA_Under(n, top)) { q->node = NULL; continue; }
         float *Lr = (float *)(n + NIAV_LOCAL_ROTATE), *Lt = (float *)(n + NIAV_LOCAL_TRANSLATE);
         char *par = *(char **)(n + NIAV_PARENT); float ps = par && !IsBadReadPtr(par, 0xA0) ? *(const float *)(par + NIAV_WORLD_SCALE) : 1.0f; if (!(ps > 0.0001f)) ps = 1.0f;
         memcpy(Lr, q->L, 36); memcpy(Lt, q->L + 9, 12);
@@ -11141,7 +11149,7 @@ static void LGA_Restore(void)
     g_lga.applied = false;
     for (int i = 0; i < g_lga.n; i++) {
         LGPart *q = &g_lga.p[i]; char *n = q->node;
-        if (!n || IsBadReadPtr(n, 0xB0)) continue;
+        if (!n || IsBadReadPtr(n, 0xB0) || !*(void **)n) continue;
         memcpy(n + NIAV_LOCAL_ROTATE, q->L, 36); memcpy(n + NIAV_LOCAL_TRANSLATE, q->L + 9, 12);
         if (q->hid) { *(uint32_t *)(n + 0x30) &= ~1u; q->hid = false; }
     }
@@ -11173,8 +11181,9 @@ static void Lighter_Apply(char *player)
     if (!g_thrOn || g_leftHanded || !Thr_ExplosiveOut() || g_thr.cls != TH_FUSE || !g_weaponNode) return;
     int h = 0;
     char *hb = g_bones[h][B_HAND]; if (!hb || !g_handWOk[h] || g_holding[h] || g_lg.on) return;
-    if (g_ltFor != g_weaponNode) {
-        g_ltFor = g_weaponNode; g_ltNode = NULL;
+    static void *ltW = NULL; void *wNow = PlayerWeaponForm();
+    if (g_ltFor != g_weaponNode || ltW != wNow) {
+        g_ltFor = g_weaponNode; ltW = wNow; g_ltNode = NULL;
         static char names[1024]; size_t L = 0; names[0] = 0;
         char *fp = player ? *(char **)(player + PLAYER_NODE_1ST_PERSON) : NULL;
         g_ltNode = Lt_Find(g_weaponNode, 0, names, &L);
@@ -11191,7 +11200,7 @@ static void Lighter_Apply(char *player)
         }
         Log("Throwing: lighter in the explosive's model: %s (parts: %s)", g_ltNode ? *(const char **)(g_ltNode + 0x08) : "NOT FOUND", names);
     }
-    char *n = g_ltNode; if (!n || IsBadReadPtr(n, 0xB0)) return;
+    char *n = g_ltNode; if (!n || IsBadReadPtr(n, 0xB0) || !*(void **)n) return;
     char *par = *(char **)(n + NIAV_PARENT); if (!par) return;
     /* the hand: up out of the fist, its right, its back (controller axes) */
     float up[3], rt[3], bk[3]; for (int i = 0; i < 3; i++) { rt[i] = g_handWR[h][i][0]; up[i] = g_handWR[h][i][1]; bk[i] = g_handWR[h][i][2]; }
@@ -11374,7 +11383,7 @@ static void LG_DepthPass(IDirect3DDevice9 *dev)
     int drawn = 0;
     for (int q = 0; q < g_lgd.n; q++) {
         LgdPiece *p = &g_lgd.p[q]; char *n = p->node;
-        if (IsBadReadPtr(n, 0xC0) || *(char **)(n + 0xB8) != p->gd || *(const float **)(p->gd + 0x20) != p->V) continue;
+        if (IsBadReadPtr(n, 0xC0) || !*(void **)n || *(char **)(n + 0xB8) != p->gd || *(const float **)(p->gd + 0x20) != p->V || !LGA_Under(n, g_lgd.forRoot)) continue;
         bool hid = false; char *up = n;
         for (int lv = 0; lv < 10 && up && !hid; lv++) { if (*(uint32_t *)(up + 0x30) & 1) hid = true; if (up == g_lgd.forRoot) break; up = *(char **)(up + NIAV_PARENT); }
         if (hid) continue;
@@ -11453,7 +11462,8 @@ static void LG_Visual(void)
     }
     NodeUpdate(root);
     LGA_Apply();   /* (slide, cylinder, magazine) */
-    if (g_lgWithArms && g_lgd.forRoot != top) Lgd_Setup(top);
+    {   static uint32_t lgdRef = 0;
+        if (g_lgWithArms && (g_lgd.forRoot != top || lgdRef != g_lg.id)) { lgdRef = g_lg.id; Lgd_Setup(top); } }
 }
 /* where the other hand's weapon is for a shot or a blow: as it was drawn last frame (the drawn hand is only posed while a
    frame is drawn - outside of that its bones hold the game's own animation, which points somewhere else) */
