@@ -1710,6 +1710,7 @@ static bool PipAdjust_Update(const VRControllerState_t *mv, const VRControllerSt
 }
 
 static void Throw_Input(bool menu, bool *rGrip, bool rGripRaw, bool *lGrip, bool lGripRaw, XPad *p, float lTrig, float rTrig);
+static bool Thr_ExplosiveOut(void);
 static WORD g_throwPress; static double g_throwPressUntil;
 static void Controllers_Poll(bool menu)
 {
@@ -1976,12 +1977,13 @@ static void Controllers_Poll(bool menu)
     {   /* left trigger: the bullet-time key (C) - held briefly on each pull */
         static bool ltPrev = false;
         float lt = mv->rAxis[1].x;
-        g_grapTrigH[g_leftHanded ? 1 : 0] = (menu || g_lg.on) ? 0.0f : lt;
+        bool expl = Thr_ExplosiveOut();
+        g_grapTrigH[g_leftHanded ? 1 : 0] = (menu || g_lg.on || expl) ? 0.0f : lt;
         g_grapTrigH[g_leftHanded ? 0 : 1] = menu ? 0.0f : am->rAxis[1].x;
         bool ltDown = ltPrev ? lt > 0.40f : lt > 0.75f;
         bool fist = Pressed(mv, EVRButtonId_k_EButton_Grip) || mv->rAxis[2].x > 0.5f;   /* a fist (grip + trigger) isn't a bullet-time pull */
         static double fistAt = 0; if (fist) fistAt = QpcMs();   /* (not right after a grapple fist, nor while being pulled) */
-        if (g_ltBullet && !g_adsEnabled && !menu && g_inGameplay && !g_pipOpen && !g_wristUp && !fist && ltDown && !ltPrev && QpcMs() - fistAt > 300.0 && !g_grapPulling) BulletKey_Press();
+        if (g_ltBullet && !g_adsEnabled && !menu && g_inGameplay && !g_pipOpen && !g_wristUp && !fist && !expl && ltDown && !ltPrev && QpcMs() - fistAt > 300.0 && !g_grapPulling) BulletKey_Press();
         ltPrev = ltDown;
         BulletKey_Tick();
         Key_TapTick(); Key_RealTick();
@@ -10207,29 +10209,34 @@ static void Throw_Input(bool menu, bool *rGrip, bool rGripRaw, bool *lGrip, bool
         tPrev = t;
         return;
     }
-    /* explosives: the aim hand's grip holds it */
-    if (!g_thr.held && *rGrip && !rPrev) { g_thr.held = true; g_thr.heldAt = now; g_thr.armed = false; }
+    /* explosives: the aim hand's grip (or trigger) holds it */
+    bool rT = rTrig > (tPrev ? 0.3f : 0.6f);
+    bool startT = rT && !tPrev; tPrev = rT;
+    if (!g_thr.held && ((*rGrip && !rPrev) || startT)) { g_thr.held = true; g_thr.heldAt = now; g_thr.armed = false; Log("Throwing: holding the %s - %s", g_thr.name, cls == TH_FUSE ? "bring your other hand to it and pull its trigger to light it" : "pull the pin with your other hand's trigger"); }
     if (g_thr.held) {
         *rGrip = false;
         bool lt = lTrig > 0.6f, ltEdge = lt && !g_thrLtPrev; g_thrLtPrev = lt;
-        if (cls == TH_PIN && !g_thr.armed && ltEdge && handsNear) {
+        if (cls == TH_PIN && !g_thr.armed && ltEdge && hd < 0.30f) {
             g_thr.armed = true; Thr_Buzz(mvH, 3999); Thr_Buzz(amH, 2500); Log("Throwing: pin pulled");
         }
         if (cls == TH_FUSE && !g_thr.lit) {
-            bool flick = lTrig > 0.6f;
-            if (flick && !g_thr.lighter) { g_thr.lighter = true; Thr_Buzz(mvH, 1500); }   /* lighter open */
+            bool flick = lTrig > 0.5f;
+            if (flick && !g_thr.lighter) { g_thr.lighter = true; Thr_Buzz(mvH, 1500);   /* lighter open */
+                if (hd >= 0.30f) { static int fl = 0; if (fl++ < 6) Log("Throwing: lighter lit, but your hands are %.0f cm apart - bring it to the fuse", hd * 100.0f); } }
             if (!flick) g_thr.lighter = false;
-            if (g_thr.lighter && handsNear) { g_thr.lit = true; g_thr.armed = true; g_thr.litAt = now; Thr_Buzz(amH, 3999); Log("Throwing: fuse lit (%.1f s)", g_thr.fuse); }
+            if (g_thr.lighter && hd < 0.30f) { g_thr.lit = true; g_thr.armed = true; g_thr.litAt = now; Thr_Buzz(amH, 3999); Log("Throwing: fuse lit (%.1f s)", g_thr.fuse); }
         }
         if (lGripRaw || lTrig > 0.3f) *lGrip = false;   /* (no VATS while holding it) */
-        if (!rGripRaw) {   /* let go */
+        if (!rGripRaw && !rT) {   /* let go (grip and trigger both open) */
             g_thr.held = false;
             if (g_thr.armed) { g_thr.releaseAt = now; g_thr.fireReq = true; }
             else if (now - g_thr.heldAt < 300.0) { g_throwPress = g_bindMask[BIND_ACTIVATE]; g_throwPressUntil = now + 120.0; }   /* a tap: activate */
         }
     } else if (cls == TH_FUSE || cls == TH_PIN) { if (lGripRaw && handsNear) *lGrip = false; }
-    rPrev = rGripRaw; lPrev = lGripRaw; (void)tPrev;
+    rPrev = rGripRaw; lPrev = lGripRaw;
 }
+/* an explosive is out: the other hand's trigger is its lighter / pin, not bullet time or the grapple */
+static bool Thr_ExplosiveOut(void) { return g_thr.weap && g_thr.weap == PlayerWeaponForm() && (g_thr.cls == TH_FUSE || g_thr.cls == TH_PIN) && PlayerWeaponOut(); }
 /* (render hook) the throwing hand's path, for the speed and direction at the moment you let go */
 static void Throw_Track(void)
 {
@@ -10901,8 +10908,7 @@ static void LG_Fingers(void)
     if (g_leftHanded || !g_lg.on || !g_holding[0] || g_held[0].ref != g_lg.ref || !g_fingersApplied[0]) return;
     RGrip *rg = RG_ForLeft(); if (!rg || !rg->fok) return;
     for (int f = 0; f < 5; f++) for (int j = 0; j < 3; j++) {
-        if (f == 0 && j == 0) continue;   /* (the thumb's base stays as it is) */
-        char *bn = g_fingers[0][f][j]; if (!bn) continue;
+        char *bn = g_fingers[0][f][j]; if (!bn) continue;   /* (thumb base too: the thumb sits like the gun hand's) */
         const float *R = rg->fing[f][j]; float *L = (float *)(bn + NIAV_LOCAL_ROTATE);
         for (int a = 0; a < 3; a++) for (int b = 0; b < 3; b++) L[a * 3 + b] = R[a * 3 + b] * (a == 2 ? -1.0f : 1.0f) * (b == 2 ? -1.0f : 1.0f);   /* (mirrored: Z flipped) */
     }
