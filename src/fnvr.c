@@ -251,7 +251,10 @@ static struct {
 static void Gun_Input(bool menu, bool gripNow, bool gripEdge, bool offGrip, bool *rGrip);
 static bool  g_dualOn = true;         /* [Grab] bDualWield */
 static float g_lgTilt = 0.0f, g_lgFwdCm = 0.0f, g_lgUpCm = 0.0f;   /* [Grab] fOtherHandTilt / fOtherHandForward / fOtherHandUp */
-static bool  g_lgWithArms = true;     /* [Grab] bOtherHandWithArms: the other hand's weapon drawn together with your hands */
+static bool  g_lgWithArms = true;     /* [Grab] bOtherHandWithArms: fingers behind the other hand's weapon are hidden by it */
+static volatile bool g_lgdWant = false, g_lgdPending = false;   /* (its shape goes into the hands' depth buffer this frame / at the next draw) */
+static int   g_lgdClearN = 0, g_lgdTarget = -1;   /* (the hands' depth clear: which of the frame's depth-only clears it is) */
+static void Lgd_OnClear(IDirect3DDevice9 *dev); static void LG_DepthPass(IDirect3DDevice9 *dev);
 static bool  g_lgMotion = true;       /* [Grab] bOtherHandGunMotion: the other hand's gun kicks when fired and moves when reloaded */
 static double g_lgKickAt = 0;         /* (the other hand's last shot, for its kick) */
 #define LG_RELOAD_MS 1300.0               /* how long reloading the other hand's gun takes */
@@ -262,6 +265,7 @@ static bool g_lgDropForSwap = false; static bool g_lhudShow = true; static float
 static volatile bool g_lgAssignReq;
 static void LHud_Draw(IDirect3DDevice9 *dev);
 static void Gun_Palm(int h, float *palm); static char *LG_Root(char *ref); static bool LG_Pose(float *org, M3 W, float *aim);
+static bool LG_PoseNow(float *org, M3 W, float *aim);   /* (the other hand's weapon as last drawn - for shots and blows) */
 static struct { bool pending; int rounds; double at; } g_lgToRight;
 static struct { bool req; char *ref; uint32_t id; void *base; int zone, rounds; int drawReq; } g_lgHol;
 static void LG_Input(bool menu, bool gripNow, bool gripEdge, float trig, bool *lGrip);
@@ -3494,7 +3498,9 @@ static HRESULT STDMETHODCALLTYPE Hook_DevClear(IDirect3DDevice9 *dev, DWORD n, c
 {
     if (g_trOn2()) Log("TRACE   CLEAR flags %lx colour %08lx rects %lu", (unsigned long)flags, (unsigned long)c, (unsigned long)n);
     if (g_capWant && g_inRenderFrame && (flags & D3DCLEAR_ZBUFFER) && g_bbW) Cap_OnClear(dev, flags);
-    return o_DevClear(dev, n, rects, flags, c, z, s);
+    HRESULT hr = o_DevClear(dev, n, rects, flags, c, z, s);
+    if (g_inRenderFrame && (flags & D3DCLEAR_ZBUFFER) && !(flags & D3DCLEAR_TARGET) && g_bbW) Lgd_OnClear(dev);   /* (the hands' pass starts with this) */
+    return hr;
 }
 
 static float HalfToF(uint16_t h)
@@ -3910,8 +3916,8 @@ static HRESULT STDMETHODCALLTYPE Hook_SetScissor(IDirect3DDevice9 *dev, const RE
 typedef HRESULT (STDMETHODCALLTYPE *DevDP_t)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, UINT, UINT);
 typedef HRESULT (STDMETHODCALLTYPE *DevDIP_t)(IDirect3DDevice9 *, D3DPRIMITIVETYPE, INT, UINT, UINT, UINT, UINT);
 static DevDP_t o_DP = NULL; static DevDIP_t o_DIP = NULL;
-static HRESULT STDMETHODCALLTYPE Hook_DP(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE t, UINT a, UINT b) { if (g_trOn) g_trDraws++; return o_DP(dev, t, a, b); }
-static HRESULT STDMETHODCALLTYPE Hook_DIP(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE t, INT a, UINT b, UINT c, UINT d2, UINT e) { if (g_trOn) g_trDraws++; return o_DIP(dev, t, a, b, c, d2, e); }
+static HRESULT STDMETHODCALLTYPE Hook_DP(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE t, UINT a, UINT b) { if (g_trOn) g_trDraws++; if (g_lgdPending) { g_lgdPending = false; LG_DepthPass(dev); } return o_DP(dev, t, a, b); }
+static HRESULT STDMETHODCALLTYPE Hook_DIP(IDirect3DDevice9 *dev, D3DPRIMITIVETYPE t, INT a, UINT b, UINT c, UINT d2, UINT e) { if (g_trOn) g_trDraws++; if (g_lgdPending) { g_lgdPending = false; LG_DepthPass(dev); } return o_DIP(dev, t, a, b, c, d2, e); }
 static HRESULT STDMETHODCALLTYPE Hook_SetDS(IDirect3DDevice9 *dev, IDirect3DSurface9 *surf)
 {
     if (g_uiPhase && surf && surf == g_uiSavedDS) surf = g_uiDepth;
@@ -10010,7 +10016,7 @@ static void Hit_Update(float dt, bool weaponOut)
         if (leftMelee) {   /* the other hand's melee weapon: the palm and points along the weapon */
             n = 0; float palm[3]; Gun_Palm(h, palm); memcpy(pr[n].p, palm, 12); pr[n].r = 3.0f; n++;
             float org[3], ax[3]; M3 Wp;
-            if (LG_Pose(org, Wp, ax)) {
+            if (LG_PoseNow(org, Wp, ax)) {
                 int segs = (int)(g_lg.len / 6.0f); if (segs < 2) segs = 2; if (segs > PROBES_MAX - 2) segs = PROBES_MAX - 2;
                 for (int k = 1; k <= segs; k++) { float t = g_lg.len * (float)k / (float)segs; for (int i = 0; i < 3; i++) pr[n].p[i] = org[i] + ax[i] * t; pr[n].r = 2.5f; n++; }
             }
@@ -10023,7 +10029,7 @@ static void Hit_Update(float dt, bool weaponOut)
         float m = (h == aimH || wt == -1) ? mass : 0.75f;
         bool handArmed = armedOut && (h == aimH ? meleeHand || wt == -1 : wt == -1);
         if (leftMelee) { int lt = *(BYTE *)((char *)g_lg.base + 0xF4); m = lt == 2 ? 1.5f : 1.0f; handArmed = true;
-            float o2[3]; M3 W2; LG_Pose(o2, W2, fwd); }
+            float o2[3]; M3 W2; LG_PoseNow(o2, W2, fwd); }
         float push[3] = { 0, 0, 0 }; float pushLen = 0;
         for (int a = 0; a < HR_ACT; a++) {
             HrActor *A = &g_hr[a];
@@ -10903,12 +10909,14 @@ static void LG_Fingers(void)
     if (g_bones[0][B_HAND]) NodeUpdate(g_bones[0][B_HAND]);
 }
 /* where the other hand's weapon is: its grip in the drawn hand's palm, its barrel (or blade) along where that hand aims */
+static bool g_lgPoseCtrl = false;   /* (from the controller only: the drawn hand isn't posed outside drawing) */
+static float g_lgPoseOrg[3], g_lgPoseAim[3]; static M3 g_lgPoseW; static double g_lgPoseAt = 0; static char *g_lgPoseRef = NULL;
 static bool LG_Pose(float *org, M3 W, float *aim)
 {
     int h = g_leftHanded ? 1 : 0;
     if (!g_handWOk[h]) return false;
     RGrip *rg = RG_ForLeft();
-    if (rg && !g_leftHanded && g_bones[h][B_HAND]) {   /* the mirror image of how the gun hand holds its gun, in the drawn hand's own axes (Z flipped) */
+    if (rg && !g_leftHanded && g_bones[h][B_HAND] && !g_lgPoseCtrl) {   /* the mirror image of how the gun hand holds its gun, in the drawn hand's own axes (Z flipped) */
         float bm[3] = { rg->b[0], rg->b[1], -rg->b[2] }, um[3] = { rg->u[0], rg->u[1], -rg->u[2] }, gm[3] = { rg->g[0], rg->g[1], -rg->g[2] };
         const float *Hl = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_ROTATE);
         float f[3], uh[3], sw[3], sl[3];
@@ -10952,9 +10960,10 @@ static bool LG_Pose(float *org, M3 W, float *aim)
    name in the model) snaps back and forward, a revolver's cylinder turns one chamber, and an empty gun's slide stays
    back. Reloading (left Y) tips the gun over in the hand, takes the magazine out and puts it back in. Every change is
    only for drawing the frame and is undone right after. [Grab] bOtherHandGunMotion */
-enum { LGP_SLIDE = 1, LGP_BOLT, LGP_CYL, LGP_MAG };
-typedef struct { char *node; int kind; float L[12]; float dir[3], piv[3]; bool hid; } LGPart;
-static struct { char *forRoot; void *forBase; LGPart p[6]; int n; float cylFrom, cylTo; double cylAt; bool applied; } g_lga;
+enum { LGP_SLIDE = 1, LGP_BOLT, LGP_CYL, LGP_MAG, LGP_HAMMER, LGP_TRIGGER, LGP_SHELL };
+#define LGP_MAX 16
+typedef struct { char *node; int kind; float L[12]; float dir[3], sid[3], piv[3]; bool hid; } LGPart;
+static struct { char *forRoot; void *forBase; LGPart p[LGP_MAX]; int n; float cylFrom, cylTo; double cylAt; bool applied; } g_lga;
 static void LGA_Walk(char *n, int depth, char *names, size_t *L, int *cnt)
 {
     if (!n || depth > 10 || IsBadReadPtr(n, 0xB0)) return;
@@ -10962,12 +10971,13 @@ static void LGA_Walk(char *n, int depth, char *names, size_t *L, int *cnt)
     if (nm && !IsBadStringPtrA(nm, 64) && nm[0]) {
         if (*cnt < 40 && *L < 900) *L += (size_t)snprintf(names + *L, 1024 - *L, "%s%s", *cnt ? ", " : "", nm);
         (*cnt)++;
-        if (depth > 0 && g_lga.n < 6) {
+        if (depth > 0 && g_lga.n < LGP_MAX && AsNode(n)) {
             char lo[64]; snprintf(lo, sizeof lo, "%s", nm); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
             int k = strstr(lo, "slide") ? LGP_SLIDE : strstr(lo, "bolt") ? LGP_BOLT : strstr(lo, "cylinder") ? LGP_CYL :
+                    strstr(lo, "hammer") ? LGP_HAMMER : strstr(lo, "trigger") ? LGP_TRIGGER : strstr(lo, "shel") ? LGP_SHELL :
                     ((strstr(lo, "mag") && !strstr(lo, "magnum") && !strstr(lo, "image")) || (strstr(lo, "clip") && !strstr(lo, "clipping"))) ? LGP_MAG : 0;
             int same = 0; for (int i = 0; i < g_lga.n; i++) if (g_lga.p[i].kind == k) same++;
-            if (k && same < (k == LGP_MAG ? 2 : 1)) { LGPart *q = &g_lga.p[g_lga.n++]; memset(q, 0, sizeof *q); q->node = n; q->kind = k; }
+            if (k && same < (k == LGP_MAG ? 2 : k == LGP_SHELL ? 8 : 1)) { LGPart *q = &g_lga.p[g_lga.n++]; memset(q, 0, sizeof *q); q->node = n; q->kind = k; }
         }
     }
     if (!AsNode(n)) return;
@@ -10982,14 +10992,18 @@ static void LGA_Find(char *top)
     char *body = LG_BodyNode(g_lg.ref); if (!body) body = top;
     const float *Rw = (const float *)(body + NIAV_WORLD_ROTATE); const float *bl = g_lg.barrelL;
     float bw[3]; for (int i = 0; i < 3; i++) bw[i] = Rw[i * 3] * bl[0] + Rw[i * 3 + 1] * bl[1] + Rw[i * 3 + 2] * bl[2];
-    char found[200]; size_t F = 0; found[0] = 0;
+    float slL[3], sw[3]; V3Cross(slL, g_lg.barrelL, g_lg.upL);   /* (the gun's side: hammers and triggers turn about it) */
+    for (int i = 0; i < 3; i++) sw[i] = Rw[i * 3] * slL[0] + Rw[i * 3 + 1] * slL[1] + Rw[i * 3 + 2] * slL[2];
+    char found[300]; size_t F = 0; found[0] = 0;
     for (int i = 0; i < g_lga.n; i++) {
         LGPart *q = &g_lga.p[i]; char *n = q->node, *par = *(char **)(n + NIAV_PARENT);
         memcpy(q->L, n + NIAV_LOCAL_ROTATE, 36); memcpy(q->L + 9, n + NIAV_LOCAL_TRANSLATE, 12);
-        if (par && !IsBadReadPtr(par, 0xA0)) {   /* the barrel's direction in the frame the part moves in */
+        if (par && !IsBadReadPtr(par, 0xA0)) {   /* the barrel's direction (and the gun's side) in the frame the part moves in */
             const float *Pr = (const float *)(par + NIAV_WORLD_ROTATE);
-            for (int a = 0; a < 3; a++) q->dir[a] = Pr[0 * 3 + a] * bw[0] + Pr[1 * 3 + a] * bw[1] + Pr[2 * 3 + a] * bw[2];
-        } else memcpy(q->dir, bw, 12);
+            for (int a = 0; a < 3; a++) { q->dir[a] = Pr[0 * 3 + a] * bw[0] + Pr[1 * 3 + a] * bw[1] + Pr[2 * 3 + a] * bw[2];
+                                          q->sid[a] = Pr[0 * 3 + a] * sw[0] + Pr[1 * 3 + a] * sw[1] + Pr[2 * 3 + a] * sw[2]; }
+        } else { memcpy(q->dir, bw, 12); memcpy(q->sid, sw, 12); }
+        { float sl2 = V3Len(q->sid); if (sl2 > 0.5f) for (int a = 0; a < 3; a++) q->sid[a] /= sl2; }
         float dl = V3Len(q->dir); if (dl < 0.5f) { q->node = NULL; continue; } for (int a = 0; a < 3; a++) q->dir[a] /= dl;
         memcpy(q->piv, q->L + 9, 12);
         if (q->kind == LGP_CYL) {   /* (it turns about its own middle) */
@@ -10999,7 +11013,8 @@ static void LGA_Find(char *top)
                 for (int a = 0; a < 3; a++) q->piv[a] = q->L[9 + a] + ls * (q->L[a * 3] * c[0] + q->L[a * 3 + 1] * c[1] + q->L[a * 3 + 2] * c[2]); }
         }
         const char *nm = *(const char **)(n + 0x08);
-        if (F < sizeof found - 40) F += (size_t)snprintf(found + F, sizeof found - F, "%s%s '%s'", F ? ", " : "", q->kind == LGP_SLIDE ? "slide" : q->kind == LGP_BOLT ? "bolt" : q->kind == LGP_CYL ? "cylinder" : "magazine", nm);
+        static const char *const kn[] = { "", "slide", "bolt", "cylinder", "magazine", "hammer", "trigger", "shells" };
+        if (F < sizeof found - 40) F += (size_t)snprintf(found + F, sizeof found - F, "%s%s '%s'", F ? ", " : "", kn[q->kind], nm);
     }
     Log("Dual wield: the other hand's gun model has %d parts (%s%s) - moving parts: %s", cnt, names, cnt > 40 ? ", ..." : "", F ? found : "none (it only kicks and tips)");
 }
@@ -11083,7 +11098,18 @@ static void LGA_Apply(void)
                 float d[3]; for (int a = 0; a < 3; a++) d[a] = q->L[9 + a] - q->piv[a];
                 for (int a = 0; a < 3; a++) Lt[a] = q->piv[a] + R[a][0] * d[0] + R[a][1] * d[1] + R[a][2] * d[2];
             }
-        } else if (q->kind == LGP_MAG) {
+        } else if (q->kind == LGP_HAMMER || q->kind == LGP_TRIGGER) {
+            /* the hammer flicks back and falls with each shot; the trigger comes back while you squeeze */
+            float ang = 0;
+            if (q->kind == LGP_HAMMER) { if (ts < 70.0f) ang = ts < 20.0f ? 28.0f * ts / 20.0f : 28.0f * (1.0f - (ts - 20.0f) / 50.0f); }
+            else ang = g_lg.trig ? -16.0f : ts < 60.0f ? -16.0f * (1.0f - ts / 60.0f) : 0.0f;
+            if (ang != 0) {
+                float v[3]; for (int a = 0; a < 3; a++) v[a] = q->sid[a] * (ang / RAD2DEG);
+                M3 R; VecRot(v, R);
+                float Rl[9]; for (int a = 0; a < 3; a++) for (int b = 0; b < 3; b++) Rl[a * 3 + b] = R[a][0] * q->L[0 * 3 + b] + R[a][1] * q->L[1 * 3 + b] + R[a][2] * q->L[2 * 3 + b];
+                memcpy(Lr, Rl, 36);
+            }
+        } else if (q->kind == LGP_MAG || q->kind == LGP_SHELL) {   /* (out during the reload, back in after) */
             if (reloading && rt > (float)LG_RELOAD_MS * 0.28f && rt < (float)LG_RELOAD_MS * 0.62f && !(*(uint32_t *)(n + 0x30) & 1)) { *(uint32_t *)(n + 0x30) |= 1; q->hid = true; }
         }
         NodeUpdate(n);
@@ -11102,85 +11128,186 @@ static void LGA_Restore(void)
     }
 }
 
-/* ---- The other hand's weapon drawn with your hands -------------------------------------------------------------------
-   The game draws your arms - and the gun in your gun hand - in a pass of their own after the world, over it, so a world
-   object in your other hand is always drawn under your fingers, even the ones wrapped behind it. While each frame is
-   drawn, the other hand's weapon is hung under your arms' node, so it's drawn in the same pass as your hands and they
-   cover each other properly, exactly like the gun in your gun hand; it goes back to the world right after.
+/* ---- Fingers behind the other hand's weapon are hidden by it -----------------------------------------------------------
+   The game draws your arms and hands in a pass of their own after the world, starting with a fresh depth buffer, so they
+   come out in front of everything in the world - including a gun held in your other hand: the fingers wrapped behind it
+   showed through it. Right after that pass clears its depth, FNVR writes the gun's own shape (its model's triangles, where
+   it's drawn this frame, through the game's own camera) into the depth buffer only - no colour. Your hands are then drawn
+   as usual: finger parts behind the gun fail the depth test and stay hidden behind it, the ones in front stay in front.
+   Checked once against the game's camera before it's used; if anything doesn't match, it switches itself off.
    [Grab] bOtherHandWithArms */
-static char *g_lgFpArr[260];
-static struct { bool on, arr; char *gun, *cp, *fp; int ci, slot; char **fData; uint16_t fCap, fUsed, fCount; float L[13]; } g_lgFp;
-static void LG_FpSwap(char *player)
+#define LGD_MAXP 24
+typedef struct { char *node, *gd; const float *V; int nv, i0, ni; } LgdPiece;
+static struct { char *forRoot; int n, tris; LgdPiece p[LGD_MAXP]; } g_lgd;
+static uint16_t g_lgdIdx[90000]; static int g_lgdIdxN = 0;
+static float g_lgdVtx[3 * 30000];
+static char *g_lgdCam = NULL; static int g_lgdState = 0;   /* 0 not checked yet, 1 working, -1 off (didn't match) */
+static bool Lgd_IdxOk(const uint16_t *ix, int n, int nv)
 {
-    g_lgFp.on = false;
-    if (!g_lgWithArms || !g_lg.on || !player) return;
-    int h = g_leftHanded ? 1 : 0;
-    if (!g_holding[h] || g_held[h].ref != g_lg.ref) return;
-    char *gun = LG_Root(g_lg.ref);
-    if (!gun || g_held[h].visNode != gun) return;   /* (only while it's placed in the hand for this frame) */
-    char *fp = *(char **)(player + PLAYER_NODE_1ST_PERSON);
-    if (!fp || IsBadReadPtr(fp, 0xB0) || !AsNode(fp)) return;
-    char *cp = *(char **)(gun + NIAV_PARENT);
-    if (!cp || cp == fp || IsBadReadPtr(cp, 0xB0)) return;
-    char **cd = *(char ***)(cp + 0xA0); uint16_t cu = *(uint16_t *)(cp + 0xA6);
-    if (!cd || !cu || cu > 8192 || IsBadReadPtr(cd, cu * 4u)) return;
-    int ci = -1; for (int i = 0; i < cu; i++) if (cd[i] == gun) { ci = i; break; }
-    if (ci < 0) return;
-    char **fd = *(char ***)(fp + 0xA0); uint16_t fcap = *(uint16_t *)(fp + 0xA4), fu = *(uint16_t *)(fp + 0xA6), fn = *(uint16_t *)(fp + 0xA8);
-    if (fu > fcap || fu >= 255 || (fu && (!fd || IsBadReadPtr(fd, fu * 4u)))) return;
-    int slot = -1; bool arr = false;
-    for (int i = 0; i < fu; i++) if (!fd[i]) { slot = i; break; }
-    if (slot < 0 && fu < fcap && fd && !IsBadReadPtr(fd, fcap * 4u)) slot = fu;
-    if (slot < 0) { if (fu) memcpy(g_lgFpArr, fd, fu * 4u); slot = fu; arr = true; }   /* (no room: a longer list just for this frame) */
-    g_lgFp.gun = gun; g_lgFp.cp = cp; g_lgFp.fp = fp; g_lgFp.ci = ci; g_lgFp.slot = slot; g_lgFp.arr = arr;
-    g_lgFp.fData = fd; g_lgFp.fCap = fcap; g_lgFp.fUsed = fu; g_lgFp.fCount = fn;
-    memcpy(g_lgFp.L, gun + NIAV_LOCAL_ROTATE, 36); memcpy(g_lgFp.L + 9, gun + NIAV_LOCAL_TRANSLATE, 12); g_lgFp.L[12] = *(float *)(gun + NIAV_LOCAL_SCALE);
-    /* the same spot in the world, seen from the arms' node */
-    M3 F, FT, Gw, Lm; memcpy(F, fp + NIAV_WORLD_ROTATE, sizeof F); M3T(FT, F); memcpy(Gw, gun + NIAV_WORLD_ROTATE, sizeof Gw);
-    float fs = *(const float *)(fp + NIAV_WORLD_SCALE); if (!(fs > 0.0001f)) fs = 1.0f;
-    float gs = *(const float *)(gun + NIAV_WORLD_SCALE); if (!(gs > 0.0001f)) gs = 1.0f;
-    float d[3]; V3Sub(d, (const float *)(gun + NIAV_WORLD_TRANSLATE), (const float *)(fp + NIAV_WORLD_TRANSLATE));
-    M3Mul(Lm, FT, Gw);
-    cd[ci] = NULL;   /* (out of the world for this frame) */
-    if (arr) { g_lgFpArr[slot] = gun; *(char ***)(fp + 0xA0) = g_lgFpArr; *(uint16_t *)(fp + 0xA4) = (uint16_t)(fu + 1); *(uint16_t *)(fp + 0xA6) = (uint16_t)(fu + 1); }
-    else { fd[slot] = gun; if (slot >= fu) *(uint16_t *)(fp + 0xA6) = (uint16_t)(slot + 1); }
-    *(uint16_t *)(fp + 0xA8) = (uint16_t)(fn + 1);
-    *(char **)(gun + NIAV_PARENT) = fp;
-    memcpy(gun + NIAV_LOCAL_ROTATE, Lm, 36);
-    float *Lt = (float *)(gun + NIAV_LOCAL_TRANSLATE);
-    for (int i = 0; i < 3; i++) Lt[i] = (FT[i][0] * d[0] + FT[i][1] * d[1] + FT[i][2] * d[2]) / fs;
-    *(float *)(gun + NIAV_LOCAL_SCALE) = gs / fs;
-    g_lgFp.on = true;
-    static int lg = 0;
-    if (lg++ < 2) Log("Dual wield: other hand's weapon drawn with your hands (arms node: %u children, %u places, room for %u%s)", fn, fu, fcap, arr ? " - a longer list just for the frame" : "");
+    if (!ix || n <= 0 || IsBadReadPtr(ix, (UINT_PTR)n * 2)) return false;
+    for (int i = 0; i < n; i++) if (ix[i] >= nv) return false;
+    return true;
 }
-static void LG_FpRestore(void)
+static void Lgd_Walk(char *n, int depth)
 {
-    if (!g_lgFp.on) return;
-    g_lgFp.on = false;
-    char *gun = g_lgFp.gun, *fp = g_lgFp.fp, *cp = g_lgFp.cp;
-    if (g_lgFp.arr) {
-        if (*(char ***)(fp + 0xA0) == g_lgFpArr) {
-            *(char ***)(fp + 0xA0) = g_lgFp.fData; *(uint16_t *)(fp + 0xA4) = g_lgFp.fCap; *(uint16_t *)(fp + 0xA6) = g_lgFp.fUsed; *(uint16_t *)(fp + 0xA8) = g_lgFp.fCount;
-        } else { static int w = 0; if (w++ < 3) Log("Dual wield: WARNING - the arms' node changed while drawing"); }
-    } else {
-        char **fd = *(char ***)(fp + 0xA0);
-        if (fd == g_lgFp.fData && fd[g_lgFp.slot] == gun) {
-            fd[g_lgFp.slot] = NULL;
-            if (g_lgFp.slot >= g_lgFp.fUsed && *(uint16_t *)(fp + 0xA6) == g_lgFp.slot + 1) *(uint16_t *)(fp + 0xA6) = g_lgFp.fUsed;
-            if (*(uint16_t *)(fp + 0xA8)) (*(uint16_t *)(fp + 0xA8))--;
+    if (!n || depth > 12 || g_lgd.n >= LGD_MAXP || IsBadReadPtr(n, 0xC0)) return;
+    if (*(uint32_t *)(n + 0x30) & 1) return;   /* (hidden parts stay out) */
+    uintptr_t vt = *(uintptr_t *)n;
+    if (vt == 0x0109D454 || vt == 0x0109CD44) {   /* a piece of the model: its triangles, as a list or as strips */
+        char *gd = *(char **)(n + 0xB8);
+        if (!gd || IsBadReadPtr(gd, 0x60)) return;
+        int nv = *(uint16_t *)(gd + 0x08); const float *V = *(const float **)(gd + 0x20);
+        if (nv < 3 || nv > 30000 || !V || IsBadReadPtr(V, (UINT_PTR)nv * 12)) return;
+        int i0 = g_lgdIdxN, ni = 0, room = (int)(sizeof g_lgdIdx / sizeof g_lgdIdx[0]) - g_lgdIdxN;
+        uintptr_t dvt = *(uintptr_t *)gd;
+        if (dvt == 0x0109DAC4) {   /* (a list of triangles) */
+            int nt = *(uint16_t *)(gd + 0x40); const uint16_t *tri = *(const uint16_t **)(gd + 0x48);
+            if (nt > 0 && nt * 3 <= room && Lgd_IdxOk(tri, nt * 3, nv)) { memcpy(g_lgdIdx + i0, tri, (size_t)nt * 6); ni = nt * 3; }
+        } else if (dvt == 0x0109D8AC) {   /* (strips) */
+            int ns = *(uint16_t *)(gd + 0x44); const uint16_t *lens = *(const uint16_t **)(gd + 0x48), *lists = *(const uint16_t **)(gd + 0x4C);
+            if (ns > 0 && ns < 4000 && lens && !IsBadReadPtr(lens, (UINT_PTR)ns * 2)) {
+                int total = 0; for (int q = 0; q < ns; q++) total += lens[q];
+                if (total >= 3 && total < 200000 && Lgd_IdxOk(lists, total, nv)) {
+                    int k = 0, out = 0;
+                    for (int q = 0; q < ns; q++) {
+                        for (int j = 2; j < lens[q] && out + 3 <= room; j++) {
+                            uint16_t a = lists[k + j - 2], b = lists[k + j - 1], c = lists[k + j];
+                            if (a == b || b == c || a == c) continue;
+                            uint16_t *o = g_lgdIdx + i0 + out; o[0] = a; o[1] = b; o[2] = c; out += 3;
+                        }
+                        k += lens[q];
+                    }
+                    ni = out;
+                }
+            }
         }
+        if (ni >= 3) { LgdPiece *p = &g_lgd.p[g_lgd.n++]; p->node = n; p->gd = gd; p->V = V; p->nv = nv; p->i0 = i0; p->ni = ni; g_lgdIdxN += ni; g_lgd.tris += ni / 3; }
+        return;
     }
-    char **cd = *(char ***)(cp + 0xA0); uint16_t cu = *(uint16_t *)(cp + 0xA6), cc = *(uint16_t *)(cp + 0xA4);
-    bool back = false;
-    if (cd && g_lgFp.ci < cu && !cd[g_lgFp.ci]) { cd[g_lgFp.ci] = gun; back = true; }
-    else if (cd) {   /* (its old place was taken while drawing: the first free one) */
-        for (int i = 0; i < cu && !back; i++) if (!cd[i]) { cd[i] = gun; back = true; }
-        if (!back && cu < cc) { cd[cu] = gun; *(uint16_t *)(cp + 0xA6) = (uint16_t)(cu + 1); back = true; }
+    if (!AsNode(n)) return;
+    char **kids = *(char ***)(n + 0xA0); unsigned kc = *(uint16_t *)(n + 0xA6);
+    for (unsigned i = 0; kids && i < kc && i < 64; i++) Lgd_Walk(kids[i], depth + 1);
+}
+static void Lgd_Setup(char *top)
+{
+    g_lgd.forRoot = top; g_lgd.n = 0; g_lgd.tris = 0; g_lgdIdxN = 0;
+    Lgd_Walk(top, 0);
+    static int sl = 0;
+    if (sl++ < 4) Log("Dual wield: the other hand's weapon's shape for hiding fingers behind it: %d pieces, %d triangles", g_lgd.n, g_lgd.tris);
+}
+/* (the depth clear before the hands' pass is the frame's last depth-only clear of the full picture) */
+static void Lgd_OnClear(IDirect3DDevice9 *dev)
+{
+    IDirect3DSurface9 *rt = NULL;
+    if (FAILED(IDirect3DDevice9_GetRenderTarget(dev, 0, &rt)) || !rt) return;
+    D3DSURFACE_DESC d; IDirect3DSurface9_GetDesc(rt, &d); IDirect3DSurface9_Release(rt);
+    if (!(d.Width * 10 >= g_bbW * 9 && d.Height * 10 >= g_bbH * 9)) return;
+    int idx = g_lgdClearN++;
+    if (g_lgdWant && idx == g_lgdTarget && g_lgdState >= 0) g_lgdPending = true;
+}
+static void Lgd_FrameBegin(void) { g_lgdClearN = 0; g_lgdPending = false; }
+static void Lgd_FrameEnd(void)
+{
+    static int lastN = -1;
+    if (g_lgdClearN != lastN && g_lgdWant) { static int cl = 0; if (cl++ < 4) Log("Dual wield: the game clears depth %d time(s) per frame before the hands - the last one starts the hands' pass", g_lgdClearN); lastN = g_lgdClearN; }
+    g_lgdTarget = g_lgdClearN - 1; g_lgdPending = false;
+}
+/* (inside the game's drawing, at the first draw of the hands' pass) */
+static void LG_DepthPass(IDirect3DDevice9 *dev)
+{
+    char *cam = g_lgdCam;
+    if (!cam || !g_lgd.n || g_lgdState < 0 || IsBadReadPtr(cam, 0xF0)) return;
+    D3DMATRIX P, Vw;
+    if (FAILED(IDirect3DDevice9_GetTransform(dev, D3DTS_PROJECTION, &P)) || FAILED(IDirect3DDevice9_GetTransform(dev, D3DTS_VIEW, &Vw))) return;
+    const float *Cp = (const float *)(cam + NIAV_WORLD_TRANSLATE), *Cw = (const float *)(cam + NIAV_WORLD_ROTATE);
+    float t[3] = { Vw._41, Vw._42, Vw._43 };
+    float Rv[3][3] = { { Vw._11, Vw._12, Vw._13 }, { Vw._21, Vw._22, Vw._23 }, { Vw._31, Vw._32, Vw._33 } };
+    float Cv[3]; for (int j = 0; j < 3; j++) Cv[j] = -(t[0] * Rv[j][0] + t[1] * Rv[j][1] + t[2] * Rv[j][2]);   /* (where the game's view says the camera is) */
+    float dc[3]; V3Sub(dc, Cv, Cp); float off = V3Len(dc);
+    bool persp = fabsf(P._34 - 1.0f) < 0.02f && fabsf(P._44) < 0.02f && P._11 > 0.05f && P._22 > 0.05f && P._33 > 0.3f && P._33 < 2.0f && P._43 < 0.0f;
+    float rowLen = sqrtf(Rv[0][0] * Rv[0][0] + Rv[0][1] * Rv[0][1] + Rv[0][2] * Rv[0][2]);
+    bool relative = false;
+    if (persp && fabsf(rowLen - 1.0f) < 0.05f && off > 8.0f && V3Len(Cv) < 3.0f) relative = true;   /* (a view around the camera, not the world's origin) */
+    bool ok = persp && fabsf(rowLen - 1.0f) < 0.05f && (off <= 8.0f || relative);
+    {   static int logged = 0, fails = 0;
+        if (logged < 2 && (ok || fails == 0)) { logged++;
+            float nearP = P._33 != 0 ? -P._43 / P._33 : 0, farP = P._33 > 1.0001f ? P._33 * nearP / (P._33 - 1.0f) : 0;
+            Log("Dual wield: hiding fingers behind the other hand's gun: %s - the game's camera: %s, near %.2f far %.0f, view %.1f units from the camera%s",
+                ok ? "working" : "camera doesn't match yet", persp ? "perspective" : "NOT a perspective view", nearP, farP, off, relative ? " (camera-centred)" : "");
+            if (!persp) Log("Dual wield:   projection %.3f %.3f %.3f %.3f / %.3f %.3f %.3f %.3f / %.3f %.3f %.3f %.3f / %.3f %.3f %.3f %.3f",
+                            P._11, P._12, P._13, P._14, P._21, P._22, P._23, P._24, P._31, P._32, P._33, P._34, P._41, P._42, P._43, P._44); }
+        if (ok) { fails = 0; g_lgdState = 1; }
+        else if (++fails > 30 && g_lgdState == 0) { g_lgdState = -1; Log("Dual wield: hiding fingers behind the other hand's gun switched OFF - the game's camera can't be matched"); }
     }
-    if (!back) { static int w = 0; if (w++ < 3) Log("Dual wield: WARNING - couldn't put the other hand's weapon back in the world's list"); }
-    *(char **)(gun + NIAV_PARENT) = cp;
-    memcpy(gun + NIAV_LOCAL_ROTATE, g_lgFp.L, 36); memcpy(gun + NIAV_LOCAL_TRANSLATE, g_lgFp.L + 9, 12); *(float *)(gun + NIAV_LOCAL_SCALE) = g_lgFp.L[12];
+    if (!ok) return;
+    /* save what's changed */
+    static const D3DRENDERSTATETYPE rsList[] = { D3DRS_ZENABLE, D3DRS_ZWRITEENABLE, D3DRS_ZFUNC, D3DRS_ALPHABLENDENABLE, D3DRS_ALPHATESTENABLE,
+        D3DRS_STENCILENABLE, D3DRS_SCISSORTESTENABLE, D3DRS_CULLMODE, D3DRS_LIGHTING, D3DRS_FOGENABLE, D3DRS_COLORWRITEENABLE,
+        D3DRS_COLORWRITEENABLE1, D3DRS_COLORWRITEENABLE2, D3DRS_COLORWRITEENABLE3, D3DRS_CLIPPLANEENABLE, D3DRS_DEPTHBIAS,
+        D3DRS_SLOPESCALEDEPTHBIAS, D3DRS_FILLMODE, D3DRS_VERTEXBLEND, D3DRS_INDEXEDVERTEXBLENDENABLE, D3DRS_CLIPPING, D3DRS_SRGBWRITEENABLE };
+    enum { NRS = sizeof rsList / sizeof rsList[0] };
+    DWORD rsSave[NRS];
+    for (int i = 0; i < NRS; i++) IDirect3DDevice9_GetRenderState(dev, rsList[i], &rsSave[i]);
+    D3DMATRIX Wsave; IDirect3DDevice9_GetTransform(dev, D3DTS_WORLD, &Wsave);
+    IDirect3DVertexShader9 *vsSave = NULL; IDirect3DDevice9_GetVertexShader(dev, &vsSave);
+    IDirect3DPixelShader9 *psSave = NULL; IDirect3DDevice9_GetPixelShader(dev, &psSave);
+    IDirect3DVertexDeclaration9 *declSave = NULL; IDirect3DDevice9_GetVertexDeclaration(dev, &declSave);
+    DWORD fvfSave = 0; IDirect3DDevice9_GetFVF(dev, &fvfSave);
+    IDirect3DVertexBuffer9 *vbSave = NULL; UINT vbOff = 0, vbStride = 0; IDirect3DDevice9_GetStreamSource(dev, 0, &vbSave, &vbOff, &vbStride);
+    IDirect3DIndexBuffer9 *ibSave = NULL; IDirect3DDevice9_GetIndices(dev, &ibSave);
+    /* depth only */
+    D3DMATRIX I; memset(&I, 0, sizeof I); I._11 = I._22 = I._33 = I._44 = 1.0f;
+    IDirect3DDevice9_SetTransform(dev, D3DTS_WORLD, &I);
+    IDirect3DDevice9_SetVertexShader(dev, NULL); IDirect3DDevice9_SetPixelShader(dev, NULL);
+    IDirect3DDevice9_SetFVF(dev, D3DFVF_XYZ);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ZENABLE, D3DZB_TRUE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ZWRITEENABLE, TRUE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ZFUNC, D3DCMP_LESSEQUAL);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ALPHABLENDENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ALPHATESTENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_STENCILENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_SCISSORTESTENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_CULLMODE, D3DCULL_NONE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_LIGHTING, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_FOGENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_COLORWRITEENABLE, 0);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_COLORWRITEENABLE1, 0);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_COLORWRITEENABLE2, 0);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_COLORWRITEENABLE3, 0);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_CLIPPLANEENABLE, 0);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_DEPTHBIAS, 0);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_SLOPESCALEDEPTHBIAS, 0);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_FILLMODE, D3DFILL_SOLID);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_VERTEXBLEND, D3DVBF_DISABLE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_INDEXEDVERTEXBLENDENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_CLIPPING, TRUE);
+    float F[3] = { Cw[0], Cw[3], Cw[6] };   /* (a hair further away than the gun itself) */
+    int drawn = 0;
+    for (int q = 0; q < g_lgd.n; q++) {
+        LgdPiece *p = &g_lgd.p[q]; char *n = p->node;
+        if (IsBadReadPtr(n, 0xC0) || *(char **)(n + 0xB8) != p->gd || *(const float **)(p->gd + 0x20) != p->V) continue;
+        bool hid = false; char *up = n;
+        for (int lv = 0; lv < 10 && up && !hid; lv++) { if (*(uint32_t *)(up + 0x30) & 1) hid = true; if (up == g_lgd.forRoot) break; up = *(char **)(up + NIAV_PARENT); }
+        if (hid) continue;
+        const float *R = (const float *)(n + NIAV_WORLD_ROTATE), *T = (const float *)(n + NIAV_WORLD_TRANSLATE);
+        float sc = *(const float *)(n + NIAV_WORLD_SCALE); if (!(sc > 0.0001f && sc < 1000.0f)) sc = 1.0f;
+        int nv = p->nv; if (nv > 30000) continue;
+        for (int k = 0; k < nv; k++) {
+            const float *v = p->V + k * 3; float *o = g_lgdVtx + k * 3;
+            for (int i = 0; i < 3; i++) o[i] = T[i] + sc * (R[i * 3] * v[0] + R[i * 3 + 1] * v[1] + R[i * 3 + 2] * v[2]) + F[i] * 0.1f - (relative ? Cp[i] : 0.0f);
+        }
+        if (SUCCEEDED(IDirect3DDevice9_DrawIndexedPrimitiveUP(dev, D3DPT_TRIANGLELIST, 0, (UINT)nv, (UINT)(p->ni / 3), g_lgdIdx + p->i0, D3DFMT_INDEX16, g_lgdVtx, 12))) drawn++;
+    }
+    /* put it all back for the game's own draw */
+    for (int i = 0; i < NRS; i++) IDirect3DDevice9_SetRenderState(dev, rsList[i], rsSave[i]);
+    IDirect3DDevice9_SetTransform(dev, D3DTS_WORLD, &Wsave);
+    IDirect3DDevice9_SetVertexShader(dev, vsSave); if (vsSave) IDirect3DVertexShader9_Release(vsSave);
+    IDirect3DDevice9_SetPixelShader(dev, psSave); if (psSave) IDirect3DPixelShader9_Release(psSave);
+    if (declSave) { IDirect3DDevice9_SetVertexDeclaration(dev, declSave); IDirect3DVertexDeclaration9_Release(declSave); }
+    else IDirect3DDevice9_SetFVF(dev, fvfSave);
+    IDirect3DDevice9_SetStreamSource(dev, 0, vbSave, vbOff, vbStride); if (vbSave) IDirect3DVertexBuffer9_Release(vbSave);
+    IDirect3DDevice9_SetIndices(dev, ibSave); if (ibSave) IDirect3DIndexBuffer9_Release(ibSave);
+    static int dl = 0; if (dl++ < 3) Log("Dual wield: other hand's gun put in front of your fingers (%d of %d pieces)", drawn, g_lgd.n);
 }
 /* (render hook, after the held objects are placed for drawing) the other hand's weapon drawn exactly in the hand */
 static char *g_lgVisNode = NULL; static float g_lgVisSaved[12];
@@ -11191,10 +11318,11 @@ static void LG_VisualRestore(void)
     memcpy(g_lgVisNode + NIAV_LOCAL_ROTATE, g_lgVisSaved, 36); memcpy(g_lgVisNode + NIAV_LOCAL_TRANSLATE, g_lgVisSaved + 9, 12);
     NodeUpdate(g_lgVisNode); g_lgVisNode = NULL;
 }
+static bool g_lgPlaced = false;   /* (the other hand's weapon was placed in the hand for this frame) */
 static void LG_Visual(void)
 {
     int h = g_leftHanded ? 1 : 0;
-    g_lgVisNode = NULL;
+    g_lgVisNode = NULL; g_lgPlaced = false;
     static int nOn = 0, nAll = 0; static double rep = 0;
     if (g_lg.on) { nAll++; if (QpcMs() > rep && nAll > 30) { rep = QpcMs() + 8000.0; Log("Dual wield: other hand's gun drawn in the hand on %d of %d frames", nOn, nAll); nOn = nAll = 0; } }
     if (!g_lg.on || !g_holding[h] || g_held[h].ref != g_lg.ref) return;
@@ -11204,7 +11332,10 @@ static void LG_Visual(void)
     char *root = LG_BodyNode(g_lg.ref);   /* (the part that carries the gun's shape: placed exactly, whatever its physics is doing) */
     if (!root) return;
     if (root != top) { memcpy(g_lgVisSaved, root + NIAV_LOCAL_ROTATE, 36); memcpy(g_lgVisSaved + 9, root + NIAV_LOCAL_TRANSLATE, 12); g_lgVisNode = root; }
-    float org[3]; M3 W; if (!LG_Pose(org, W, NULL)) return;
+    float org[3], aim[3]; M3 W; if (!LG_Pose(org, W, aim)) return;
+    /* (the hand's real pose is only there while a frame is drawn: shots and blows use this copy of it) */
+    memcpy(g_lgPoseOrg, org, 12); memcpy(g_lgPoseW, W, sizeof W); memcpy(g_lgPoseAim, aim, 12); g_lgPoseAt = QpcMs(); g_lgPoseRef = g_lg.ref;
+    g_lgPlaced = true;
     LGA_Pose(org, W);   /* (a shot's kick, the reload) */
     float *Lr = (float *)(root + NIAV_LOCAL_ROTATE), *Lt = (float *)(root + NIAV_LOCAL_TRANSLATE);
     char *parent = *(char **)(root + NIAV_PARENT);
@@ -11233,6 +11364,18 @@ static void LG_Visual(void)
     }
     NodeUpdate(root);
     LGA_Apply();   /* (slide, cylinder, magazine) */
+    if (g_lgWithArms && g_lgd.forRoot != top) Lgd_Setup(top);
+}
+/* where the other hand's weapon is for a shot or a blow: as it was drawn last frame (the drawn hand is only posed while a
+   frame is drawn - outside of that its bones hold the game's own animation, which points somewhere else) */
+static bool LG_PoseNow(float *org, M3 W, float *aim)
+{
+    if (g_lgPoseRef == g_lg.ref && g_lgPoseAt > 0 && QpcMs() - g_lgPoseAt < 250.0) {
+        memcpy(org, g_lgPoseOrg, 12); memcpy(W, g_lgPoseW, sizeof(M3)); if (aim) memcpy(aim, g_lgPoseAim, 12);
+        return true;
+    }
+    g_lgPoseCtrl = true; bool ok = LG_Pose(org, W, aim); g_lgPoseCtrl = false;
+    return ok;
 }
 /* (render hook) taking a gun into the other hand */
 static void LG_Update(void)
@@ -11462,7 +11605,7 @@ static void LG_Tick(void)
         return;
     }
     if (!o_FireWeapon) return;
-    float org[3], dir[3]; M3 Wp; if (!LG_Pose(org, Wp, dir)) return;
+    float org[3], dir[3]; M3 Wp; if (!LG_PoseNow(org, Wp, dir)) return;
     float pos[3]; for (int i = 0; i < 3; i++) pos[i] = org[i] + Wp[i][0] * g_lg.pnL[0] + Wp[i][1] * g_lg.pnL[1] + Wp[i][2] * g_lg.pnL[2];
     char *player = (char *)GetPlayer();
     float dl = V3Len(dir); if (dl < 0.5f) return; for (int i = 0; i < 3; i++) dir[i] /= dl;
@@ -13091,7 +13234,6 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             if (armsDone) RG_Capture();
             if (g_hitReact) Hit_Apply();
             Holster_Models((char *)player);
-            LG_FpSwap((char *)player);   /* (the other hand's weapon drawn with your hands this frame) */
             {   /* grappling: the body below you is hidden (it can't keep up at grapple speed); back a moment after */
                 static double pullEnd = 0;
                 if (g_grapPulling || g_climbing) pullEnd = QpcMs();   /* (climbing too) */
@@ -13107,6 +13249,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         if (!armsDone) g_capWant = false;
         Trk_Update();
         g_capCount = 0; g_inRenderFrame = true;
+        g_lgdWant = grabVis && g_lgWithArms && g_lgPlaced && cam; g_lgdCam = cam;   /* (fingers behind the other hand's gun hidden this frame) */
         bool full = g_stereoFull && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11 && !((const volatile bool *)0x011F308F)[1007];
         {   /* the Pip-Boy: 3D once it's fully open and settled; one picture while it opens or closes (drawing the opening
                twice stalls the game) and while other menus are up */
@@ -13148,7 +13291,9 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                     PipScr_Prepare((char *)player, cam);
                 }
                 double tr = QpcMs();
+                Lgd_FrameBegin();
                 o_DoRenderFrame(osGlobals, renderer, a, b);
+                Lgd_FrameEnd();
                 te[eye] = QpcMs() - tr;
                 if (te[eye] > 250.0 && g_fullPipNow) g_fullPipSlow = true;
                 for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }   /* (in case the game moved it while drawing) */
@@ -13162,14 +13307,12 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             g_stereoCapturedThisFrame = ok0;
             {   static int fl = 0; static double nl = 0;
                 if (QpcMs() > nl) { nl = QpcMs() + 10000.0; if (fl++ < 30) Log("Full 3D: left eye drawn in %.1f ms, right eye %.1f ms (%s)", te[0], te[1], ok0 && ok1 ? "both captured" : "capture failed"); } }
-        } else
-        o_DoRenderFrame(osGlobals, renderer, a, b);
-        g_inRenderFrame = false;
+        } else { Lgd_FrameBegin(); o_DoRenderFrame(osGlobals, renderer, a, b); Lgd_FrameEnd(); }
+        g_inRenderFrame = false; g_lgdWant = false;
         t4 = QpcMs(); g_tGame += t4 - t3;
         MeleeAngle_Restore();
         Hit_Restore();
         if (g_bodyHidden) { *(uint32_t *)(g_bodyHidden + 0x30) &= ~1u; g_bodyHidden = NULL; }
-        LG_FpRestore();
         if (grabVis) { LG_VisualRestore(); Grab_VisualRestore(); }
         if (armsDone) Arms_Restore();
         HeadOffset_Restore();
@@ -15028,7 +15171,7 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: up/down", "LeftHanded", "fGunUp", &g_lhGunUp, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Moves the gun in your left hand up (+) or down (-) - the second gun when dual wielding, or your gun in left-handed play." },
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: left/right", "LeftHanded", "fGunSide", &g_lhGunSide, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Moves the gun in your left hand to the right (+) or left (-) - the second gun when dual wielding, or your gun in left-handed play." },
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: tilt (dual wield)", "Grab", "fOtherHandTilt", &g_lgTilt, -90.0f, 90.0f, 1.0f, "%.0f deg", 0, 0, "Dual wielding: tips the second gun in your left hand up (+) or down (-)." },
-    { SP_WEAPONS, ST_BOOL, "Left hand gun: drawn with your hands", "Grab", "bOtherHandWithArms", &g_lgWithArms, 0, 0, 0, 0, 0, 0, "ON: the second gun or melee weapon in your left hand is drawn together with your hands, like the gun in your gun hand - fingers wrapped behind it are hidden by it. OFF: drawn as a world object (fingers show through it)." },
+    { SP_WEAPONS, ST_BOOL, "Left hand gun: fingers go behind it", "Grab", "bOtherHandWithArms", &g_lgWithArms, 0, 0, 0, 0, 0, 0, "ON: fingers wrapped behind the second gun or melee weapon in your left hand are hidden by it, like with the gun in your gun hand (the game draws your hands over the world, so without this they show through it). OFF: as the game draws it." },
     { SP_WEAPONS, ST_BOOL, "Left hand gun: kick and reload motion", "Grab", "bOtherHandGunMotion", &g_lgMotion, 0, 0, 0, 0, 0, 0, "ON: the second gun kicks up when it fires, its slide, bolt or cylinder moves (when the model has one), and it tips over in your hand while it reloads, magazine out and back in. OFF: it stays still." },
     { SP_WEAPONS, ST_BOOL, "See-through scopes", "Controls", "bSeeThroughScopes", &g_scopesEnabled, 0, 0, 0, 0, SF_RESTART, 0, "Look through a scope on your gun to see a magnified view. Turning it ON needs a restart." },
     { SP_WEAPONS, ST_BOOL, "Raise to eye to aim scopes", "Controls", "bRaiseToEyeScopes", &g_autoScope, 0, 0, 0, 0, 0, 0, "Bring a scoped gun up to your eye and the game's own scope view comes up." },
