@@ -29,7 +29,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.2.1 (other hand's gun aims where that hand aims, plays its shot sound, keeps its rounds when passed between hands; any weapon held by squeezing the grip can be dropped or handed over; script fixes for magazines, ammo readout and Pip-Boy pick; left Y reloads the other hand's gun from your ammo; melee weapons in the other hand; the other hand's weapon picked in the Pip-Boy with the left trigger; its readout on the left of the HUD; holsters for the other hand: its own hip and shoulder; dual wielding: a gun in the other hand, fired with its trigger until empty, reloaded by passing it to the gun hand; weapons lying in the world taken by the grip, held while you squeeze, dropped or thrown when you let go; bleeding from stabs and from enemy blades, until healed with a stimpak; blows deal damage where they land; solid bodies; stabbing - blades stick until pulled out; leg hits drop enemies, head strikes knock them out for an hour; VR throwing: knives/spears with the trigger, dynamite lit with your other hand, grenades with a pin to pull; hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_STR    "2.2.1 (other hand's gun: lined up from the weapon's shape, bullets created directly (crash fix), never dropped while running, reload sound; other hand's gun aims where that hand aims, plays its shot sound, keeps its rounds when passed between hands; any weapon held by squeezing the grip can be dropped or handed over; script fixes for magazines, ammo readout and Pip-Boy pick; left Y reloads the other hand's gun from your ammo; melee weapons in the other hand; the other hand's weapon picked in the Pip-Boy with the left trigger; its readout on the left of the HUD; holsters for the other hand: its own hip and shoulder; dual wielding: a gun in the other hand, fired with its trigger until empty, reloaded by passing it to the gun hand; weapons lying in the world taken by the grip, held while you squeeze, dropped or thrown when you let go; bleeding from stabs and from enemy blades, until healed with a stimpak; blows deal damage where they land; solid bodies; stabbing - blades stick until pulled out; leg hits drop enemies, head strikes knock them out for an hour; VR throwing: knives/spears with the trigger, dynamite lit with your other hand, grenades with a pin to pull; hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -10428,6 +10428,59 @@ static bool LG_IsGunRef(char *ref)
 }
 static char *LG_Root(char *ref) { char *rs = *(char **)(ref + 0x64); char *root = (rs && !IsBadReadPtr(rs, 0x18)) ? *(char **)(rs + 0x14) : NULL; return root && !IsBadReadPtr(root, 0xA0) ? root : NULL; }
 /* hold the gun by its grip: grip at the palm, barrel along the hand's pointing direction, top up */
+/* a weapon model's points (in the model's own frame), a sample of them */
+static float g_lgPts[3000][3]; static int g_lgPtN;
+static void LG_PtsWalk(char *n, const float Rp[9], const float Tp[3], int depth)
+{
+    if (!n || depth > 16 || IsBadReadPtr(n, 0xC0)) return;
+    const float *Lr = (const float *)(n + NIAV_LOCAL_ROTATE), *Lt = (const float *)(n + NIAV_LOCAL_TRANSLATE);
+    float R[9], T[3];
+    if (depth == 0) { for (int i = 0; i < 9; i++) R[i] = (i % 4 == 0) ? 1.0f : 0.0f; T[0] = T[1] = T[2] = 0; }
+    else for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) R[i * 3 + j] = Rp[i * 3 + 0] * Lr[0 * 3 + j] + Rp[i * 3 + 1] * Lr[1 * 3 + j] + Rp[i * 3 + 2] * Lr[2 * 3 + j];
+        T[i] = Tp[i] + Rp[i * 3 + 0] * Lt[0] + Rp[i * 3 + 1] * Lt[1] + Rp[i * 3 + 2] * Lt[2];
+    }
+    if (*(uint32_t *)(n + 0x30) & 1) return;
+    uintptr_t vt = *(uintptr_t *)n;
+    if (vt == 0x0109D454 || vt == 0x0109CD44) {
+        char *gd = *(char **)(n + 0xB8);
+        if (!gd || IsBadReadPtr(gd, 0x30)) return;
+        uint16_t nv = *(uint16_t *)(gd + 0x08); const float *V = *(const float **)(gd + 0x20);
+        if (!nv || !V || IsBadReadPtr(V, nv * 12)) return;
+        int step = nv > 600 ? nv / 600 : 1;
+        for (int q = 0; q < nv && g_lgPtN < 3000; q += step) {
+            for (int i = 0; i < 3; i++) g_lgPts[g_lgPtN][i] = T[i] + R[i * 3] * V[q * 3] + R[i * 3 + 1] * V[q * 3 + 1] + R[i * 3 + 2] * V[q * 3 + 2];
+            g_lgPtN++;
+        }
+        return;
+    }
+    if (!AsNode(n)) return;
+    char **kids = *(char ***)(n + 0xA0); unsigned cnt = *(uint16_t *)(n + 0xA6);
+    for (unsigned i = 0; kids && i < cnt && i < 64; i++) LG_PtsWalk(kids[i], R, T, depth + 1);
+}
+/* the weapon's barrel (or blade) direction and its top, in its own frame, from its shape: the longest way is the barrel,
+   pointing to the far end from the grip; the top is the way the front part sits from the grip (a barrel is above the hand) */
+static bool LG_ModelAxes(char *root, float *bl, float *ul, float *len)
+{
+    g_lgPtN = 0; LG_PtsWalk(root, NULL, NULL, 0);
+    if (g_lgPtN < 12) return false;
+    float mn[3] = { 1e9f, 1e9f, 1e9f }, mx[3] = { -1e9f, -1e9f, -1e9f };
+    for (int k = 0; k < g_lgPtN; k++) for (int i = 0; i < 3; i++) { if (g_lgPts[k][i] < mn[i]) mn[i] = g_lgPts[k][i]; if (g_lgPts[k][i] > mx[i]) mx[i] = g_lgPts[k][i]; }
+    int A = 0; for (int i = 1; i < 3; i++) if (mx[i] - mn[i] > mx[A] - mn[A]) A = i;
+    int C = -1; for (int i = 0; i < 3; i++) if (i != A && (C < 0 || mx[i] - mn[i] < mx[C] - mn[C])) C = i;   /* (the thin way: the side) */
+    int B = 3 - A - C;
+    bool fwdPos = mx[A] >= -mn[A];
+    float farEnd = fwdPos ? mx[A] : -mn[A];
+    double sum = 0; int cnt = 0;
+    for (int k = 0; k < g_lgPtN; k++) { float a = fwdPos ? g_lgPts[k][A] : -g_lgPts[k][A]; if (a > farEnd * 0.5f) { sum += g_lgPts[k][B]; cnt++; } }
+    float upSign = (cnt && sum / cnt < 0) ? -1.0f : 1.0f;
+    bl[0] = bl[1] = bl[2] = 0; bl[A] = fwdPos ? 1.0f : -1.0f;
+    ul[0] = ul[1] = ul[2] = 0; ul[B] = upSign;
+    *len = farEnd;
+    Log("Dual wield: weapon shape %.0f x %.0f x %.0f, barrel along %c%c, top %c%c (%d points)", mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2],
+        fwdPos ? '+' : '-', "XYZ"[A], upSign > 0 ? '+' : '-', "XYZ"[B], g_lgPtN);
+    return true;
+}
 static bool LG_SetGrip(int h, char *ref)
 {
     Held *g = &g_held[h];
@@ -10454,8 +10507,17 @@ static bool LG_SetGrip(int h, char *ref)
     if (pn) { float d[3]; V3Sub(d, (const float *)(pn + NIAV_WORLD_TRANSLATE), org);
         float l[3]; for (int i = 0; i < 3; i++) l[i] = WrT[i][0] * d[0] + WrT[i][1] * d[1] + WrT[i][2] * d[2];
         if (V3Len(l) > 2.0f) memcpy(bl, l, 12); }
+    float ul[3] = { 0, 0, 1 };
+    {   float mb[3], mu[3], ml;
+        if (LG_ModelAxes(root, mb, mu, &ml)) {
+            if (!pn || V3Dot(mb, bl) > 0.0f || V3Len(bl) < 0.5f) memcpy(bl, mb, 12);   /* (the muzzle point, when there is one, settles which end is the front) */
+            else for (int i = 0; i < 3; i++) bl[i] = -mb[i];
+            memcpy(ul, mu, 12);
+            if (g_lg.melee) g_lg.len = fminf(fmaxf(ml, 8.0f), 90.0f);
+        }
+    }
     float L = V3Len(bl); for (int i = 0; i < 3; i++) bl[i] /= L;
-    float ul[3] = { 0, 0, 1 }; float pd = V3Dot(ul, bl); for (int i = 0; i < 3; i++) ul[i] -= pd * bl[i];
+    float pd = V3Dot(ul, bl); for (int i = 0; i < 3; i++) ul[i] -= pd * bl[i];
     if (V3Len(ul) < 0.3f) { ul[0] = 1; ul[1] = ul[2] = 0; pd = V3Dot(ul, bl); for (int i = 0; i < 3; i++) ul[i] -= pd * bl[i]; }
     L = V3Len(ul); for (int i = 0; i < 3; i++) ul[i] /= L;
     float sl[3]; V3Cross(sl, bl, ul);
@@ -10579,6 +10641,56 @@ static void LG_Input(bool menu, bool gripNow, bool gripEdge, float trig, bool *l
     if (g_lg.on && t && !g_lg.trig) g_lg.fireReq = true;
     g_lg.trig = t && g_lg.on;
 }
+/* a reload sound for a weapon: the game's reload sounds are found by their file names, matched to the weapon's model/name */
+static const char *Snd_Path(char *f)
+{
+    for (int o = 0x30; o <= 0x5C; o += 4) {
+        const char *p = *(const char **)(f + o);
+        if (!p || IsBadStringPtrA(p, 160)) continue;
+        size_t L = strnlen(p, 160); if (L < 5 || L >= 160) continue;
+        if (strchr(p, '\\') || strchr(p, '/')) return p;
+    }
+    return NULL;
+}
+static void *LG_ReloadSound(void *w)
+{
+    static char *snd[800]; static const char *pth[800]; static int n = -1;
+    if (n < 0) {
+        n = 0;
+        char *map = *(char **)FORMMAP_PTR_ADDR;
+        if (map) { uint32_t nb = *(uint32_t *)(map + 4); char **buckets = *(char ***)(map + 8);
+            if (nb && buckets && nb < 4000000)
+                for (uint32_t bk = 0; bk < nb && n < 800; bk++)
+                    for (char *e = buckets[bk]; e && !IsBadReadPtr(e, 12) && n < 800; e = *(char **)e) {
+                        char *f = *(char **)(e + 8);
+                        if (!f || IsBadReadPtr(f, 0x60) || *(BYTE *)(f + 4) != 0x0D) continue;
+                        const char *p = Snd_Path(f); if (!p) continue;
+                        char lo[160]; snprintf(lo, sizeof lo, "%s", p); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
+                        if (strstr(lo, "reload")) { snd[n] = f; pth[n] = p; n++; }
+                    } }
+        Log("Dual wield: %d reload sounds found%s%s", n, n ? ", e.g. " : "", n ? pth[0] : "");
+    }
+    if (!n || !w) return NULL;
+    char key[256]; const char *nm = *(const char **)((char *)w + 0x34), *mp = *(const char **)((char *)w + 0x40);
+    snprintf(key, sizeof key, "%s %s", nm && !IsBadStringPtrA(nm, 64) ? nm : "", mp && !IsBadStringPtrA(mp, 160) ? mp : "");
+    for (char *c = key; *c; c++) *c = isalnum((unsigned char)*c) ? (char)tolower((unsigned char)*c) : ' ';
+    int t = *(BYTE *)((char *)w + 0xF4);
+    int best = -1, bestS = 0;
+    for (int i = 0; i < n; i++) {
+        char lo[160]; snprintf(lo, sizeof lo, "%s", pth[i]); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
+        int sc = 0; char kk[256]; snprintf(kk, sizeof kk, "%s", key);
+        for (char *tok = strtok(kk, " "); tok; tok = strtok(NULL, " ")) {
+            if (strlen(tok) < 3 || !strcmp(tok, "nif") || !strcmp(tok, "weapons") || !strcmp(tok, "weapon")) continue;
+            if (strstr(lo, tok)) sc += (int)strlen(tok);
+        }
+        if (sc == 0 && (t == 3 || t == 4) && strstr(lo, "pistol")) sc = 1;
+        if (sc == 0 && t >= 5 && t <= 9 && strstr(lo, "rifle")) sc = 1;
+        if (sc > bestS) { bestS = sc; best = i; }
+    }
+    if (best < 0) best = 0;
+    static void *forW = NULL; if (forW != w) { forW = w; Log("Dual wield: reload sound for this gun: %s", pth[best]); }
+    return snd[best];
+}
 /* (main loop) shots, magazines, passing the gun between hands */
 static void LG_Tick(void)
 {
@@ -10612,7 +10724,9 @@ static void LG_Tick(void)
             g_lg.reloadReq = false;
             if (g_lg.on && !g_lg.melee && !g_lg.reloadAt) {
                 if (g_lg.rounds >= g_lg.clip) { if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 500); }
-                else { g_lg.reloadAt = now + 1300.0; if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2500); Log("Dual wield: reloading the other hand's gun"); }
+                else { g_lg.reloadAt = now + 1300.0; if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2500); Log("Dual wield: reloading the other hand's gun");
+                    static void *ps = NULL; if (!ps) ps = g_scriptIntf->CompileScript("ref rSnd\nBegin Function { rSnd }\nPlaySound rSnd\nEnd\n");
+                    void *rs = LG_ReloadSound(g_lg.base); if (rs && ps) g_scriptIntf->CallFunctionAlt(ps, GetPlayer(), 1, rs); }
             }
         }
         if (g_lg.reloadAt && now > g_lg.reloadAt) {
@@ -10688,13 +10802,30 @@ static void LG_Tick(void)
     float pos[3]; for (int i = 0; i < 3; i++) pos[i] = org[i] + Wp[i][0] * g_lg.pnL[0] + Wp[i][1] * g_lg.pnL[1] + Wp[i][2] * g_lg.pnL[2];
     char *player = (char *)GetPlayer();
     float dl = V3Len(dir); if (dl < 0.5f) return; for (int i = 0; i < 3; i++) dir[i] /= dl;
-    g_launch.on = true; g_launch.spawned = false; g_launch.gunShot = true; memcpy(g_launch.pos, pos, 12);
-    g_launch.h = atan2f(dir[0], dir[1]); g_launch.p = -asinf(fminf(fmaxf(dir[2], -1.0f), 1.0f)); g_launch.timer = 0; g_launch.speed = 0;
-    float *rx = PlayerRotX(player), *rz = PlayerRotZ(player); float sx = *rx, sz = *rz;
-    *rz = g_launch.h; *rx = g_launch.p;
-    o_FireWeapon(g_lg.base, player);
-    *rx = sx; *rz = sz;
-    g_launch.on = false; g_launch.gunShot = false;
+    for (int i = 0; i < 3; i++) pos[i] += dir[i] * 3.0f;   /* (just clear of the gun) */
+    /* the gun's own bullet(s), created directly - the game's whole firing routine isn't run for a gun it doesn't think you hold */
+    char *wb = (char *)g_lg.base, *proj = *(char **)(wb + 0x118);
+    int np = *(BYTE *)(wb + 0x11E); if (np < 1 || np > 30) np = 1;
+    float spreadDeg = *(float *)(wb + 0x108); if (!(spreadDeg >= 0 && spreadDeg < 30)) spreadDeg = 0;
+    g_launch.spawned = false;
+    if (proj && !IsBadReadPtr(proj, 0x88) && *(BYTE *)(proj + 4) == 0x33 && o_ProjSpawn) {
+        void *cell = *(void **)(player + 0x40);
+        for (int k = 0; k < np; k++) {
+            float d[3]; memcpy(d, dir, 12);
+            if (np > 1 && spreadDeg > 0) {   /* (shotgun pellets: spread the weapon's own amount) */
+                float a = ((float)rand() / RAND_MAX) * 6.2832f, r = sqrtf((float)rand() / RAND_MAX) * spreadDeg / RAD2DEG;
+                float u[3] = { 0, 0, 1 }, sd[3], up[3]; V3Cross(sd, d, u); float sl = V3Len(sd); if (sl < 1e-3f) { sd[0] = 1; sd[1] = sd[2] = 0; sl = 1; }
+                for (int i = 0; i < 3; i++) sd[i] /= sl; V3Cross(up, sd, d);
+                for (int i = 0; i < 3; i++) d[i] += (sd[i] * cosf(a) + up[i] * sinf(a)) * tanf(r);
+                float l2 = V3Len(d); for (int i = 0; i < 3; i++) d[i] /= l2;
+            }
+            float hh = atan2f(d[0], d[1]), pp = -asinf(fminf(fmaxf(d[2], -1.0f), 1.0f));
+            void *r = o_ProjSpawn(proj, player, NULL, wb, pos[0], pos[1], pos[2], hh, pp, NULL, NULL, 0, 0, 0.0f, 0.0f, (uint32_t)(uintptr_t)cell);
+            if (r) g_launch.spawned = true;
+        }
+    } else {
+        static int wl = 0; if (wl++ < 3) Log("Dual wield: this gun's bullet type wasn't found - can't fire it from the other hand");
+    }
     g_lg.lastShot = now; g_lg.rounds--;
     {   /* the gun's own shot sound */
         static void *p2 = NULL, *p3 = NULL; static bool t2 = false;
@@ -10942,14 +11073,15 @@ static void Grab_Hold(int h, float dt)
     float rerr[3]; RotVec(E, rerr);
 
     float dist = V3Len(err);
-    g->farTime = dist > 60.0f ? g->farTime + dt : 0.0f;
+    g->farTime = (dist > 60.0f && !g->gripHold) ? g->farTime + dt : 0.0f;   /* (held by the grip: it's drawn in your hand anyway - never let go of for lagging behind) */
     if (g->farTime > 0.75f) { Log("Grab: held object stuck %.0f units from the hand - releasing", dist); Grab_Drop(h, false); return; }
 
     const float kp = 25.0f, ka = 22.0f;
     float v[3], w[3];
     for (int i = 0; i < 3; i++) { v[i] = (vff[i] + err[i] * kp) / HK_TO_GAME; w[i] = wff[i] + rerr[i] * ka; }
     float vl = V3Len(v), wl = V3Len(w);
-    if (vl > 120.0f) for (int i = 0; i < 3; i++) v[i] *= 120.0f / vl;
+    float vmax = g->gripHold ? 400.0f : 120.0f;
+    if (vl > vmax) for (int i = 0; i < 3; i++) v[i] *= vmax / vl;
     if (wl > 50.0f)  for (int i = 0; i < 3; i++) w[i] *= 50.0f / wl;
     float *lv = (float *)(g->rb + 0x1B0), *av = (float *)(g->rb + 0x1C0);
     for (int i = 0; i < 3; i++) { lv[i] = v[i]; av[i] = w[i]; }
