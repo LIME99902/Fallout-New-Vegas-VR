@@ -29,7 +29,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.2.1 (other hand's weapon: kept in your inventory and drawn in the hand (no physics object - fixes it flying off, drops and the crash), fine-tuning settings; other hand's gun: lined up from the weapon's shape, bullets created directly (crash fix), never dropped while running, reload sound; other hand's gun aims where that hand aims, plays its shot sound, keeps its rounds when passed between hands; any weapon held by squeezing the grip can be dropped or handed over; script fixes for magazines, ammo readout and Pip-Boy pick; left Y reloads the other hand's gun from your ammo; melee weapons in the other hand; the other hand's weapon picked in the Pip-Boy with the left trigger; its readout on the left of the HUD; holsters for the other hand: its own hip and shoulder; dual wielding: a gun in the other hand, fired with its trigger until empty, reloaded by passing it to the gun hand; weapons lying in the world taken by the grip, held while you squeeze, dropped or thrown when you let go; bleeding from stabs and from enemy blades, until healed with a stimpak; blows deal damage where they land; solid bodies; stabbing - blades stick until pulled out; leg hits drop enemies, head strikes knock them out for an hour; VR throwing: knives/spears with the trigger, dynamite lit with your other hand, grenades with a pin to pull; hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_STR    "2.2.1 (other hand's weapon model loaded by FNVR and hung in your arms - now shown; other hand's weapon: kept in your inventory and drawn in the hand (no physics object - fixes it flying off, drops and the crash), fine-tuning settings; other hand's gun: lined up from the weapon's shape, bullets created directly (crash fix), never dropped while running, reload sound; other hand's gun aims where that hand aims, plays its shot sound, keeps its rounds when passed between hands; any weapon held by squeezing the grip can be dropped or handed over; script fixes for magazines, ammo readout and Pip-Boy pick; left Y reloads the other hand's gun from your ammo; melee weapons in the other hand; the other hand's weapon picked in the Pip-Boy with the left trigger; its readout on the left of the HUD; holsters for the other hand: its own hip and shoulder; dual wielding: a gun in the other hand, fired with its trigger until empty, reloaded by passing it to the gun hand; weapons lying in the world taken by the grip, held while you squeeze, dropped or thrown when you let go; bleeding from stabs and from enemy blades, until healed with a stimpak; blows deal damage where they land; solid bodies; stabbing - blades stick until pulled out; leg hits drop enemies, head strikes knock them out for an hour; VR throwing: knives/spears with the trigger, dynamite lit with your other hand, grenades with a pin to pull; hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -10515,44 +10515,78 @@ static bool LG_Pose(float *org, M3 W, float *aim)
     if (aim) memcpy(aim, f, 12);
     return true;
 }
-/* (render hook) the other hand's weapon model: attached to your body like the holstered ones, placed in that hand each frame */
-static HolModel g_lgM;
+/* (render hook) the other hand's weapon model: FNVR loads the weapon's model itself and hangs it in your first-person
+   skeleton (next to your arms), then places it in that hand each frame */
+typedef struct { void *weap; char path[200]; char name[96]; char *node; double triedAt; } LgModel;
+static LgModel g_lgM; static char *g_lgPar = NULL; static int g_lgSlot = -1; static char *g_lgFp = NULL;
+static void LG_Detach(void)
+{
+    LgModel *m = &g_lgM;
+    if (m->node && g_lgPar && g_lgSlot >= 0 && !IsBadReadPtr(g_lgPar, 0xB0)) {
+        char **data = *(char ***)(g_lgPar + 0xA0);
+        if (data && data[g_lgSlot] == m->node) { data[g_lgSlot] = NULL; (*(uint16_t *)(g_lgPar + 0xA8))--; *(char **)(m->node + NIAV_PARENT) = NULL; }
+    }
+    if (m->node) *(uint32_t *)(m->node + 0x30) |= 1;
+    g_lgPar = NULL; g_lgSlot = -1;
+}
+/* put child into node's child list (a free slot) */
+static bool LG_AttachTo(char *node, char *child)
+{
+    if (!node || IsBadReadPtr(node, 0xB0) || !AsNode(node)) return false;
+    char **data = *(char ***)(node + 0xA0); uint16_t cap = *(uint16_t *)(node + 0xA4), ff = *(uint16_t *)(node + 0xA6), sz = *(uint16_t *)(node + 0xA8);
+    if (!data || cap > 512 || ff > cap || sz > ff || IsBadReadPtr(data, cap * 4)) return false;
+    int slot = -1;
+    for (int i = 0; i < ff; i++) if (!data[i]) { slot = i; break; }
+    if (slot < 0 && ff < cap) { slot = ff; *(uint16_t *)(node + 0xA6) = ff + 1; }
+    if (slot < 0) return false;
+    data[slot] = child; *(uint16_t *)(node + 0xA8) = sz + 1;
+    *(char **)(child + NIAV_PARENT) = node;
+    g_lgPar = node; g_lgSlot = slot;
+    return true;
+}
+static char *LG_FindRoom(char *n, int depth)
+{   /* a node in the first-person skeleton with room for one more child */
+    if (!n || depth > 12 || IsBadReadPtr(n, 0xB0) || !AsNode(n)) return NULL;
+    uint16_t cap = *(uint16_t *)(n + 0xA4), ff = *(uint16_t *)(n + 0xA6);
+    char **data = *(char ***)(n + 0xA0);
+    if (data && cap <= 512 && ff <= cap) {
+        if (ff < cap) return n;
+        for (int i = 0; i < ff; i++) if (!data[i]) return n;
+    }
+    for (int i = 0; data && i < ff && i < 64; i++) { char *k = data[i]; const char *nm = k ? *(const char **)(k + 0x08) : NULL;
+        if (nm && !_strnicmp(nm, "Bip01", 5)) { char *r = LG_FindRoom(k, depth + 1); if (r) return r; } }
+    return NULL;
+}
 static void LG_ModelTick(char *player)
 {
-    char *rs = *(char **)(player + 0x64); char *root = rs && !IsBadReadPtr(rs, 0x18) ? *(char **)(rs + 0x14) : NULL;
-    if (!root || IsBadReadPtr(root, 0xB0)) return;
-    HolModel *m = &g_lgM;
+    LgModel *m = &g_lgM;
     void *w = g_lg.on ? g_lg.base : NULL;
-    const char *bone = "Bip01 Spine2";
-    char *parent = FindBone(root, bone, 0);
-    if (m->weap != w) {
-        if (m->node && !IsBadReadPtr(m->node, 0x34)) *(uint32_t *)(m->node + 0x30) |= 1;
+    char *fp = *(char **)(player + PLAYER_NODE_1ST_PERSON);
+    if (fp != g_lgFp) { g_lgFp = fp; g_lgPar = NULL; g_lgSlot = -1; if (m->node) { *(char **)(m->node + NIAV_PARENT) = NULL; } }   /* (the arms were rebuilt: hang it again) */
+    if (m->weap != w) {   /* a different weapon: take the old model out */
+        LG_Detach();
+        if (m->node) { InterlockedDecrement((volatile LONG *)(m->node + 4)); }
         memset(m, 0, sizeof *m); m->weap = w;
         const char *mp = w && !IsBadReadPtr((char *)w + 0x40, 4) ? *(const char **)((char *)w + 0x40) : NULL;
         if (mp && !IsBadReadPtr(mp, 1)) snprintf(m->path, sizeof m->path, "%s", mp);
     }
-    if (!w || !parent || !m->path[0]) { if (m->node && !IsBadReadPtr(m->node, 0x34)) *(uint32_t *)(m->node + 0x30) |= 1; return; }
-    if (m->node && (IsBadReadPtr(m->node, 0xB0) || *(char **)(m->node + NIAV_PARENT) != parent)) m->node = NULL;
-    if (!m->node && m->name[0]) m->node = Hol_ChildNamed(parent, m->name);
+    if (!w || !m->path[0] || !fp) { if (m->node) *(uint32_t *)(m->node + 0x30) |= 1; return; }
     if (!m->node) {
-        if (QpcMs() - m->triedAt < 1000.0 || g_holAttFailed || !g_scriptIntf || !g_scriptIntf->CompileScript || !g_scriptIntf->CallFunctionAlt) return;
+        if (QpcMs() - m->triedAt < 2000.0) return;
         m->triedAt = QpcMs();
-        if (!g_holAttScr) {
-            g_holAttScr = g_scriptIntf->CompileScript("string_var sNode\nstring_var sPath\nBegin Function { sNode, sPath }\nplayer.AttachModel $sNode $sPath 0\nEnd\n");
-            if (!g_holAttScr) { g_holAttFailed = true; Log("Dual wield: JIP LN's AttachModel isn't available - the other hand's weapon can't be shown"); return; }
-        }
-        unsigned before = AsNode(parent) ? *(uint16_t *)(parent + 0xA6) : 0;
-        char **kidsB = AsNode(parent) ? *(char ***)(parent + 0xA0) : NULL; char *old[64]; unsigned nb = before < 64 ? before : 64;
-        for (unsigned i = 0; i < nb; i++) old[i] = kidsB ? kidsB[i] : NULL;
-        g_scriptIntf->CallFunctionAlt(g_holAttScr, player, 2, bone, m->path);
-        char **kids = AsNode(parent) ? *(char ***)(parent + 0xA0) : NULL; unsigned n = AsNode(parent) ? *(uint16_t *)(parent + 0xA6) : 0;
-        for (unsigned i = 0; kids && i < n && !m->node; i++) {
-            bool seen = false; for (unsigned j = 0; j < nb; j++) if (old[j] == kids[i]) seen = true;
-            if (!seen && kids[i]) { m->node = kids[i]; const char *kn = *(const char **)(kids[i] + 0x08); snprintf(m->name, sizeof m->name, "%s", kn ? kn : ""); }
-        }
-        Log("Dual wield: other hand's weapon model %s - %s", m->path, m->node ? "shown" : "not shown yet");
-        if (!m->node) return;
+        void *loader = *(void **)0x011C3B3C;
+        char *root = loader ? (char *)((LoadModel_t)0x00447080)(loader, m->path, 0, true, 0, false, true) : NULL;
+        if (!root || IsBadReadPtr(root, 0xB0)) { Log("Dual wield: couldn't load the model %s", m->path); return; }
+        InterlockedIncrement((volatile LONG *)(root + 4));   /* (our own hold on it) */
+        m->node = root; g_lgPar = NULL; g_lgSlot = -1;
     }
+    if (!g_lgPar) {
+        char *room = LG_FindRoom(fp, 0);
+        if (!room || !LG_AttachTo(room, m->node)) { static int fl = 0; if (fl++ < 3) Log("Dual wield: no place in your arms' skeleton to hang the other hand's weapon"); return; }
+        const char *pn = *(const char **)(room + 0x08);
+        Log("Dual wield: other hand's weapon model %s shown (hung on %s)", m->path, pn && !IsBadStringPtrA(pn, 64) ? pn : "?");
+    }
+    char *parent = g_lgPar;
     if (g_lg.axesFor != m->node) {   /* its barrel / top / muzzle, from its shape */
         g_lg.axesFor = m->node;
         float bl[3] = { 0, 1, 0 }, ul[3] = { 0, 0, 1 }, ml = 20.0f;
@@ -10572,6 +10606,7 @@ static void LG_ModelTick(char *player)
     }
     /* place it: grip in the drawn hand's palm, barrel along where the hand aims */
     *(uint32_t *)(m->node + 0x30) &= ~1u;
+    if (*(char **)(m->node + NIAV_PARENT) != parent) { g_lgPar = NULL; return; }
     float org[3]; M3 W; if (!LG_Pose(org, W, NULL)) { *(uint32_t *)(m->node + 0x30) |= 1; return; }
     M3 PW, PT, L; memcpy(PW, parent + NIAV_WORLD_ROTATE, sizeof PW); M3T(PT, PW);
     float sc = *(const float *)(parent + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
