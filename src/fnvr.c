@@ -4732,7 +4732,7 @@ static void Far_UiTick(void)
             ((TileSound_t)0x00A0B110)(tile, 0xFCB /* clicksound */);
             ((TileSetFloat_t)0x00A012D0)(tile, 0xFC7 /* clicked */, 1.0f, false);
             ((TileSetFloat_t)0x00A012D0)(tile, 0xFC7, 0.0f, false);
-            if (menu) { void **vt = *(void ***)menu; ((MenuClick_t)vt[3])(menu, id, tile); }
+            if (menu && id >= 0) { void **vt = *(void ***)menu; ((MenuClick_t)vt[3])(menu, id, tile); }   /* (a tile without an id isn't a button - clicking it crashed the game) */
             hover = NULL;   /* the menu may have changed - pick again next frame */
         }
     }
@@ -13282,7 +13282,13 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             char *cell = player ? *(char **)((char *)player + 0x40) : NULL;
             bool loading = ((const volatile bool *)0x011F308F)[1007];
             if (g_worldReset) { g_worldReset = false; loading = true; }   /* (a save was loaded: start quiet, as after a loading screen) */
-            if (loading || cell != lastCell) {
+            /* walking/running from one outdoor cell into the next isn't a new location - nothing near you is unloaded, so
+               nothing is let go (only loading screens, doors, and going in or out of buildings) */
+            bool newPlace = cell != lastCell;
+            if (newPlace && cell && lastCell && !IsBadReadPtr(cell, 0x28) && !IsBadReadPtr(lastCell, 0x28) &&
+                *(uint8_t *)(cell + 4) == 0x39 && *(uint8_t *)(lastCell + 4) == 0x39 && !(*(uint8_t *)(cell + 0x24) & 1) && !(*(uint8_t *)(lastCell + 0x24) & 1))
+                { newPlace = false; lastCell = cell; }
+            if (loading || newPlace) {
                 if (g_nearCount || g_holding[0] || g_holding[1] || g_climb[0] || g_climb[1] || g_thrown.ref)
                     Log("Physics: %s - letting go of everything for 2 s", loading ? "loading screen" : "new location");
                 Grab_ClearAll(); Hit_Clear(); g_climb[0] = g_climb[1] = false; memset(&g_thrown, 0, sizeof g_thrown); g_yank.on = false; g_actMoveHave = false;
