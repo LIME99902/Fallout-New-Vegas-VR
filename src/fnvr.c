@@ -29,7 +29,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.2.1 (blows deal damage where they land; solid bodies; stabbing - blades stick until pulled out; leg hits drop enemies, head strikes knock them out for an hour; VR throwing: knives/spears with the trigger, dynamite lit with your other hand, grenades with a pin to pull; hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_STR    "2.2.1 (bleeding from stabs and from enemy blades, until healed with a stimpak; blows deal damage where they land; solid bodies; stabbing - blades stick until pulled out; leg hits drop enemies, head strikes knock them out for an hour; VR throwing: knives/spears with the trigger, dynamite lit with your other hand, grenades with a pin to pull; hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -233,6 +233,10 @@ static float g_stabPull = 0.22f;      /* [Combat] fStabPull: how far (m) you hav
 static bool  g_koOn = true;           /* [Combat] bKnockouts: hard head strikes knock enemies out */
 static float g_koHours = 1.0f;        /* [Combat] fKnockoutHours */
 static void Hit_AdjustTarget(int h, float *T);
+static void *g_stimForm[2];
+static bool  g_bleedOn = true;        /* [Combat] bBleeding */
+static float g_bleedRate = 1.0f;      /* [Combat] fBleedPerSecond: health lost per second per wound */
+static void Bleed_Add(char *ref, uint32_t id);
 static bool  g_thrOn = true;          /* [Throwing] bVRThrowing */
 static float g_thrPower = 1.3f;       /* [Throwing] fThrowPower: thrown speed = your hand speed x this */
 static float g_fuseShort = 2.5f, g_fuseLong = 5.0f;   /* [Throwing] fFuseSeconds / fLongFuseSeconds */
@@ -588,6 +592,8 @@ static void LoadSettings(void)
     g_hitSolid = GetPrivateProfileIntA("Combat", "bSolidBodies", 1, g_iniPath) != 0;
     g_stabOn = GetPrivateProfileIntA("Combat", "bStabbing", 1, g_iniPath) != 0;
     g_koOn = GetPrivateProfileIntA("Combat", "bKnockouts", 1, g_iniPath) != 0;
+    g_bleedOn = GetPrivateProfileIntA("Combat", "bBleeding", 1, g_iniPath) != 0;
+    { char b[32]; GetPrivateProfileStringA("Combat", "fBleedPerSecond", "1.0", b, sizeof b, g_iniPath); g_bleedRate = fminf(fmaxf((float)atof(b), 0.1f), 20.0f); }
     { char b[32]; GetPrivateProfileStringA("Combat", "fDamageMult", "1.0", b, sizeof b, g_iniPath); g_dmgMult = fminf(fmaxf((float)atof(b), 0.1f), 10.0f);
       GetPrivateProfileStringA("Combat", "fStabSpeed", "1.6", b, sizeof b, g_iniPath); g_stabSpeed = fminf(fmaxf((float)atof(b), 0.5f), 8.0f);
       GetPrivateProfileStringA("Combat", "fStabPull", "0.22", b, sizeof b, g_iniPath); g_stabPull = fminf(fmaxf((float)atof(b), 0.05f), 1.0f);
@@ -9587,6 +9593,7 @@ static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float 
     A->lastHit = now;
     Hit_Buzz(h, stab ? I + 3.0f : I);
     if (dmg10 || action) Hit_Queue(A, dmg10, part, action, lvl);
+    if (stab && dmg10 && A->alive) Bleed_Add(A->ref, A->id);
     if (action) { A->knockUntil = now + 4000.0; memset(A->th, 0, sizeof A->th); memset(A->om, 0, sizeof A->om); return; }
     if (down || !A->alive) return;
     if (stagger) A->softUntil = now + 900.0;
@@ -9995,6 +10002,96 @@ static void Throw_Tick(void)
         Thr_Fire(g_thr.weap, pos, vel, timer);
         g_thr.lit = g_thr.armed = false;
     }
+}
+
+/* ---- Bleeding ------------------------------------------------------------------------------------------------
+   A blade stabbed into someone leaves them bleeding: they keep losing health every second until they heal (a stimpak).
+   The same for you: hit by an enemy's knife, machete, sword or spear, you bleed until you use a stimpak (or are fully
+   healed - a doctor, sleeping). More wounds bleed faster. [Combat] bBleeding, fBleedPerSecond */
+typedef struct { char *ref; uint32_t id; int stacks; double lastHP; double next; } Bleed;
+static Bleed g_bleed[12]; static int g_bleedN = 0;
+static struct { int stacks; double next, lastHP, checkAt; int stim[2]; } g_pBleed;
+static void *g_bleedScr = NULL, *g_pHealthScr = NULL, *g_pAttackerScr = NULL, *g_pBleedScr = NULL; static bool g_bleedScrTried = false;
+static void Bleed_Add(char *ref, uint32_t id)
+{
+    if (!g_bleedOn) return;
+    for (int i = 0; i < g_bleedN; i++) if (g_bleed[i].id == id) { if (g_bleed[i].stacks < 3) g_bleed[i].stacks++; return; }
+    if (g_bleedN >= 12) return;
+    Bleed *b = &g_bleed[g_bleedN++]; memset(b, 0, sizeof *b); b->ref = ref; b->id = id; b->stacks = 1; b->lastHP = -1; b->next = QpcMs() + 1000.0;
+    Log("Bleeding: %08X is bleeding", id);
+}
+static bool Scr_Num2(void *scr, void *a1, int a2, double *out)
+{
+    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+    if (!g_scriptIntf || !g_scriptIntf->CallFunction || !scr) return false;
+    struct { double num; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+    if (!((CallFn_t)g_scriptIntf->CallFunction)(scr, GetPlayer(), NULL, &res, 2, a1, a2) || res.type != 1) return false;
+    *out = res.num; return true;
+}
+static void Stim_FindForms(void);
+static void Bleed_Tick(void)
+{
+    if (!g_bleedOn || !g_inGameplay || !g_scriptIntf || !g_scriptIntf->CompileScript) return;
+    if (((const volatile bool *)0x011F308F)[1007]) return;
+    if (!g_bleedScrTried) {
+        g_bleedScrTried = true;
+        /* takes iDmg tenths of health (yours if they die of it); returns the health it had */
+        g_bleedScr = g_scriptIntf->CompileScript("ref rWho\nint iDmg\nfloat fD\nfloat fHP\nBegin Function { rWho, iDmg }\nset fD to iDmg / 10\nset fHP to rWho.GetAV Health\nif fHP > 0\nif fD >= fHP\nrWho.Kill player\nelse\nrWho.DamageAV Health fD\nendif\nendif\nSetFunctionValue fHP\nEnd\n");
+        g_pBleedScr = g_scriptIntf->CompileScript("ref rWho\nint iDmg\nfloat fD\nfloat fHP\nBegin Function { rWho, iDmg }\nset fD to iDmg / 10\nset fHP to player.GetAV Health\nplayer.DamageAV Health fD\nSetFunctionValue fHP\nEnd\n");
+        g_pHealthScr = g_scriptIntf->CompileScript("ref rWho\nfloat fV\nBegin Function { rWho }\nset fV to player.GetHealthPercentage\nSetFunctionValue fV\nEnd\n");
+        if (!g_pHealthScr) g_pHealthScr = g_scriptIntf->CompileScript("ref rWho\nfloat fV\nBegin Function { rWho }\nset fV to player.GetAV Health\nSetFunctionValue fV\nEnd\n");
+        /* an enemy right next to you, fighting you, with a weapon in hand: that weapon */
+        g_pAttackerScr = g_scriptIntf->CompileScript("ref rWho\nref rA\nref rW\nref rBest\nfloat fD\nfloat fBest\nBegin Function { rWho }\nset fBest to 230\nset rA to GetFirstRef 200 1\nwhile rA != 0\nif rA != player\nif rA.GetDead == 0\nif rA.GetCombatTarget == player\nset fD to rA.GetDistance player\nif fD < fBest\nset rW to rA.GetEquippedObject 5\nif rW != 0\nset fBest to fD\nset rBest to rW\nendif\nendif\nendif\nendif\nendif\nset rA to GetNextRef\nloop\nSetFunctionValue rBest\nEnd\n");
+        Log("Bleeding: %s (people %s, you %s, attacker check %s)", g_bleedScr && g_pBleedScr ? "ready" : "partly unavailable", g_bleedScr ? "ok" : "FAILED", g_pBleedScr && g_pHealthScr ? "ok" : "FAILED", g_pAttackerScr ? "ok" : "FAILED");
+    }
+    double now = QpcMs();
+    /* people and creatures you stabbed */
+    for (int i = 0; i < g_bleedN; i++) {
+        Bleed *b = &g_bleed[i];
+        if (now < b->next) continue;
+        b->next = now + 1000.0;
+        if (!g_bleedScr || LookupForm(b->id) != (void *)b->ref) { *b = g_bleed[--g_bleedN]; i--; continue; }
+        int dmg10 = (int)(g_bleedRate * b->stacks * 10.0f + 0.5f);
+        double hp = 0; if (!Scr_Num2(g_bleedScr, b->ref, dmg10, &hp)) { *b = g_bleed[--g_bleedN]; i--; continue; }
+        if (hp <= 0) { Log("Bleeding: %08X bled out / is dead", b->id); *b = g_bleed[--g_bleedN]; i--; continue; }
+        if (b->lastHP >= 0 && hp > b->lastHP + 4.0) { Log("Bleeding: %08X healed - bleeding stopped", b->id); *b = g_bleed[--g_bleedN]; i--; continue; }
+        b->lastHP = hp - dmg10 / 10.0;
+    }
+    /* you */
+    if (!g_pHealthScr || now < g_pBleed.checkAt) return;
+    g_pBleed.checkAt = now + 150.0;
+    double hp = -1; if (!Scr_Num(g_pHealthScr, GetPlayer(), &hp)) return;
+    static double lastHP = -1;
+    int stim[2] = { -1, -1 };
+    if (g_pBleed.stacks) { Stim_FindForms(); for (int k = 0; k < 2; k++) if (g_stimForm[k]) stim[k] = Thr_Count(g_stimForm[k]); }
+    if (g_pBleed.stacks) {
+        bool used = false; for (int k = 0; k < 2; k++) if (stim[k] >= 0 && g_pBleed.stim[k] >= 0 && stim[k] < g_pBleed.stim[k]) used = true;
+        bool full = hp >= 0.995 && hp <= 1.0001;   /* (health percentage) fully healed */
+        if (used || full) { g_pBleed.stacks = 0; UIMessage("The bleeding stopped"); Log("Bleeding: you stopped bleeding (%s)", used ? "stimpak" : "fully healed"); }
+        else { memcpy(g_pBleed.stim, stim, sizeof stim); }
+        if (g_pBleed.stacks && now > g_pBleed.next && g_pBleedScr) {
+            g_pBleed.next = now + 1000.0;
+            double h2; Scr_Num2(g_pBleedScr, GetPlayer(), (int)(g_bleedRate * 0.6f * g_pBleed.stacks * 10.0f + 0.5f), &h2);
+            hp = -1;   /* (our own damage isn't a new wound) */
+        }
+    }
+    /* a new wound from an enemy's blade */
+    if (hp >= 0 && lastHP >= 0 && hp < lastHP - 0.004 && g_pAttackerScr) {
+        char *w = Scr_Ref(g_pAttackerScr, GetPlayer());
+        int t = (w && !IsBadReadPtr(w + 0xF4, 1)) ? *(uint8_t *)(w + 0xF4) : -1;
+        if (w && (t == 1 || t == 2)) {
+            const char *nm = (!IsBadReadPtr(w + 0x34, 4) && *(const char **)(w + 0x34) && !IsBadStringPtrA(*(const char **)(w + 0x34), 64)) ? *(const char **)(w + 0x34) : "";
+            char lo[64]; snprintf(lo, sizeof lo, "%s", nm); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
+            char words[512]; GetPrivateProfileStringA("Combat", "sBladeWords", "knife,machete,sword,blade,katana,bayonet,cleaver,spear,shiv,switchblade,gehenna,chance,dagger,sickle,scalpel,saber,sabre", words, sizeof words, g_iniPath);
+            bool bl = false; for (char *p = strtok(words, ","); p; p = strtok(NULL, ",")) { while (*p == ' ') p++; if (*p && strstr(lo, p)) { bl = true; break; } }
+            if (bl) {
+                if (!g_pBleed.stacks) { UIMessage("You're bleeding - use a stimpak"); Stim_FindForms(); for (int k = 0; k < 2; k++) g_pBleed.stim[k] = g_stimForm[k] ? Thr_Count(g_stimForm[k]) : -1; g_pBleed.next = now + 1000.0; }
+                if (g_pBleed.stacks < 3) g_pBleed.stacks++;
+                Log("Bleeding: cut by a %s - you're bleeding (%d wound%s)", nm, g_pBleed.stacks, g_pBleed.stacks > 1 ? "s" : "");
+            }
+        }
+    }
+    if (hp >= 0) lastHP = hp;
 }
 
 static void Grab_Start(int h, char *ref)
@@ -12719,7 +12816,6 @@ static char *Scr_Ref(void *scr, void *arg)
 static const char *const g_stimNames[2] = { "Stimpak", "Super Stimpak" };
 /* The two items, found by their in-game names among the game's aid items (a Super Stimpak's editor name isn't the
    same in every version) - then every script gets the item itself. */
-static void *g_stimForm[2];
 static void Stim_FindForms(void)
 {
     static bool done = false; if (done) return; done = true;
@@ -13406,6 +13502,8 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_BOOL, "Solid bodies", "Combat", "bSolidBodies", &g_hitSolid, 0, 0, 0, 0, 0, 0, "ON: your drawn hands and weapons stop at people and creatures instead of passing through them." },
     { SP_WEAPONS, ST_BOOL, "Stabbing", "Combat", "bStabbing", &g_stabOn, 0, 0, 0, 0, 0, 0, "ON: knives, machetes, swords and spears thrust point-first stick into the body and stay stuck until you pull them out hard." },
     { SP_WEAPONS, ST_FLOAT, "Pull to free a stuck blade", "Combat", "fStabPull", &g_stabPull, 0.05f, 0.8f, 0.01f, "%.2f m", 0, 0, "How far you have to pull your hand away to get a stuck blade out." },
+    { SP_WEAPONS, ST_BOOL, "Bleeding", "Combat", "bBleeding", &g_bleedOn, 0, 0, 0, 0, 0, 0, "ON: a blade stabbed into someone leaves them bleeding until they heal. Cut by an enemy's blade, you bleed until you use a stimpak (or are fully healed). More wounds bleed faster." },
+    { SP_WEAPONS, ST_FLOAT, "Bleeding per second", "Combat", "fBleedPerSecond", &g_bleedRate, 0.1f, 10.0f, 0.1f, "%.1f health", 0, 0, "Health lost each second for each wound (you lose a bit less than enemies)." },
     { SP_WEAPONS, ST_BOOL, "Head strikes knock out", "Combat", "bKnockouts", &g_koOn, 0, 0, 0, 0, 0, 0, "ON: a hard blow to an enemy's head knocks them out cold - they lie where they fell, out of the fight." },
     { SP_WEAPONS, ST_FLOAT, "Knocked out for", "Combat", "fKnockoutHours", &g_koHours, 0.1f, 24.0f, 0.1f, "%.1f game hours", 0, 0, "How long a knocked-out enemy stays down." },
     { SP_WEAPONS, ST_FLOAT, "Hit reaction strength", "Combat", "fHitStrength", &g_hitStrength, 0.2f, 3.0f, 0.1f, "x%.1f", 0, 0, "How far bodies move when you strike them." },
@@ -14339,6 +14437,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         Dialogue_Tick();
         Holster_Tick();
         Throw_Tick();
+        Bleed_Tick();
         Hit_Flush();
         LootMenu_Tick(); Hud_Tick(); FireRate_Tick();
         if (g_seqWantAt > 0 && !g_seqTried && QpcMs() > g_seqWantAt) { Log("Menu Sequoia: loading the model"); Room_LoadSequoia(); }
