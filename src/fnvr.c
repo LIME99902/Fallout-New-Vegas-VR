@@ -261,7 +261,9 @@ static bool  g_lgMotion = true;       /* [Grab] bOtherHandGunMotion: the other h
 static double g_lgKickAt = 0;         /* (the other hand's last shot, for its kick) */
 #define LG_RELOAD_MS 1300.0               /* how long reloading the other hand's gun takes */
 static char *g_lgCand = NULL; static bool g_lgGrip = false; static bool g_lgEat = false;
-static bool g_lgSticky = false;   /* (a gun drawn from a holster or handed over stays in the other hand until you squeeze and let go) */
+static bool g_lgSticky = false;
+static bool  g_keepWeapons = true;     /* [Grab] bKeepWeaponsInHand: letting go of the grip never drops a weapon - only a throw does */
+static float g_keepThrowSpeed = 2.0f;  /* [Grab] fWeaponThrowSpeed: how fast (m/s) your hand must move as you let go to throw it */   /* (a gun drawn from a holster or handed over stays in the other hand until you squeeze and let go) */
 static struct { bool on, pickReq, passReq, fireReq, trig, automatic, melee, blade; char *ref, *pickRef; uint32_t id, pickId; void *base; int rounds, passRounds, clip; double lastShot, reloadAt; float barrelL[3], len, upL[3], pnL[3]; volatile bool reloadReq; void *clipFor; void *snd2, *snd3; bool tpOk, qConj; float Rnb[3][3], tnb[3]; } g_lg;
 static bool Hit_BladeOf(void *w);
 static bool g_lgDropForSwap = false; static bool g_lhudShow = true; static float g_lhudX = 0.30f, g_lhudY = 0.62f;
@@ -633,6 +635,8 @@ static void LoadSettings(void)
     g_thrOn = GetPrivateProfileIntA("Throwing", "bVRThrowing", 1, g_iniPath) != 0;
     g_gunGrab = GetPrivateProfileIntA("Grab", "bGrabWeapons", 1, g_iniPath) != 0;
     g_dualOn = GetPrivateProfileIntA("Grab", "bDualWield", 1, g_iniPath) != 0;
+    g_keepWeapons = GetPrivateProfileIntA("Grab", "bKeepWeaponsInHand", 1, g_iniPath) != 0;
+    { char b[32]; GetPrivateProfileStringA("Grab", "fWeaponThrowSpeed", "2.0", b, sizeof b, g_iniPath); g_keepThrowSpeed = fminf(fmaxf((float)atof(b), 0.5f), 10.0f); }
     g_lgWithArms = GetPrivateProfileIntA("Grab", "bOtherHandWithArms", 1, g_iniPath) != 0;
     g_lgMotion = GetPrivateProfileIntA("Grab", "bOtherHandGunMotion", 1, g_iniPath) != 0;
     g_hitSounds = GetPrivateProfileIntA("Combat", "bImpactSounds", 1, g_iniPath) != 0;
@@ -10576,7 +10580,13 @@ static void Gun_Input(bool menu, bool gripNow, bool gripEdge, bool offGrip, bool
     }
     if (g_gun.holding) {
         *rGrip = false;   /* (not activate) */
-        if (!gripNow) { g_gun.holding = false; g_gun.releaseAt = QpcMs(); g_gun.dropReq = true; }
+        if (!gripNow) {
+            int amH = g_leftHanded ? 0 : 1;
+            if (g_keepWeapons && g_gun.on && g_handSpeed[amH] <= g_keepThrowSpeed && !Holster_Zone()) {   /* (not thrown: it stays your equipped weapon) */
+                g_gun.holding = false; g_gun.on = false;
+                static int kl = 0; if (kl++ < 5) Log("Weapons: let go of the grip - the weapon stays in your hand (throw it to let it fly)");
+            } else { g_gun.holding = false; g_gun.releaseAt = QpcMs(); g_gun.dropReq = true; }
+        }
     }
 }
 /* (main loop) picking up, drawing, dropping */
@@ -11966,7 +11976,7 @@ static void Grab_Hold(int h, float dt)
 
     float dist = V3Len(err);
     g->farTime = (dist > (g->gripHold ? 150.0f : 60.0f)) ? g->farTime + dt : 0.0f;   /* (held by the grip: it's drawn in your hand anyway - only let go of if it's really lost) */
-    if (g->farTime > (g->gripHold ? 1.0f : 0.75f)) { Log("Grab: held object stuck %.0f units from the hand - releasing", dist); Grab_Drop(h, false); return; }
+    if (g->farTime > (g->gripHold ? 1.0f : 0.75f) && !(g->gripHold && g_keepWeapons)) { Log("Grab: held object stuck %.0f units from the hand - releasing", dist); Grab_Drop(h, false); return; }
 
     const float kp = g->gripHold ? 45.0f : 25.0f, ka = g->gripHold ? 30.0f : 22.0f;
     float v[3], w[3];
@@ -13016,6 +13026,12 @@ static void Grab_Update(char *player, char *cam)
     for (int h = 0; h < 2; h++) {
         bool dualH = g_lg.on && h == (g_leftHanded ? 1 : 0) && g_held[h].ref == g_lg.ref;
         if (dualH && g_lgGrip) g_lgSticky = false;   /* (once you squeeze again, letting go drops it as usual) */
+        if (dualH && g_keepWeapons) {   /* (weapons stay in hand: letting go only drops it as part of a throw, or at a holster) */
+            static bool lgPrev = false; bool rel = lgPrev && !g_lgGrip; lgPrev = g_lgGrip;
+            if (rel) { bool thrown = g_handSpeed[h] > g_keepThrowSpeed, hol = Holster_OffZone() != 0;
+                g_lgSticky = !(thrown || hol);
+                if (thrown) Log("Dual wield: other hand's weapon thrown (%.1f m/s)", g_handSpeed[h]); }
+        }
         bool keep = (h == g_stimHand ? g_gripHeld[h] : g_grabWant[h]) || (g_gunCarry && h == g_gun.findHandUsed) || (dualH && (g_lgGrip || g_lgSticky));
         if (g_holding[h] && (!keep || (!noWeapon && h != g_stimHand && !dualH && !(g_gunCarry && h == g_gun.findHandUsed)) || !g_handWOk[h])) {
             if (g_grabWant[h]) Log("Grab: %s hand drops its object (%s)", h ? "right" : "left", !noWeapon ? "weapon drawn" : "hand tracking lost");
@@ -15199,6 +15215,8 @@ static const SetOpt g_setOpts[] = {
 
     { SP_HANDS, ST_BOOL, "Pick up objects", "Grab", "bGrabObjects", &g_grabEnabled, 0, 0, 0, 0, 0, 0, "With no weapon out, squeeze a grip next to a loose object to pick it up." },
     { SP_HANDS, ST_BOOL, "Pick up weapons by the grip", "Grab", "bGrabWeapons", &g_gunGrab, 0, 0, 0, 0, 0, 0, "ON: with your gun hand empty, squeeze its grip with your hand on a weapon's grip (a buzz tells you you're on it) to pick it up and hold it ready. It stays while you squeeze; let go to drop it, or let go mid-throw to throw it. Big guns: pick one up with your other hand first, then take the grip - keep the other hand on it to hold it with both." },
+    { SP_HANDS, ST_BOOL, "Keep weapons in hand", "Grab", "bKeepWeaponsInHand", &g_keepWeapons, 0, 0, 0, 0, 0, 0, "ON: letting go of the grip never drops a weapon in either hand - it only leaves your hand if you throw it (let go while swinging your hand) or let go at a holster. OFF: letting go of the grip drops it." },
+    { SP_HANDS, ST_FLOAT, "Weapon throw speed", "Grab", "fWeaponThrowSpeed", &g_keepThrowSpeed, 0.5f, 10.0f, 0.1f, "%.1f m/s", 0, 0, "With Keep weapons in hand: how fast your hand must be moving as you let go of the grip for the weapon to be thrown." },
     { SP_HANDS, ST_BOOL, "Dual wield", "Grab", "bDualWield", &g_dualOn, 0, 0, 0, 0, 0, 0, "ON: take a gun or melee weapon lying in the world by its grip with your other hand (or pick one in the Pip-Boy with the LEFT trigger) and fire it with that hand's trigger until it's empty. To reload, put your gun-hand weapon away, take the gun by its grip with your gun hand, reload as usual, then hand it back: hold it with your other hand and let go with your gun hand." },
     { SP_HUD, ST_BOOL, "Other hand's weapon readout", "Display", "bLeftHud", &g_lhudShow, 0, 0, 0, 0, 0, 0, "Shows the weapon in your other hand at the left of your view: its name, rounds in it / rounds you carry, and its condition." },
     { SP_HUD, ST_FLOAT, "Readout: across", "Display", "fLeftHudX", &g_lhudX, 0.0f, 0.9f, 0.01f, "%.2f", 0, 0, "Where the other hand's readout sits, from the left edge of the picture (0) to the right (0.9)." },
