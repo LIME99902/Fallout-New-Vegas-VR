@@ -29,7 +29,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.2.1 (VR throwing: knives/spears with the trigger, dynamite lit with your other hand, grenades with a pin to pull; hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
+#define FNVR_VERSION_STR    "2.2.1 (blows deal damage where they land; solid bodies; stabbing - blades stick until pulled out; leg hits drop enemies, head strikes knock them out for an hour; VR throwing: knives/spears with the trigger, dynamite lit with your other hand, grenades with a pin to pull; hit reactions: people and creatures you strike react where they were hit and spring back, hard hits stagger, very hard hits knock enemies down; 2.2.0: talk to people with your voice: say hello to start a conversation and say an answer to pick it (optional voice add-on); conversations keep the world running and people finish every line with lip sync; they stand still while talking; left arm keeps its own pose with two-handed weapons; machete/sledgehammer-style melee weapons stay in your hand without the swing animation and point straight forward; Anti-Materiel Rifle scope picture moved back; no menu gunshot when a conversation starts; Super Stimpaks work with the chest heal; grapple aim ignores your drawn weapon; experimental full 3D (off by default); 2.1.0: startup setup screen: profile, standing or seated, calibration before the main menu; seated play with right-stick crouch; arms, hands and Pip-Boy repair themselves when the game rebuilds them - no more holstering to fix them; 2.0.4: climbing and grapple moves run from the main loop, not mid-frame; body hidden while climbing; hand turn saved; loading screens / new locations: hands let go of everything and physics rests 2 s - fixes a crash leaving a building; no controls repair on a new game; menu revolver: the Ranger Sequoia's own textures (found in each part's material list), loaded on the main menu too; barrel end found from the gun's shape - faces forward with any revolver model; intro skip works during the movie (checks your location, not your body); 2.0.3: log: which app SteamVR is showing, refused menu pictures; 2.0.2: new game intro movie: hold the right grip 6 s to skip it, with a ring that fills up; 2.0.1: message boxes (tutorial prompts) are normal menus again - OK can be pressed; left X never opens the pause menu over a menu; 2.0.0: new game: VR features wait until you are in the world - fixes a crash on starting a new game; menu revolver faces forward by default; menu shot volume setting, quieter by default; 1.9.9: vendor menu: left X accepts the trade, takes all in containers; test photos only with [Debug] bSavePhotos=1; 1.9.8: holstered weapons shown on your hip and over your shoulder; 1.9.7: body hidden while grappling; 1.9.6: body-moving fix from 1.9.2-1.9.5 removed - possible cause of a crash in combat; 1.9.5: body-under-head fix only at grapple/launch speeds, reads the body's position for this frame; 1.9.4: leaving a conversation no longer flashes the flat screen; 1.9.3: melee weapon angle in the hand, per weapon; 1.9.2: your body stays under your head at any speed - grapple, launches; 1.9.1: Pip-Boy text back - the clip fix only touches the screen picture; 1.9.0: smaller menus: lists clipped in the right place again - dialogue answers and trade lists show; looking away presses Tab to close; dialogue shrinks again; 1.8.9: look away to close menus uses the frame's head pose, logs the angle; 1.8.8: fire rate and Sequoia scripts fixed; menus lowered to eye level (Menu height); dialogue full size by default; 1.8.7: more revolvers recognised: That Gun, Mysterious Magnum, Schofield, .500 S&W; 1.8.6: revolvers fire as fast as you pull the trigger; 1.8.5: fire rate setting; Ranger Sequoia back to 5 rounds; 1.8.4: scopes without a lens part start at the gun's highest part; grapple grip-then-trigger again; 1.8.3: Pip-Boy no longer switches controls (right grip activates again); scope settings shared by guns of the same model; Dialogue size setting; 1.8.2: bullet time fires at once again; 1.8.1: grapple only fires grip-then-trigger; bullet time never fires while making a grapple fist; 1.8.0: scope picture height in cm (Marksman, Bozar, AMR start 11 cm up) and size per gun; melee weapons can be held with both hands; 1.7.9: menu size also applies to the dialogue topics (second interface camera); HUD switches matched to the real HUD pieces (health, AP, sneak, compass, ammo, crosshair); 1.7.8: new HUD & menus settings page; HUD and pop-up menus drawn smaller towards the middle of your view (HUD size / Menu size); HUD parts found by name, listed in the log; 1.7.7: pop-up menus further away and smaller; HUD smaller with distance/width settings; HUD parts can be hidden; Pip-Boy A works again; 1.7.6: live menus: talking, trading, containers and messages keep the world running, you stay in it, look away to close; 1.7.5: automatic melee weapons use the trigger; right-trigger melee option; scope picture height per gun (Marksman, Bozar, AMR raised); character held still while the Pip-Boy is open - A never jumps; 1.7.4: Pip-Boy map: right stick at a third of its strength, so turning is gentle; no more snapping back; 1.7.3: Pip-Boy map: the right stick moves the map cursor again; facing and tilt held still while the Pip-Boy is open; 1.7.2: 1.7.1: the right stick never turns you while the Pip-Boy or the quick-loot window is up; 1.7.0: quick loot: right stick scrolls the list (as mouse wheel clicks); 1.6.9: Pip-Boy: right stick moves the map cursor only on the map page - no more turning you elsewhere; 1.6.8: quick loot: A takes the item (the loot mod's E key), grip opens the full menu; 1.6.7: quick loot: also recognised from what you look at - a container; right grip loot check written to the log; 1.6.6: Pip-Boy: the right stick works as the game's right stick again - moves the map cursor; 1.6.5: F10 only switches the real-time Pip-Boy - 3D is Ctrl+F10; 1.6.4: Pip-Boy menu stays on your saved spot - the game's own screen shape is shrunk away while FNVR draws, so following it made the menu vanish; 1.6.3: Pip-Boy menu drawn on every frame - its spot is worked out again at the end of each frame; 1.6.2: Pip-Boy menu taken from the end of the game's Pip-Boy draw step every frame, placed on the game's own Pip-Boy screen; quick loot keys sent as real keystrokes; 1.6.1: quick loot: right grip presses the loot mod's R key, B its take-all key; Pip-Boy drawing trace; black box stays on the Pip-Boy; 1.6.0: one Pip-Boy menu for paused and live: the menu picture is caught as the game draws the Pip-Boy screen with it, then FNVR draws it on your arm over everything; 1.5.9: menu copied from where the game draws it, screen box behind the menu, loot: grip takes, Y opens; 1.5.8: frozen-mode Pip-Boy screen laid over the live world; 1.5.7: quick-loot window controls for motion controllers; 1.5.6: quick-loot window centred in your view; 1.5.5: live world drawn first, Pip-Boy menu on top of it; 1.5.4: menu picture read from its transparency and coloured like the Pip-Boy; 1.5.3: Pip-Boy menu copied straight from the Pip-Boy's own draw step and drawn on your arm over everything; menu on top of the glass as in 1.3.5; slide it on your arm; both Pip-Boy black boxes switchable; view stays with your body at grapple speed; run by swinging your arms; no fall damage in power armor; grapple in either hand + more grapple settings; rope drawing fixed, Pip-Boy menu shown with its own screen over the live world; grapple rope, stronger kid friendly options; grappling hook, Pip-Boy menu shown over the live world, held objects can't lift you, kid friendly options; live world behind the Pip-Boy, gentler grip, sneak throws)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -224,6 +224,15 @@ static float g_hitKnockSpeed = 5.5f;   /* [Combat] fKnockdownSpeed: swing speed 
 static bool  g_hitKnockAnyone = false; /* [Combat] bKnockdownAnyone: also people who aren't fighting you */
 static struct { bool on, spawned; float pos[3], h, p, speed, timer; } g_launch;
 static void *Thr_Spawn(void *proj, void *shooter, void *cc, void *weap, void *target, uint32_t b1, uint32_t b2, float f1, float f2, uint32_t z);
+static bool  g_contactDmg = true;     /* [Combat] bContactDamage: your blows deal the damage where they land (not the game's swing) */
+static float g_dmgMult = 1.0f;        /* [Combat] fDamageMult */
+static bool  g_hitSolid = true;       /* [Combat] bSolidBodies: drawn hands and weapons stop at bodies */
+static bool  g_stabOn = true;         /* [Combat] bStabbing */
+static float g_stabSpeed = 1.6f;      /* [Combat] fStabSpeed (m/s) */
+static float g_stabPull = 0.22f;      /* [Combat] fStabPull: how far (m) you have to pull to get a stuck blade out */
+static bool  g_koOn = true;           /* [Combat] bKnockouts: hard head strikes knock enemies out */
+static float g_koHours = 1.0f;        /* [Combat] fKnockoutHours */
+static void Hit_AdjustTarget(int h, float *T);
 static bool  g_thrOn = true;          /* [Throwing] bVRThrowing */
 static float g_thrPower = 1.3f;       /* [Throwing] fThrowPower: thrown speed = your hand speed x this */
 static float g_fuseShort = 2.5f, g_fuseLong = 5.0f;   /* [Throwing] fFuseSeconds / fLongFuseSeconds */
@@ -575,6 +584,14 @@ static void LoadSettings(void)
     g_meleeAlign = GetPrivateProfileIntA("Controls", "bMeleeAlign", 1, g_iniPath) != 0;
     g_hitReact = GetPrivateProfileIntA("Combat", "bHitReactions", 1, g_iniPath) != 0;
     g_thrOn = GetPrivateProfileIntA("Throwing", "bVRThrowing", 1, g_iniPath) != 0;
+    g_contactDmg = GetPrivateProfileIntA("Combat", "bContactDamage", 1, g_iniPath) != 0;
+    g_hitSolid = GetPrivateProfileIntA("Combat", "bSolidBodies", 1, g_iniPath) != 0;
+    g_stabOn = GetPrivateProfileIntA("Combat", "bStabbing", 1, g_iniPath) != 0;
+    g_koOn = GetPrivateProfileIntA("Combat", "bKnockouts", 1, g_iniPath) != 0;
+    { char b[32]; GetPrivateProfileStringA("Combat", "fDamageMult", "1.0", b, sizeof b, g_iniPath); g_dmgMult = fminf(fmaxf((float)atof(b), 0.1f), 10.0f);
+      GetPrivateProfileStringA("Combat", "fStabSpeed", "1.6", b, sizeof b, g_iniPath); g_stabSpeed = fminf(fmaxf((float)atof(b), 0.5f), 8.0f);
+      GetPrivateProfileStringA("Combat", "fStabPull", "0.22", b, sizeof b, g_iniPath); g_stabPull = fminf(fmaxf((float)atof(b), 0.05f), 1.0f);
+      GetPrivateProfileStringA("Combat", "fKnockoutHours", "1.0", b, sizeof b, g_iniPath); g_koHours = fminf(fmaxf((float)atof(b), 0.05f), 48.0f); }
     { char b[32]; GetPrivateProfileStringA("Throwing", "fThrowPower", "1.3", b, sizeof b, g_iniPath); g_thrPower = fminf(fmaxf((float)atof(b), 0.3f), 4.0f);
       GetPrivateProfileStringA("Throwing", "fFuseSeconds", "2.5", b, sizeof b, g_iniPath); g_fuseShort = fminf(fmaxf((float)atof(b), 0.5f), 15.0f);
       GetPrivateProfileStringA("Throwing", "fLongFuseSeconds", "5.0", b, sizeof b, g_iniPath); g_fuseLong = fminf(fmaxf((float)atof(b), 0.5f), 30.0f); }
@@ -1311,6 +1328,7 @@ static void Melee_Update(bool menu)
     float sp = g_vrHandOk[aim] ? g_handSpeed[aim] : 0.0f;
     if (wt == -1 && g_vrHandOk[off]) sp = fmaxf(sp, g_handSpeed[off]);   /* fists: either hand punches */
     DWORD now = GetTickCount();
+    if (g_contactDmg && g_hitReact && !PlayerWeaponAutomatic()) return;   /* (your blows do the damage themselves) */
     if (sp > g_swingSpeed && now - g_lastSwing > 450) {
         g_lastSwing = now;
         g_swingFrames = 6;
@@ -8120,6 +8138,7 @@ static bool Arms_Apply(char *player, char *cam)
                 }
             }
         }
+        if (g_hitReact) Hit_AdjustTarget(hnd, T);
         Arm_Reach(s, T, D, Bh);
         if (s == 0) { memcpy(g_lhT, T, 12); memcpy(g_lhD, D, sizeof D); memcpy(g_lhBa, Ba, sizeof Ba); g_lhOk = true; }
         {   /* the drawn hand must end up where your hand is (when the arm can reach it): if it stays well off, repair */
@@ -9266,31 +9285,39 @@ static void Collide_Update(float dt, bool weaponOut)
     }
 }
 
-/* ---- Hit reactions (Blade & Sorcery style) --------------------------------------------------------------
-   Your hand, fist or melee weapon striking a living person or creature moves their body where it was struck:
-   a blow to the head snaps it back, a gut hit folds them over, an arm hit knocks the arm aside - the parts spring
-   back like a body regaining its balance. Hard hits stagger them (they fold further and recover slowly), and very
-   hard hits knock them down into a ragdoll. The blow's place, direction and speed come from your real swing.
-   The reaction is laid over the game's own animation just for drawing (put back after each frame), so the
-   game's AI, animations and saves are untouched. [Combat] in FNVR.ini */
+/* ---- Hit reactions, contact damage, stabbing (Blade & Sorcery style) -------------------------------------
+   Your hand, fist or melee weapon striking a living person or creature:
+   - moves their body where it was struck: a blow to the head snaps it back, a gut hit folds them over, an arm hit knocks
+     the arm aside - the parts spring back like a body regaining its balance; hard hits stagger them;
+   - deals the damage itself, where it lands (head hits hurt more and hurt the head, leg hits cripple legs...), scaled by
+     how fast you swung, from the weapon's own damage and your skill - the game's swing no longer decides;
+   - very hard hits knock enemies down or send them flying (the game's ragdoll); a hard hit to a leg drops them and
+     they have to get up; a hard head strike knocks them out cold for an hour, lying where they fell;
+   - bodies are solid: your drawn hand and weapon stop at them instead of passing through;
+   - blades (knives, machetes, swords, spears) thrust point-first stick in, and stay stuck until you pull hard.
+   The body movement is laid over the game's animation just for drawing (put back after each frame).
+   [Combat] in FNVR.ini */
 #define HR_ACT 12
-#define HR_B 13
+#define HR_B 14
 enum { HK_TORSO, HK_HEAD, HK_ARM, HK_LEG, HK_PELVIS };
-static const struct { const char *name, *child; signed char kind, parent; float rad, gain; } g_hrDef[HR_B] = {
-    { "Bip01 Pelvis",     "Bip01 Spine",     HK_PELVIS, -1, 11.0f, 0.0f },   /* 0 (hits here fold the spine) */
-    { "Bip01 Spine",      "Bip01 Spine1",    HK_TORSO,  -1, 11.0f, 0.45f },  /* 1 */
-    { "Bip01 Spine1",     "Bip01 Spine2",    HK_TORSO,   1, 11.0f, 0.45f },  /* 2 */
-    { "Bip01 Spine2",     "Bip01 Neck",      HK_TORSO,   2, 11.5f, 0.45f },  /* 3 */
-    { "Bip01 Neck",       "Bip01 Head",      HK_HEAD,    3,  5.0f, 0.7f },   /* 4 */
-    { "Bip01 Head",       NULL,              HK_HEAD,    4,  8.5f, 1.0f },   /* 5 */
-    { "Bip01 L UpperArm", "Bip01 L Forearm", HK_ARM,     3,  4.5f, 1.0f },   /* 6 */
-    { "Bip01 L Forearm",  "Bip01 L Hand",    HK_ARM,     6,  3.8f, 1.2f },   /* 7 */
-    { "Bip01 R UpperArm", "Bip01 R Forearm", HK_ARM,     3,  4.5f, 1.0f },   /* 8 */
-    { "Bip01 R Forearm",  "Bip01 R Hand",    HK_ARM,     8,  3.8f, 1.2f },   /* 9 */
-    { "Bip01 L Thigh",    "Bip01 L Calf",    HK_LEG,    -1,  6.5f, 0.35f },  /* 10 */
-    { "Bip01 R Thigh",    "Bip01 R Calf",    HK_LEG,    -1,  6.5f, 0.35f },  /* 11 */
-    { "Bip01 Spine2",     NULL,              HK_TORSO,  -1,  0.0f, 0.0f },   /* 12 (unused slot) */
+static const struct { const char *name, *child; signed char kind, parent, part; float rad, gain; } g_hrDef[HR_B] = {
+    /* part: 0 torso, 1 head, 2 left arm, 3 right arm, 4 left leg, 5 right leg */
+    { "Bip01 Pelvis",     "Bip01 Spine",     HK_PELVIS, -1, 0, 11.0f, 0.0f },   /* 0 (hits here fold the spine) */
+    { "Bip01 Spine",      "Bip01 Spine1",    HK_TORSO,  -1, 0, 11.0f, 0.45f },  /* 1 */
+    { "Bip01 Spine1",     "Bip01 Spine2",    HK_TORSO,   1, 0, 11.0f, 0.45f },  /* 2 */
+    { "Bip01 Spine2",     "Bip01 Neck",      HK_TORSO,   2, 0, 11.5f, 0.45f },  /* 3 */
+    { "Bip01 Neck",       "Bip01 Head",      HK_HEAD,    3, 1,  5.0f, 0.7f },   /* 4 */
+    { "Bip01 Head",       NULL,              HK_HEAD,    4, 1,  8.5f, 1.0f },   /* 5 */
+    { "Bip01 L UpperArm", "Bip01 L Forearm", HK_ARM,     3, 2,  4.5f, 1.0f },   /* 6 */
+    { "Bip01 L Forearm",  "Bip01 L Hand",    HK_ARM,     6, 2,  3.8f, 1.2f },   /* 7 */
+    { "Bip01 R UpperArm", "Bip01 R Forearm", HK_ARM,     3, 3,  4.5f, 1.0f },   /* 8 */
+    { "Bip01 R Forearm",  "Bip01 R Hand",    HK_ARM,     8, 3,  3.8f, 1.2f },   /* 9 */
+    { "Bip01 L Thigh",    "Bip01 L Calf",    HK_LEG,    -1, 4,  6.5f, 0.35f },  /* 10 */
+    { "Bip01 R Thigh",    "Bip01 R Calf",    HK_LEG,    -1, 5,  6.5f, 0.35f },  /* 11 */
+    { "Bip01 L Calf",     "Bip01 L Foot",    HK_LEG,    10, 4,  5.0f, 0.3f },   /* 12 */
+    { "Bip01 R Calf",     "Bip01 R Foot",    HK_LEG,    11, 5,  5.0f, 0.3f },   /* 13 */
 };
+static const char *const g_partName[6] = { "body", "head", "left arm", "right arm", "left leg", "right leg" };
 typedef struct {
     char *ref; uint32_t id; char *root; bool ok, alive, hostile, knocked;
     char *bone[HR_B], *child[HR_B];
@@ -9302,33 +9329,150 @@ typedef struct {
 static HrActor g_hr[HR_ACT];
 static Probe g_hrPrev[2][PROBES_MAX]; static int g_hrPrevN[2];
 static double g_hrScanAt = 0, g_hrLastApply = 0;
-static void *g_hrStatusScr = NULL, *g_hrPushScr[3]; static int g_hrScrState = 0;   /* 0 not yet, 1 ok, -1 failed */
+static void *g_hrStatusScr = NULL, *g_hrPushScr[4], *g_hrDmgScr = NULL, *g_hrBaseScr = NULL, *g_hrKoScr = NULL, *g_hrWakeScr = NULL, *g_hrDayScr = NULL;
+static int g_hrScrState = 0;   /* 0 not yet, 1 ok, -1 failed */
+static float g_hrPush[2][3], g_hrPushCur[2][3];   /* how far the drawn hand is held out of bodies (world units) */
+typedef struct { bool on; int a, b; uint32_t id; char *ref; float local[3]; double since, lastBuzz; } Lodge;
+static Lodge g_lodge[2];
+/* blows waiting for the main loop (damage, knockdowns, knockouts) */
+enum { HA_NONE, HA_PUSH, HA_KO };
+typedef struct { char *ref; uint32_t id; int dmg10, part, action, lvl; } HrEvent;
+static HrEvent g_hrEv[16]; static volatile LONG g_hrEvN = 0;
+typedef struct { uint32_t id; double wake; double sleepAt; char *ref; bool asleep; } KoEntry;
+static KoEntry g_ko[16]; static int g_koN = 0; static bool g_koLoaded = false;
 
-static char *g_hrKnockRef = NULL; static uint32_t g_hrKnockId = 0; static int g_hrKnockLvl = 0;
-static void Hit_Flush(void)
-{
-    char *r = g_hrKnockRef; if (!r) return; g_hrKnockRef = NULL;
-    if (LookupForm(g_hrKnockId) != (void *)r || ((const volatile bool *)0x011F308F)[1007]) return;
-    void *s = g_hrPushScr[g_hrKnockLvl] ? g_hrPushScr[g_hrKnockLvl] : g_hrPushScr[0];
-    if (s && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(s, GetPlayer(), 1, r);
-}
 static void Hit_Clear(void)
 {
     for (int i = 0; i < HR_ACT; i++) g_hr[i].ref = NULL;
-    g_hrPrevN[0] = g_hrPrevN[1] = 0;
+    g_hrPrevN[0] = g_hrPrevN[1] = 0; memset(g_lodge, 0, sizeof g_lodge);
+    memset(g_hrPush, 0, sizeof g_hrPush); memset(g_hrPushCur, 0, sizeof g_hrPushCur);
+    g_hrEvN = 0;
 }
 static bool Hit_Scripts(void)
 {
     if (g_hrScrState) return g_hrScrState > 0;
     if (!g_scriptIntf || !g_scriptIntf->CompileScript) return false;
-    /* 0 alive and calm, 1 dead, 2 knocked down / getting up, 4 fighting (or should be fighting) you */
-    g_hrStatusScr = g_scriptIntf->CompileScript("ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nelseif rWho.IsInCombat\nset iVal to 4\nelseif rWho.GetShouldAttack player\nset iVal to 4\nendif\nSetFunctionValue iVal\nEnd\n");
-    if (!g_hrStatusScr) g_hrStatusScr = g_scriptIntf->CompileScript("ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nendif\nSetFunctionValue iVal\nEnd\n");
-    static const int force[3] = { 3, 5, 8 };
-    for (int i = 0; i < 3; i++) { char b[128]; snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho %d\nEnd\n", force[i]); g_hrPushScr[i] = g_scriptIntf->CompileScript(b); }
+    /* 0 alive and calm, 1 dead, 2 knocked down / getting up / out cold, 4 fighting (or should be fighting) you */
+    static const char *st[3] = {
+        "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nelseif rWho.GetUnconscious\nset iVal to 2\nelseif rWho.IsInCombat\nset iVal to 4\nelseif rWho.GetShouldAttack player\nset iVal to 4\nendif\nSetFunctionValue iVal\nEnd\n",
+        "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nelseif rWho.IsInCombat\nset iVal to 4\nelseif rWho.GetShouldAttack player\nset iVal to 4\nendif\nSetFunctionValue iVal\nEnd\n",
+        "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nendif\nSetFunctionValue iVal\nEnd\n" };
+    int sv = -1;
+    for (int i = 0; i < 3 && !g_hrStatusScr; i++) { g_hrStatusScr = g_scriptIntf->CompileScript(st[i]); if (g_hrStatusScr) sv = i; }
+    static const int force[4] = { 2, 4, 6, 9 };
+    for (int i = 0; i < 4; i++) { char b[128]; snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho %d\nEnd\n", force[i]); g_hrPushScr[i] = g_scriptIntf->CompileScript(b); }
+    /* the blow's damage (tenths of a point), on the part it hit; a killing blow is yours; anyone you hit (not companions) fights back */
+    g_hrDmgScr = g_scriptIntf->CompileScript(
+        "ref rWho\nint iDmg\nint iPart\nfloat fD\nfloat fHP\nBegin Function { rWho, iDmg, iPart }\n"
+        "set fD to iDmg / 10\nset fHP to rWho.GetAV Health\n"
+        "if fD >= fHP\nrWho.Kill player\nelse\nrWho.DamageAV Health fD\n"
+        "if iPart == 1\nrWho.DamageAV PerceptionCondition fD\nelseif iPart == 2\nrWho.DamageAV LeftAttackCondition fD\n"
+        "elseif iPart == 3\nrWho.DamageAV RightAttackCondition fD\nelseif iPart == 4\nrWho.DamageAV LeftMobilityCondition fD\n"
+        "elseif iPart == 5\nrWho.DamageAV RightMobilityCondition fD\nelse\nrWho.DamageAV EnduranceCondition fD\nendif\n"
+        "if rWho.GetPlayerTeammate == 0\nif rWho.GetCombatTarget != player\nrWho.StartCombat player\nendif\nendif\nendif\nEnd\n");
+    /* a weapon's damage per hit with your skill: 0 melee weapon, 1 unarmed weapon (power fist...), 2 bare fists */
+    g_hrBaseScr = g_scriptIntf->CompileScript(
+        "ref rW\nint iKind\nfloat fV\nfloat fS\nBegin Function { rW, iKind }\n"
+        "if iKind == 2\nset fS to player.GetAV Unarmed\nset fV to 0.5 + fS / 20\nelse\nset fV to GetAttackDamage rW\n"
+        "if iKind == 1\nset fS to player.GetAV Unarmed\nelse\nset fS to player.GetAV MeleeWeapons\nendif\nset fV to fV * (0.5 + fS / 200)\nendif\n"
+        "SetFunctionValue fV\nEnd\n");
+    g_hrKoScr = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nrWho.StopCombat\nrWho.SetUnconscious 1\nEnd\n");
+    g_hrWakeScr = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nrWho.SetUnconscious 0\nEnd\n");
+    g_hrDayScr = g_scriptIntf->CompileScript("ref rWho\nfloat fV\nBegin Function { rWho }\nset fV to GameDaysPassed\nSetFunctionValue fV\nEnd\n");
     g_hrScrState = (g_hrStatusScr && g_hrPushScr[0]) ? 1 : -1;
-    Log("Hit reactions: %s", g_hrScrState > 0 ? "ready" : "couldn't set up the status check - hit reactions off");
+    Log("Hit reactions: %s (status check %d, damage %s, weapon damage %s, knockouts %s, game clock %s)", g_hrScrState > 0 ? "ready" : "couldn't set up the status check - hit reactions off",
+        sv, g_hrDmgScr ? "ok" : "FAILED", g_hrBaseScr ? "ok" : "FAILED", g_hrKoScr && g_hrWakeScr ? "ok" : "FAILED", g_hrDayScr ? "ok" : "FAILED");
     return g_hrScrState > 0;
+}
+static double Hit_Day(void) { double v = -1; return (g_hrDayScr && Scr_Num(g_hrDayScr, GetPlayer(), &v)) ? v : -1.0; }
+static void Ko_Save(void)
+{
+    char buf[1024]; size_t L = 0; buf[0] = 0;
+    for (int i = 0; i < g_koN; i++) L += (size_t)snprintf(buf + L, sizeof buf - L, "%s%08X:%.4f", i ? "," : "", g_ko[i].id, g_ko[i].wake);
+    WritePrivateProfileStringA("Combat", "sKnockedOut", buf, g_iniPath);
+}
+static void Ko_Load(void)
+{
+    g_koLoaded = true; g_koN = 0;
+    char buf[1024]; GetPrivateProfileStringA("Combat", "sKnockedOut", "", buf, sizeof buf, g_iniPath);
+    for (char *p = buf; *p && g_koN < 16;) {
+        unsigned id = 0; double w = 0;
+        if (sscanf(p, "%x:%lf", &id, &w) == 2) { memset(&g_ko[g_koN], 0, sizeof g_ko[0]); g_ko[g_koN].id = id; g_ko[g_koN].wake = w; g_ko[g_koN].asleep = true; g_koN++; }
+        char *c = strchr(p, ','); if (!c) break; p = c + 1;
+    }
+}
+/* (main loop) */
+static void Hit_Flush(void)
+{
+    if (g_hrScrState <= 0) return;
+    bool loading = ((const volatile bool *)0x011F308F)[1007];
+    LONG n = g_hrEvN; if (n > 16) n = 16;
+    for (int i = 0; i < n; i++) {
+        HrEvent *e = &g_hrEv[i];
+        if (loading || LookupForm(e->id) != (void *)e->ref) continue;
+        if (e->dmg10 > 0 && g_hrDmgScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrDmgScr, GetPlayer(), 3, e->ref, e->dmg10, e->part);
+        if (e->action == HA_PUSH || e->action == HA_KO) {
+            void *s = g_hrPushScr[e->lvl] ? g_hrPushScr[e->lvl] : g_hrPushScr[0];
+            if (s && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(s, GetPlayer(), 1, e->ref);
+        }
+        if (e->action == HA_KO && g_hrKoScr) {   /* out cold once they've landed */
+            int k = -1; for (int j = 0; j < g_koN; j++) if (g_ko[j].id == e->id) k = j;
+            if (k < 0 && g_koN < 16) k = g_koN++;
+            if (k >= 0) { memset(&g_ko[k], 0, sizeof g_ko[0]); g_ko[k].id = e->id; g_ko[k].ref = e->ref; g_ko[k].sleepAt = QpcMs() + 1300.0; }
+        }
+    }
+    g_hrEvN = 0;
+    /* knocked out: asleep where they fell for an hour of game time, then they wake */
+    if (!g_koLoaded) Ko_Load();
+    static double checkAt = 0; double now = QpcMs();
+    bool changed = false;
+    for (int j = 0; j < g_koN; j++) {
+        KoEntry *k = &g_ko[j];
+        if (!k->asleep && k->sleepAt > 0 && now > k->sleepAt) {
+            k->sleepAt = 0;
+            if (!loading && LookupForm(k->id) == (void *)k->ref) {
+                g_scriptIntf->CallFunctionAlt(g_hrKoScr, GetPlayer(), 1, k->ref);
+                double d = Hit_Day(); k->wake = d >= 0 ? d + g_koHours / 24.0 : 0; k->asleep = true; changed = true;
+                Log("Hit reactions: %08X knocked out cold (wakes in %.1f game hours)", k->id, g_koHours);
+            } else { *k = g_ko[--g_koN]; j--; changed = true; }
+        }
+    }
+    if (now > checkAt && g_koN) {
+        checkAt = now + 3000.0;
+        double d = Hit_Day();
+        for (int j = 0; j < g_koN; j++) {
+            KoEntry *k = &g_ko[j];
+            if (!k->asleep || d < 0 || d < k->wake) continue;
+            void *r = LookupForm(k->id);
+            if (r && !loading && g_hrWakeScr) { g_scriptIntf->CallFunctionAlt(g_hrWakeScr, GetPlayer(), 1, r); Log("Hit reactions: %08X wakes up", k->id); }
+            *k = g_ko[--g_koN]; j--; changed = true;
+        }
+    }
+    if (changed) Ko_Save();
+}
+static void Hit_Queue(HrActor *A, int dmg10, int part, int action, int lvl)
+{
+    LONG i = g_hrEvN; if (i >= 16) return;
+    g_hrEv[i].ref = A->ref; g_hrEv[i].id = A->id; g_hrEv[i].dmg10 = dmg10; g_hrEv[i].part = part; g_hrEv[i].action = action; g_hrEv[i].lvl = lvl;
+    g_hrEvN = i + 1;
+}
+/* damage per hit of what's in your hand (with your skill), checked now and then */
+static float Hit_BaseDamage(int wt)
+{
+    static void *forW = NULL; static int forT = -99; static double at = 0; static float val = 2.0f;
+    void *w = PlayerWeaponForm(); double now = QpcMs();
+    if (w == forW && wt == forT && now < at) return val;
+    forW = w; forT = wt; at = now + 10000.0;
+    int kind = wt == -1 || !w ? 2 : wt == 0 ? 1 : 0;
+    double v = 0;
+    if (g_hrBaseScr && g_scriptIntf->CallFunction) {
+        typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+        struct { double num; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+        if (((CallFn_t)g_scriptIntf->CallFunction)(g_hrBaseScr, GetPlayer(), NULL, &res, 2, w ? w : GetPlayer(), kind) && res.type == 1) v = res.num;
+    }
+    val = (v > 0.1 && v < 2000.0) ? (float)v : (kind == 2 ? 2.0f : 10.0f);
+    Log("Hit reactions: your %s does %.1f damage per full-speed hit", kind == 2 ? "fists" : "weapon", val);
+    return val;
 }
 /* the people and creatures near you that the game is fully running (its "high" process list) */
 static int Hit_ListActors(char **out, int max)
@@ -9354,14 +9498,13 @@ static void Hit_Bind(HrActor *A, char *ref, char *root)
     A->ref = ref; A->id = *(uint32_t *)(ref + 0x0C); A->root = root;
     int found = 0;
     for (int i = 0; i < HR_B; i++) {
-        if (i == 12) continue;
         A->bone[i] = FindBone(root, g_hrDef[i].name, 0);
         A->child[i] = (A->bone[i] && g_hrDef[i].child) ? FindBone(A->bone[i], g_hrDef[i].child, 0) : NULL;
         if (A->bone[i]) found++;
     }
     A->ok = found >= 4 && A->bone[5];
     static int bl = 0;
-    if (bl++ < 12) Log("Hit reactions: %08X has %d of %d body parts%s", A->id, found, HR_B - 1, A->ok ? "" : " - too few, no reactions for it");
+    if (bl++ < 12) Log("Hit reactions: %08X has %d of %d body parts%s", A->id, found, HR_B, A->ok ? "" : " - too few, no reactions for it");
 }
 static void Hit_Scan(void)
 {
@@ -9381,6 +9524,8 @@ static void Hit_Scan(void)
         if (!A) {
             if (!freeA) for (int k = 0; k < HR_ACT; k++) if (!g_hr[k].moving && (!freeA || g_hr[k].seen < freeA->seen)) freeA = &g_hr[k];
             if (!freeA || freeA->moving) continue;
+            if (g_lodge[0].on && g_lodge[0].ref == freeA->ref) continue;
+            if (g_lodge[1].on && g_lodge[1].ref == freeA->ref) continue;
             A = freeA; Hit_Bind(A, a, root);
         } else if (A->root != root) Hit_Bind(A, a, root);   /* (its body was rebuilt) */
         A->seen = now;
@@ -9398,30 +9543,56 @@ static void Hit_Buzz(int h, float I)
     float us = fminf(1200.0f + I * 500.0f, 3999.0f);
     g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, (unsigned short)us);
 }
-/* a blow at C (world), moving along v (units/s), on bone b of actor A */
-static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float I, int h)
+/* is what's in your hand a blade (it can stab and stick)? */
+static bool Hit_Blade(void)
+{
+    static void *forW = NULL; static bool val = false;
+    void *w = PlayerWeaponForm(); int wt = PlayerWeaponType();
+    if (w == forW) return val;
+    forW = w; val = false;
+    if (!w || (wt != 1 && wt != 2)) return false;
+    const char *nm = (!IsBadReadPtr((char *)w + 0x34, 4) && *(const char **)((char *)w + 0x34) && !IsBadStringPtrA(*(const char **)((char *)w + 0x34), 64)) ? *(const char **)((char *)w + 0x34) : "";
+    char lo[64]; snprintf(lo, sizeof lo, "%s", nm); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
+    char words[512]; GetPrivateProfileStringA("Combat", "sBladeWords", "knife,machete,sword,blade,katana,bayonet,cleaver,spear,shiv,switchblade,gehenna,chance,dagger,sickle,scalpel,saber,sabre", words, sizeof words, g_iniPath);
+    for (char *p = strtok(words, ","); p; p = strtok(NULL, ",")) { while (*p == ' ') p++; if (*p && strstr(lo, p)) { val = true; break; } }
+    Log("Hit reactions: '%s' %s", nm, val ? "is a blade - thrust point-first to stab, it sticks until you pull it out" : "isn't a blade (no stabbing)");
+    return val;
+}
+/* a blow at C (world), moving along v (units/s), on bone b of actor A; I = impact (swing m/s x weapon weight) */
+static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float I, int h, bool stab, bool armed)
 {
     double now = QpcMs();
     float sp = V3Len(v); if (sp < 1e-3f) return;
     float d[3] = { v[0] / sp, v[1] / sp, v[2] / sp };
-    bool stagger = I >= g_hitKnockSpeed * 0.6f;
-    bool knock = g_hitKnockdown && I >= g_hitKnockSpeed && (A->hostile || g_hitKnockAnyone) && now > A->knockUntil;
-    static int hl = 0;
-    if (hl++ < 40) Log("Hit reactions: %s hit %08X on the %s at %.1f m/s (impact %.1f)%s", h ? "right" : "left", A->id,
-                       g_hrDef[b].name + 6, sp / g_unitsPerMeter, I, knock ? " - knocked down" : stagger ? " - staggered" : "");
-    A->lastHit = now;
-    Hit_Buzz(h, I);
-    if (knock) {
-        int lvl = I >= g_hitKnockSpeed * 1.6f ? 2 : I >= g_hitKnockSpeed * 1.25f ? 1 : 0;
-        g_hrKnockRef = A->ref; g_hrKnockId = A->id; g_hrKnockLvl = lvl;   /* (done from the main loop) */
-        A->knockUntil = now + 4000.0; A->knocked = true;
-        memset(A->th, 0, sizeof A->th); memset(A->om, 0, sizeof A->om);
-        return;
+    int part = g_hrDef[b].part, kind = g_hrDef[b].kind;
+    bool down = A->knocked || now < A->knockUntil;
+    bool canKnock = g_hitKnockdown && A->alive && !down && (A->hostile || g_hitKnockAnyone);
+    int action = HA_NONE, lvl = 0;
+    if (canKnock && kind == HK_HEAD && g_koOn && I >= g_hitKnockSpeed * 0.85f && A->hostile) { action = HA_KO; lvl = 1; }
+    else if (canKnock && I >= g_hitKnockSpeed && !stab) { action = HA_PUSH; lvl = I >= g_hitKnockSpeed * 1.6f ? 3 : I >= g_hitKnockSpeed * 1.25f ? 2 : 1; }
+    else if (canKnock && kind == HK_LEG && I >= g_hitKnockSpeed * 0.55f) { action = HA_PUSH; lvl = 0; }   /* legs taken out: down they go */
+    bool stagger = !action && I >= g_hitKnockSpeed * 0.6f;
+    int dmg10 = 0;
+    if (g_contactDmg && armed && A->alive) {
+        int wt = PlayerWeaponType();
+        float base = Hit_BaseDamage(wt), spdF = fminf(fmaxf(I / 3.0f, 0.35f), 1.6f);
+        float pm = part == 1 ? 1.6f : part == 0 ? 1.0f : 0.7f;
+        dmg10 = (int)(base * spdF * pm * (stab ? 1.4f : 1.0f) * g_dmgMult * 10.0f + 0.5f);
+        if (dmg10 < 1) dmg10 = 1;
     }
+    static int hl = 0;
+    if (hl++ < 60) Log("Hit reactions: %s %s %08X's %s at %.1f m/s (impact %.1f) - %.1f damage%s", h ? "right" : "left", stab ? "stabbed" : "hit", A->id,
+                       g_partName[part], sp / g_unitsPerMeter, I, dmg10 / 10.0f,
+                       action == HA_KO ? ", knocked out" : action == HA_PUSH ? (lvl == 0 ? ", legs taken out" : ", knocked flying") : stagger ? ", staggered" : "");
+    A->lastHit = now;
+    Hit_Buzz(h, stab ? I + 3.0f : I);
+    if (dmg10 || action) Hit_Queue(A, dmg10, part, action, lvl);
+    if (action) { A->knockUntil = now + 4000.0; memset(A->th, 0, sizeof A->th); memset(A->om, 0, sizeof A->om); return; }
+    if (down || !A->alive) return;
     if (stagger) A->softUntil = now + 900.0;
     /* the struck part and the ones it hangs from (a hit to the head also moves the neck and upper back) */
     int hit = b == 0 ? 1 : b;   /* (a hit on the hips folds the lower back) */
-    float scale = I * g_hitStrength * (stagger ? 1.5f : 1.0f);
+    float scale = I * g_hitStrength * (stagger ? 1.5f : 1.0f) * (stab ? 0.6f : 1.0f);
     int chain[5], cn = 0;
     for (int j = hit; j >= 0 && cn < 5; j = g_hrDef[j].parent) chain[cn++] = j;
     if (g_hrDef[hit].kind == HK_TORSO) { cn = 0; for (int j = 3; j >= 1; j--) if (A->bone[j]) chain[cn++] = j; }   /* the whole back bends */
@@ -9439,62 +9610,134 @@ static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float 
     }
     A->moving = true;
 }
-/* (in the render hook, right after the hands): find blows on nearby bodies */
+static void Hit_SegEnd(HrActor *A, int b, float sc, float *P1)
+{
+    const float *P0 = (const float *)(A->bone[b] + NIAV_WORLD_TRANSLATE);
+    if (A->child[b]) { memcpy(P1, A->child[b] + NIAV_WORLD_TRANSLATE, 12); return; }
+    if (b == 5 && A->bone[4]) {
+        float u[3]; V3Sub(u, P0, (const float *)(A->bone[4] + NIAV_WORLD_TRANSLATE)); float ul = V3Len(u);
+        for (int i = 0; i < 3; i++) P1[i] = P0[i] + (ul > 0.5f ? u[i] / ul * 12.0f * sc : 0); if (ul <= 0.5f) P1[2] += 12.0f * sc;
+        return;
+    }
+    memcpy(P1, P0, 12);
+}
+/* distance from point p to bone b's capsule axis; q = the nearest axis point */
+static float Hit_SegDist(HrActor *A, int b, float sc, const float *p, float *q)
+{
+    const float *P0 = (const float *)(A->bone[b] + NIAV_WORLD_TRANSLATE); float P1[3]; Hit_SegEnd(A, b, sc, P1);
+    float ab[3], ap[3]; V3Sub(ab, P1, P0); V3Sub(ap, p, P0);
+    float L2 = V3Dot(ab, ab), t = L2 > 1e-4f ? fminf(fmaxf(V3Dot(ap, ab) / L2, 0.0f), 1.0f) : 0.0f;
+    for (int i = 0; i < 3; i++) q[i] = P0[i] + ab[i] * t;
+    float dv[3]; V3Sub(dv, p, q); return V3Len(dv);
+}
+static bool Hit_ActorLive(HrActor *A)
+{
+    if (!A->ref || !A->ok || IsBadReadPtr(A->ref, 0x70)) return false;
+    char *rs = *(char **)(A->ref + 0x64), *root = (rs && !IsBadReadPtr(rs, 0x18)) ? *(char **)(rs + 0x14) : NULL;
+    return root == A->root;
+}
+/* (in the render hook, right after the hands): blows, stabs, and keeping the drawn hands out of bodies */
 static void Hit_Update(float dt, bool weaponOut)
 {
-    if (!g_hitReact || !g_inGameplay) { g_hrPrevN[0] = g_hrPrevN[1] = 0; return; }
+    memset(g_hrPush, 0, sizeof g_hrPush);
+    if (!g_hitReact || !g_inGameplay) { g_hrPrevN[0] = g_hrPrevN[1] = 0; g_lodge[0].on = g_lodge[1].on = false; return; }
     if (!Hit_Scripts()) return;
     double now = QpcMs();
     if (now > g_hrScanAt) { g_hrScanAt = now + 100.0; Hit_Scan(); }
     int aimH = g_leftHanded ? 0 : 1, wt = PlayerWeaponType();
+    bool armedOut = g_weaponOutThisFrame;   /* fists raised or a weapon drawn: blows do damage */
+    bool meleeHand = wt <= 2 && !PlayerWeaponAutomatic();
     float mass = wt == -1 ? 0.75f : wt == 0 ? 1.1f : wt == 1 ? 1.0f : wt == 2 ? 1.5f : 0.9f;
+    bool blade = weaponOut && Hit_Blade();
     for (int h = 0; h < 2; h++) {
-        if (!g_handWOk[h] || g_holding[h]) { g_hrPrevN[h] = 0; continue; }
+        Lodge *Lg = &g_lodge[h];
+        if (!g_handWOk[h] || g_holding[h]) { g_hrPrevN[h] = 0; Lg->on = false; continue; }
+        /* a blade stuck in someone: the drawn hand stays with it until you pull hard enough */
+        if (Lg->on) {
+            HrActor *A = &g_hr[Lg->a];
+            bool keep = blade && h == aimH && A->ref == Lg->ref && Hit_ActorLive(A) && A->bone[Lg->b];
+            if (keep) {
+                const float *P = (const float *)(A->bone[Lg->b] + NIAV_WORLD_TRANSLATE), *R = (const float *)(A->bone[Lg->b] + NIAV_WORLD_ROTATE);
+                float pin[3]; for (int i = 0; i < 3; i++) pin[i] = P[i] + R[i * 3] * Lg->local[0] + R[i * 3 + 1] * Lg->local[1] + R[i * 3 + 2] * Lg->local[2];
+                float d[3]; V3Sub(d, pin, g_handW[h]); float pull = V3Len(d);
+                if (pull > g_stabPull * g_unitsPerMeter) {
+                    keep = false; Hit_Buzz(h, 6.0f);
+                    Log("Hit reactions: blade pulled out of %08X's %s (%.0f cm pull)", A->id, g_partName[g_hrDef[Lg->b].part], pull / g_unitsPerMeter * 100.0f);
+                    A->lastHit = now + 300.0;
+                } else {
+                    memcpy(g_hrPush[h], d, 12);
+                    double gap = pull > g_stabPull * g_unitsPerMeter * 0.6f ? 60 : 160;
+                    if (now - Lg->lastBuzz > gap) { Lg->lastBuzz = now; if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, (unsigned short)fminf(400.0f + pull * 40.0f, 3000.0f)); }
+                }
+            }
+            if (!keep) Lg->on = false;
+        }
         Probe pr[PROBES_MAX];
         int n = Collide_BuildProbes(h, weaponOut && wt >= 0 && h == aimH, pr);
         bool haveVel = g_hrPrevN[h] == n && dt > 0;
         Probe prev[PROBES_MAX]; memcpy(prev, g_hrPrev[h], sizeof prev);
         memcpy(g_hrPrev[h], pr, sizeof(Probe) * n); g_hrPrevN[h] = n;
-        if (!haveVel) continue;
+        if (!haveVel || Lg->on) continue;
+        float fwd[3] = { -g_handWR[h][0][2], -g_handWR[h][1][2], -g_handWR[h][2][2] };
         float m = (h == aimH || wt == -1) ? mass : 0.75f;
+        bool handArmed = armedOut && (h == aimH ? meleeHand || wt == -1 : wt == -1);
+        float push[3] = { 0, 0, 0 }; float pushLen = 0;
         for (int a = 0; a < HR_ACT; a++) {
             HrActor *A = &g_hr[a];
-            if (!A->ref || !A->ok || !A->alive || A->knocked || now - A->lastHit < 280.0) continue;
-            char *rs = *(char **)(A->ref + 0x64), *root = (rs && !IsBadReadPtr(rs, 0x18)) ? *(char **)(rs + 0x14) : NULL;
-            if (root != A->root) continue;
+            if (!A->ref || !A->ok) continue;
+            if (!Hit_ActorLive(A)) continue;
             float sc = *(const float *)(A->root + NIAV_WORLD_SCALE); if (!(sc > 0.2f && sc < 5.0f)) sc = 1.0f;
             const float *hp = (const float *)(A->bone[5] + NIAV_WORLD_TRANSLATE);
             float dd[3]; V3Sub(dd, pr[0].p, hp);
             if (V3Dot(dd, dd) > 160.0f * 160.0f * sc * sc) continue;   /* (quick reject: nowhere near) */
-            int bestB = -1; float bestPen = 0, bestC[3], bestV[3], bestSp = 0;
+            int bestB = -1, bestK = 0; float bestPen = 0, bestC[3], bestV[3], bestSp = 0;
             for (int k = 0; k < n; k++) {
                 float v[3]; for (int i = 0; i < 3; i++) v[i] = (pr[k].p[i] - prev[k].p[i]) / dt;
                 float spd = V3Len(v);
-                if (spd > 1500.0f || spd < 1.5f * g_unitsPerMeter) continue;   /* (too slow to be a blow, or a teleport) */
                 for (int b = 0; b < HR_B; b++) {
-                    char *bn = A->bone[b]; if (!bn || g_hrDef[b].rad <= 0) continue;
-                    const float *P0 = (const float *)(bn + NIAV_WORLD_TRANSLATE);
-                    float P1[3];
-                    if (A->child[b]) memcpy(P1, A->child[b] + NIAV_WORLD_TRANSLATE, 12);
-                    else if (b == 5 && A->bone[4]) { float u[3]; V3Sub(u, P0, (const float *)(A->bone[4] + NIAV_WORLD_TRANSLATE)); float ul = V3Len(u); for (int i = 0; i < 3; i++) P1[i] = P0[i] + (ul > 0.5f ? u[i] / ul * 12.0f * sc : 0); if (ul <= 0.5f) P1[2] += 12.0f * sc; }
-                    else memcpy(P1, P0, 12);
-                    float ab[3], ap[3]; V3Sub(ab, P1, P0); V3Sub(ap, pr[k].p, P0);
-                    float L2 = V3Dot(ab, ab), t = L2 > 1e-4f ? fminf(fmaxf(V3Dot(ap, ab) / L2, 0.0f), 1.0f) : 0.0f;
-                    float q[3]; for (int i = 0; i < 3; i++) q[i] = P0[i] + ab[i] * t;
-                    float dv[3]; V3Sub(dv, pr[k].p, q); float dist = V3Len(dv);
-                    float R = g_hrDef[b].rad * sc + pr[k].r;
+                    if (!A->bone[b]) continue;
+                    float q[3], R = g_hrDef[b].rad * sc + pr[k].r;
+                    float dist = Hit_SegDist(A, b, sc, pr[k].p, q);
                     if (dist >= R) continue;
-                    /* moving into the body (not along it, not pulling out) */
-                    float nrm[3]; if (dist > 1e-3f) for (int i = 0; i < 3; i++) nrm[i] = dv[i] / dist; else { nrm[0] = -v[0] / spd; nrm[1] = -v[1] / spd; nrm[2] = -v[2] / spd; }
+                    /* solid bodies: the drawn hand is held out of them */
+                    if (g_hitSolid && dist > 1e-3f) {
+                        float pen = R - dist, nv[3]; for (int i = 0; i < 3; i++) nv[i] = (pr[k].p[i] - q[i]) / dist * pen;
+                        if (pen > pushLen) { pushLen = pen; memcpy(push, nv, 12); }
+                    }
+                    if (spd > 1500.0f || spd < 1.5f * g_unitsPerMeter || now - A->lastHit < 280.0) continue;   /* (too slow to be a blow, or a teleport) */
+                    float qp[3]; if (Hit_SegDist(A, b, sc, prev[k].p, qp) < R) continue;   /* (it was already inside: not a new blow) */
+                    float nrm[3]; if (dist > 1e-3f) for (int i = 0; i < 3; i++) nrm[i] = (pr[k].p[i] - q[i]) / dist; else { nrm[0] = -v[0] / spd; nrm[1] = -v[1] / spd; nrm[2] = -v[2] / spd; }
                     float into = -V3Dot(v, nrm);
-                    if (into < 0.4f * spd) continue;
+                    if (into < 0.4f * spd) continue;   /* moving into the body (not along it) */
                     float pen = R - dist;
-                    if (pen > bestPen) { bestPen = pen; bestB = b; memcpy(bestC, pr[k].p, 12); memcpy(bestV, v, 12); bestSp = spd; }
+                    if (pen > bestPen || bestB < 0) { bestPen = pen; bestB = b; bestK = k; memcpy(bestC, pr[k].p, 12); memcpy(bestV, v, 12); bestSp = spd; }
                 }
             }
-            if (bestB >= 0) Hit_Strike(A, bestB, bestC, bestV, bestSp / g_unitsPerMeter * m, h);
+            if (bestB < 0) continue;
+            bool stab = false;
+            if (blade && h == aimH && g_stabOn && bestK >= 2 && bestK >= n - 3 && A->alive && bestSp > g_stabSpeed * g_unitsPerMeter) {
+                float vd[3] = { bestV[0] / bestSp, bestV[1] / bestSp, bestV[2] / bestSp };
+                stab = V3Dot(vd, fwd) > 0.72f;   /* point first, moving along the blade */
+            }
+            Hit_Strike(A, bestB, bestC, bestV, bestSp / g_unitsPerMeter * m, h, stab, handArmed);
+            if (stab) {   /* it sticks: the hand is pinned to that body part, a little deeper than where the point met it */
+                char *bn = A->bone[bestB]; const float *P = (const float *)(bn + NIAV_WORLD_TRANSLATE), *Rr = (const float *)(bn + NIAV_WORLD_ROTATE);
+                float hw[3]; for (int i = 0; i < 3; i++) hw[i] = g_handW[h][i] + fwd[i] * 3.0f - P[i];
+                for (int i = 0; i < 3; i++) Lg->local[i] = Rr[0 * 3 + i] * hw[0] + Rr[1 * 3 + i] * hw[1] + Rr[2 * 3 + i] * hw[2];
+                Lg->on = true; Lg->a = a; Lg->b = bestB; Lg->ref = A->ref; Lg->id = A->id; Lg->since = now; Lg->lastBuzz = now;
+                pushLen = 0;
+                break;
+            }
         }
+        if (!Lg->on && pushLen > 0) { if (pushLen > 30.0f) for (int i = 0; i < 3; i++) push[i] *= 30.0f / pushLen; memcpy(g_hrPush[h], push, 12); }
     }
+}
+/* (arm drawing) where the drawn hand goes: kept out of bodies, or stuck where its blade is */
+static void Hit_AdjustTarget(int h, float *T)
+{
+    if (h < 0 || h > 1) return;
+    float k = g_lodge[h].on ? 1.0f : 0.6f;
+    for (int i = 0; i < 3; i++) { g_hrPushCur[h][i] += (g_hrPush[h][i] - g_hrPushCur[h][i]) * k; T[i] += g_hrPushCur[h][i]; }
 }
 /* (in the render hook, just before drawing): lay each struck body's lean over its animation */
 static void Hit_Apply(void)
@@ -9506,17 +9749,16 @@ static void Hit_Apply(void)
     for (int a = 0; a < HR_ACT; a++) {
         HrActor *A = &g_hr[a];
         if (!A->ref || !A->moving) continue;
-        char *rs = (!IsBadReadPtr(A->ref, 0x70)) ? *(char **)(A->ref + 0x64) : NULL, *root = (rs && !IsBadReadPtr(rs, 0x18)) ? *(char **)(rs + 0x14) : NULL;
-        if (root != A->root || A->knocked) { A->moving = false; memset(A->th, 0, sizeof A->th); memset(A->om, 0, sizeof A->om); continue; }
+        if (!Hit_ActorLive(A) || A->knocked || now < A->knockUntil) { A->moving = false; memset(A->th, 0, sizeof A->th); memset(A->om, 0, sizeof A->om); continue; }
         bool soft = now < A->softUntil;
         float f = soft ? 1.1f : 2.1f, kk = (2.0f * 3.14159f * f) * (2.0f * 3.14159f * f), c = 2.0f * (soft ? 0.7f : 0.5f) * sqrtf(kk);
         bool any = false;
-        int steps = dt > 1.0f / 100.0f ? 2 : 1; float h = dt / steps;
+        int steps = dt > 1.0f / 100.0f ? 2 : 1; float hs = dt / steps;
         for (int b = 0; b < HR_B; b++) {
             if (!A->bone[b]) continue;
             for (int s = 0; s < steps; s++) for (int i = 0; i < 3; i++) {
-                A->om[b][i] += (-kk * A->th[b][i] - c * A->om[b][i]) * h;
-                A->th[b][i] += A->om[b][i] * h;
+                A->om[b][i] += (-kk * A->th[b][i] - c * A->om[b][i]) * hs;
+                A->th[b][i] += A->om[b][i] * hs;
             }
             float tl = V3Len(A->th[b]); float mx = soft ? 1.0f : 0.8f;
             if (tl > mx) for (int i = 0; i < 3; i++) { A->th[b][i] *= mx / tl; A->om[b][i] *= 0.5f; }
@@ -13159,6 +13401,13 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Fuse time", "Throwing", "fFuseSeconds", &g_fuseShort, 0.5f, 15.0f, 0.5f, "%.1f s", 0, 0, "Dynamite and fire bombs: seconds from lighting the fuse until it goes off (in your hand if you're still holding it)." },
     { SP_WEAPONS, ST_FLOAT, "Long fuse time", "Throwing", "fLongFuseSeconds", &g_fuseLong, 0.5f, 30.0f, 0.5f, "%.1f s", 0, 0, "Long fuse dynamite: seconds from lighting until it goes off." },
     { SP_WEAPONS, ST_BOOL, "Hit reactions", "Combat", "bHitReactions", &g_hitReact, 0, 0, 0, 0, 0, 0, "ON: people and creatures you strike with your fists, a melee weapon or a gun butt react where they were hit - the head snaps back, a gut hit folds them over, an arm is knocked aside - and spring back. Hard hits stagger them." },
+    { SP_WEAPONS, ST_BOOL, "Blows deal damage where they land", "Combat", "bContactDamage", &g_contactDmg, 0, 0, 0, 0, 0, 0, "ON: your fist or melee weapon does the damage where it actually hits, scaled by how fast you swing (head hits hurt more, leg hits cripple legs). The game's own swing no longer hits. OFF: a fast swing makes the game attack, as before." },
+    { SP_WEAPONS, ST_FLOAT, "Blow damage", "Combat", "fDamageMult", &g_dmgMult, 0.1f, 5.0f, 0.1f, "x%.1f", 0, 0, "Damage of your blows compared with the weapon's own damage (with your skill)." },
+    { SP_WEAPONS, ST_BOOL, "Solid bodies", "Combat", "bSolidBodies", &g_hitSolid, 0, 0, 0, 0, 0, 0, "ON: your drawn hands and weapons stop at people and creatures instead of passing through them." },
+    { SP_WEAPONS, ST_BOOL, "Stabbing", "Combat", "bStabbing", &g_stabOn, 0, 0, 0, 0, 0, 0, "ON: knives, machetes, swords and spears thrust point-first stick into the body and stay stuck until you pull them out hard." },
+    { SP_WEAPONS, ST_FLOAT, "Pull to free a stuck blade", "Combat", "fStabPull", &g_stabPull, 0.05f, 0.8f, 0.01f, "%.2f m", 0, 0, "How far you have to pull your hand away to get a stuck blade out." },
+    { SP_WEAPONS, ST_BOOL, "Head strikes knock out", "Combat", "bKnockouts", &g_koOn, 0, 0, 0, 0, 0, 0, "ON: a hard blow to an enemy's head knocks them out cold - they lie where they fell, out of the fight." },
+    { SP_WEAPONS, ST_FLOAT, "Knocked out for", "Combat", "fKnockoutHours", &g_koHours, 0.1f, 24.0f, 0.1f, "%.1f game hours", 0, 0, "How long a knocked-out enemy stays down." },
     { SP_WEAPONS, ST_FLOAT, "Hit reaction strength", "Combat", "fHitStrength", &g_hitStrength, 0.2f, 3.0f, 0.1f, "x%.1f", 0, 0, "How far bodies move when you strike them." },
     { SP_WEAPONS, ST_BOOL, "Hard hits knock down", "Combat", "bKnockdown", &g_hitKnockdown, 0, 0, 0, 0, 0, 0, "ON: a very hard blow (a fast swing, more so with a heavy weapon) knocks the enemy over into a ragdoll." },
     { SP_WEAPONS, ST_FLOAT, "Knockdown swing speed", "Combat", "fKnockdownSpeed", &g_hitKnockSpeed, 2.0f, 15.0f, 0.5f, "%.1f m/s", 0, 0, "How hard a blow must be to knock someone down: your swing speed, x1.5 for two-handed weapons, x0.75 for fists. Hits above 60% of this stagger." },
