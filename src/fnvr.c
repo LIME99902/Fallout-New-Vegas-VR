@@ -188,7 +188,9 @@ static void LogOpen(void)
     char path[MAX_PATH];
     GetModuleFileNameA(NULL, path, MAX_PATH);
     DirOf(path);
+    char prev[MAX_PATH]; snprintf(prev, sizeof prev, "%sFNVR_previous.log", path);
     strcat(path, "FNVR.log");
+    MoveFileExA(path, prev, MOVEFILE_REPLACE_EXISTING);   /* (the last session's log is kept - e.g. after a crash) */
     g_log = fopen(path, "w");
 }
 
@@ -259,6 +261,7 @@ static bool  g_lgMotion = true;       /* [Grab] bOtherHandGunMotion: the other h
 static double g_lgKickAt = 0;         /* (the other hand's last shot, for its kick) */
 #define LG_RELOAD_MS 1300.0               /* how long reloading the other hand's gun takes */
 static char *g_lgCand = NULL; static bool g_lgGrip = false; static bool g_lgEat = false;
+static bool g_lgSticky = false;   /* (a gun drawn from a holster or handed over stays in the other hand until you squeeze and let go) */
 static struct { bool on, pickReq, passReq, fireReq, trig, automatic, melee, blade; char *ref, *pickRef; uint32_t id, pickId; void *base; int rounds, passRounds, clip; double lastShot, reloadAt; float barrelL[3], len, upL[3], pnL[3]; volatile bool reloadReq; void *clipFor; void *snd2, *snd3; bool tpOk, qConj; float Rnb[3][3], tnb[3]; } g_lg;
 static bool Hit_BladeOf(void *w);
 static bool g_lgDropForSwap = false; static bool g_lhudShow = true; static float g_lhudX = 0.30f, g_lhudY = 0.62f;
@@ -11474,6 +11477,7 @@ static void LG_Update(void)
             Grab_Start(mvH, r);
             if (g_holding[mvH] && LG_SetGrip(mvH, r)) {
                 g_lg.on = true; g_lg.ref = r; g_lg.id = g_lg.pickId; g_lg.base = *(void **)(r + 0x20); g_lg.reloadAt = 0;
+                g_lgSticky = !g_lgGrip;   /* (it arrived after you let go of the grip: keep it) */
                 int known = LG_RoundsOf(g_lg.id);
                 g_lg.rounds = g_lg.passRounds >= 0 ? g_lg.passRounds : known >= 0 ? known : -1;   /* (-1: a full magazine, counted in the main loop) */
                 g_lg.passRounds = -1;
@@ -13011,7 +13015,8 @@ static void Grab_Update(char *player, char *cam)
     bool noWeapon = !g_weaponOutThisFrame || PlayerWeaponType() == -1;
     for (int h = 0; h < 2; h++) {
         bool dualH = g_lg.on && h == (g_leftHanded ? 1 : 0) && g_held[h].ref == g_lg.ref;
-        bool keep = (h == g_stimHand ? g_gripHeld[h] : g_grabWant[h]) || (g_gunCarry && h == g_gun.findHandUsed) || (dualH && g_lgGrip);
+        if (dualH && g_lgGrip) g_lgSticky = false;   /* (once you squeeze again, letting go drops it as usual) */
+        bool keep = (h == g_stimHand ? g_gripHeld[h] : g_grabWant[h]) || (g_gunCarry && h == g_gun.findHandUsed) || (dualH && (g_lgGrip || g_lgSticky));
         if (g_holding[h] && (!keep || (!noWeapon && h != g_stimHand && !dualH && !(g_gunCarry && h == g_gun.findHandUsed)) || !g_handWOk[h])) {
             if (g_grabWant[h]) Log("Grab: %s hand drops its object (%s)", h ? "right" : "left", !noWeapon ? "weapon drawn" : "hand tracking lost");
             Grab_Drop(h, g_handWOk[h]);
