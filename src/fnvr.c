@@ -9561,6 +9561,8 @@ static float HB_Gain(const HrActor *A, int b)   { return A->gen ? 0.55f : g_hrDe
 static HrActor g_hr[HR_ACT];
 static Probe g_hrPrev[2][PROBES_MAX]; static int g_hrPrevN[2];
 static double g_hrScanAt = 0, g_hrLastApply = 0;
+static void *g_hrEnchScr = NULL;
+static void *g_hrStrikeW = NULL;   /* (the other hand's weapon, for its blows) */
 static void *g_hrStatusScr = NULL, *g_hrPushScr[4], *g_hrKoPushScr = NULL, *g_hrSndScr = NULL, *g_hrDmgScr = NULL, *g_hrBaseScr = NULL, *g_hrKoScr = NULL, *g_hrWakeScr = NULL, *g_hrDayScr = NULL;
 static int g_hrScrState = 0;   /* 0 not yet, 1 ok, -1 failed */
 static float g_hrPush[2][3], g_hrPushCur[2][3];   /* how far the drawn hand is held out of bodies (world units) */
@@ -9568,7 +9570,7 @@ typedef struct { bool on; int a, b; uint32_t id; char *ref; float local[3]; doub
 static Lodge g_lodge[2];
 /* blows waiting for the main loop (damage, knockdowns, knockouts) */
 enum { HA_NONE, HA_PUSH, HA_KO };
-typedef struct { char *ref; uint32_t id; int dmg10, part, action, lvl; void *snd; } HrEvent;
+typedef struct { char *ref; uint32_t id; int dmg10, part, action, lvl; void *snd; void *weap; } HrEvent;
 static HrEvent g_hrEv[16]; static volatile LONG g_hrEvN = 0;
 typedef struct { uint32_t id; double wake; double sleepAt; char *ref; bool asleep; } KoEntry;
 static KoEntry g_ko[16]; static int g_koN = 0; static bool g_koLoaded = false;
@@ -9595,6 +9597,8 @@ static bool Hit_Scripts(void)
     static const int force[4] = { 1, 2, 3, 5 };
     for (int i = 0; i < 4; i++) { char b[128]; snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho %d\nEnd\n", force[i]); g_hrPushScr[i] = g_scriptIntf->CompileScript(b); }
     g_hrKoPushScr = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho 4\nEnd\n");
+    /* the weapon's own effect on whoever it hits (super-heated fire, shock, poison, bleeding...) - its enchantment, cast on them */
+    g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rWeap\nref rE\nBegin Function { rWho, rWeap }\nset rE to GetEnchantment rWeap\nif rE\nrWho.CastImmediateOnSelf rE\nendif\nEnd\n");
     g_hrSndScr = g_scriptIntf->CompileScript("ref rWho\nref rSnd\nBegin Function { rWho, rSnd }\nrWho.PlaySound3D rSnd\nEnd\n");
     /* the blow's damage (tenths of a point), on the part it hit; a killing blow is yours; anyone you hit (not companions) fights back */
     g_hrDmgScr = g_scriptIntf->CompileScript(
@@ -9617,6 +9621,7 @@ static bool Hit_Scripts(void)
     g_hrScrState = (g_hrStatusScr && g_hrPushScr[0]) ? 1 : -1;
     Log("Hit reactions: %s (status check %d, damage %s, weapon damage %s, knockouts %s, game clock %s, impact sounds %s)", g_hrScrState > 0 ? "ready" : "couldn't set up the status check - hit reactions off",
         sv, g_hrDmgScr ? "ok" : "FAILED", g_hrBaseScr ? "ok" : "FAILED", g_hrKoScr && g_hrWakeScr ? "ok" : "FAILED", g_hrDayScr ? "ok" : "FAILED", g_hrSndScr ? "ok" : "FAILED");
+    Log("Hit reactions: weapon effects on blows %s", g_hrEnchScr ? "ok" : "FAILED");
     return g_hrScrState > 0;
 }
 static double Hit_Day(void) { double v = -1; return (g_hrDayScr && Scr_Num(g_hrDayScr, GetPlayer(), &v)) ? v : -1.0; }
@@ -9647,6 +9652,7 @@ static void Hit_Flush(void)
         if (loading || LookupForm(e->id) != (void *)e->ref) continue;
         if (e->snd && g_hrSndScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrSndScr, GetPlayer(), 2, e->ref, e->snd);
         if (e->dmg10 > 0 && g_hrDmgScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrDmgScr, GetPlayer(), 3, e->ref, e->dmg10, e->part);
+        if (e->dmg10 > 0 && e->weap && g_hrEnchScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, e->weap);   /* (its fire, shock, poison...) */
         if (e->action == HA_PUSH || e->action == HA_KO) {
             int lv = e->lvl < 0 ? 0 : e->lvl > 3 ? 3 : e->lvl;
             void *s = e->action == HA_KO && g_hrKoPushScr ? g_hrKoPushScr : g_hrPushScr[lv] ? g_hrPushScr[lv] : g_hrPushScr[0];
@@ -9691,6 +9697,7 @@ static void Hit_Queue(HrActor *A, int dmg10, int part, int action, int lvl, void
 {
     LONG i = g_hrEvN; if (i >= 16) return;
     g_hrEv[i].ref = A->ref; g_hrEv[i].id = A->id; g_hrEv[i].dmg10 = dmg10; g_hrEv[i].part = part; g_hrEv[i].action = action; g_hrEv[i].lvl = lvl; g_hrEv[i].snd = snd;
+    g_hrEv[i].weap = g_hrStrikeW ? g_hrStrikeW : (PlayerWeaponType() >= 0 ? PlayerWeaponForm() : NULL);
     g_hrEvN = i + 1;
 }
 /* damage per hit of what's in your hand (with your skill), checked now and then */
@@ -9924,7 +9931,6 @@ static bool Hit_Blade(void)
     return val;
 }
 /* a blow at C (world), moving along v (units/s), on bone b of actor A; I = impact (swing m/s x weapon weight) */
-static void *g_hrStrikeW = NULL;   /* (the other hand's weapon, for its blows) */
 static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float I, int h, bool stab, bool armed)
 {
     double now = QpcMs();
@@ -10037,7 +10043,8 @@ static void Hit_Update(float dt, bool weaponOut)
     bool blade = weaponOut && Hit_Blade();
     for (int h = 0; h < 2; h++) {
         Lodge *Lg = &g_lodge[h];
-        if (!g_handWOk[h] || g_holding[h]) { g_hrPrevN[h] = 0; Lg->on = false; continue; }
+        bool lgHeldMelee = h != aimH && g_lg.on && g_lg.melee && g_holding[h] && g_held[h].ref == g_lg.ref;
+        if (!g_handWOk[h] || (g_holding[h] && !lgHeldMelee)) { g_hrPrevN[h] = 0; Lg->on = false; continue; }
         /* a blade stuck in someone: the drawn hand stays with it until you pull hard enough */
         if (Lg->on) {
             HrActor *A = &g_hr[Lg->a];
@@ -11014,12 +11021,12 @@ static bool LG_Pose(float *org, M3 W, float *aim)
         for (int i = 0; i < 3; i++) { fx[i] = Hl[i * 3 + 0]; up[i] = -Hl[i * 3 + 2]; }
         float pd = V3Dot(up, fx); for (int i = 0; i < 3; i++) up[i] -= pd * fx[i];
         float L = V3Len(up); if (L < 0.2f) return false; for (int i = 0; i < 3; i++) up[i] /= L;
-        V3Cross(sd, fx, up);
+        float bk[3] = { -fx[0], -fx[1], -fx[2] };   /* (its long way - the cuff - runs back along the forearm) */
+        V3Cross(sd, bk, up);
         float sl[3]; V3Cross(sl, g_lg.barrelL, g_lg.upL);
-        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) W[i][j] = fx[i] * g_lg.barrelL[j] + up[i] * g_lg.upL[j] + sd[i] * sl[j];
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) W[i][j] = bk[i] * g_lg.barrelL[j] + up[i] * g_lg.upL[j] + sd[i] * sl[j];
         float U = g_unitsPerMeter / 100.0f;
-        for (int i = 0; i < 3; i++) org[i] = Hb[i] + fx[i] * 4.0f - (W[i][0] * g_lgMid[0] + W[i][1] * g_lgMid[1] + W[i][2] * g_lgMid[2])
-                                      + (fx[i] * g_lhGunFwd + up[i] * g_lhGunUp + sd[i] * g_lhGunSide) * U;
+        for (int i = 0; i < 3; i++) org[i] = Hb[i] + fx[i] * 3.0f + (fx[i] * g_lhGunFwd + up[i] * g_lhGunUp - sd[i] * g_lhGunSide) * U;   /* (the model's own middle point is the hand) */
         if (aim) memcpy(aim, fx, 12);
         return true;
     }
