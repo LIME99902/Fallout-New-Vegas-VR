@@ -262,6 +262,7 @@ static double g_lgKickAt = 0;         /* (the other hand's last shot, for its ki
 #define LG_RELOAD_MS 1300.0               /* how long reloading the other hand's gun takes */
 static char *g_lgCand = NULL; static bool g_lgGrip = false; static bool g_lgEat = false;
 static bool g_lgSticky = false;
+static bool g_lgLeftZone = false;   /* (the other hand's gun has been away from the holsters since it was taken - letting go right where you drew it doesn't put it back) */
 static bool  g_keepWeapons = true;     /* [Grab] bKeepWeaponsInHand: letting go of the grip never drops a weapon - only a throw does */
 static float g_keepThrowSpeed = 2.0f;  /* [Grab] fWeaponThrowSpeed: how fast (m/s) your hand must move as you let go to throw it */   /* (a gun drawn from a holster or handed over stays in the other hand until you squeeze and let go) */
 static struct { bool on, pickReq, passReq, fireReq, trig, automatic, melee, blade; char *ref, *pickRef; uint32_t id, pickId; void *base; int rounds, passRounds, clip; double lastShot, reloadAt; float barrelL[3], len, upL[3], pnL[3]; volatile bool reloadReq; void *clipFor; void *snd2, *snd3; bool tpOk, qConj; float Rnb[3][3], tnb[3]; } g_lg;
@@ -11495,11 +11496,12 @@ static void LG_Update(void)
     g_lgCand = NULL;
     if (g_lg.on && (!g_holding[mvH] || g_held[mvH].ref != g_lg.ref)) {   /* let go (dropped or thrown) */
         LG_SetRounds(g_lg.id, g_lg.rounds); g_lg.on = false;
-        int z = Holster_OffZone();
+        int z = g_lgLeftZone ? Holster_OffZone() : 0;
         if (z) { int sl = Holster_SlotOf(*(BYTE *)((char *)g_lg.base + 0xF4)); if (sl) z = sl + 2; }   /* (small ones on the hip, big ones over the shoulder) */
         if (z) { g_lgHol.req = true; g_lgHol.ref = g_lg.ref; g_lgHol.id = g_lg.id; g_lgHol.base = g_lg.base; g_lgHol.zone = z; g_lgHol.rounds = g_lg.rounds; }   /* (let go at a holster: put away there) */
         else Log("Dual wield: other hand let go of its gun (%d rounds left in it)", g_lg.rounds);
     }
+    if (g_lg.on && !Holster_OffZone()) g_lgLeftZone = true;
     {   static int zPrev = 0; int z = Holster_OffZone();
         if (z && z != zPrev && (g_lg.on || g_holster[z] || (g_holsterId[z] && LookupForm(g_holsterId[z]))) && g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 600);
         zPrev = z; }
@@ -11510,6 +11512,7 @@ static void LG_Update(void)
             if (g_holding[mvH] && LG_SetGrip(mvH, r)) {
                 g_lg.on = true; g_lg.ref = r; g_lg.id = g_lg.pickId; g_lg.base = *(void **)(r + 0x20); g_lg.reloadAt = 0;
                 g_lgSticky = !g_lgGrip;   /* (it arrived after you let go of the grip: keep it) */
+                g_lgLeftZone = false;
                 int known = LG_RoundsOf(g_lg.id);
                 g_lg.rounds = g_lg.passRounds >= 0 ? g_lg.passRounds : known >= 0 ? known : -1;   /* (-1: a full magazine, counted in the main loop) */
                 g_lg.passRounds = -1;
@@ -11847,23 +11850,27 @@ static void LHud_Draw(IDirect3DDevice9 *dev)
     typedef INT (__stdcall *DrawText_t)(void *, void *, LPCSTR, INT, RECT *, DWORD, DWORD);
     if (failed) return;
     UINT H = g_bbH ? g_bbH : 1080, W = g_bbW ? g_bbW : 1920;
-    if (font && fontFor != H) { ((ULONG (__stdcall *)(void *))(*(void ***)font)[2])(font); font = NULL; }
+    UINT fkey = H * 1000 + (UINT)(g_uiScale * 100.0f);
+    if (font && fontFor != fkey) { ((ULONG (__stdcall *)(void *))(*(void ***)font)[2])(font); font = NULL; }
     if (!font) {
         HMODULE m = GetModuleHandleA("d3dx9_43.dll"); if (!m) m = LoadLibraryA("d3dx9_43.dll");
         CreateFont_t cf = m ? (CreateFont_t)GetProcAddress(m, "D3DXCreateFontA") : NULL;
-        if (!cf || FAILED(cf(dev, (INT)(H / 38), 0, FW_BOLD, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Arial", &font)) || !font) {
+        if (!cf || FAILED(cf(dev, (INT)fmaxf(H / 38.0f * g_uiScale, 12.0f), 0, FW_BOLD, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Arial", &font)) || !font) {
             failed = true; Log("Other hand's HUD: couldn't make a font (d3dx9_43.dll) - no readout"); return; }
-        fontFor = H;
+        fontFor = fkey;
     }
     IDirect3DSurface9 *bb = NULL, *old = NULL; D3DVIEWPORT9 vp;
     if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
     IDirect3DDevice9_GetRenderTarget(dev, 0, &old); IDirect3DDevice9_GetViewport(dev, &vp);
     IDirect3DDevice9_SetRenderTarget(dev, 0, bb);
     DrawText_t dt = (DrawText_t)(*(void ***)font)[14];
-    int lh = (int)(H / 34);
+    /* sized and placed like the game's HUD (HUD size): above where the health bar sits, toward the middle as the HUD shrinks */
+    float sc = g_uiScale;
+    int lh = (int)fmaxf(H / 34.0f * sc, 14.0f);
+    float px = 0.5f + (0.06f - 0.5f) * sc + (g_lhudX - 0.30f), py = 0.5f + (0.78f - 0.5f) * sc + (g_lhudY - 0.62f);
     for (int i = 0; i < 3; i++) {
         if (!g_lhud[i][0]) continue;
-        RECT r = { (LONG)(W * g_lhudX), (LONG)(H * g_lhudY) + i * lh, (LONG)(W * g_lhudX) + (LONG)(W / 3), (LONG)(H * g_lhudY) + (i + 1) * lh };
+        RECT r = { (LONG)(W * px), (LONG)(H * py) + i * lh, (LONG)(W * px) + (LONG)(W / 3), (LONG)(H * py) + (i + 1) * lh };
         RECT rs = r; OffsetRect(&rs, 2, 2);
         dt(font, NULL, g_lhud[i], -1, &rs, DT_LEFT | DT_TOP | DT_NOCLIP, 0xC0000000);
         dt(font, NULL, g_lhud[i], -1, &r, DT_LEFT | DT_TOP | DT_NOCLIP, 0xFFFFB642);   /* (the HUD's amber) */
@@ -13051,7 +13058,7 @@ static void Grab_Update(char *player, char *cam)
         if (dualH && g_lgGrip) g_lgSticky = false;   /* (once you squeeze again, letting go drops it as usual) */
         if (dualH && g_keepWeapons) {   /* (weapons stay in hand: letting go only drops it as part of a throw, or at a holster) */
             static bool lgPrev = false; bool rel = lgPrev && !g_lgGrip; lgPrev = g_lgGrip;
-            if (rel) { bool thrown = g_handSpeed[h] > g_keepThrowSpeed, hol = Holster_OffZone() != 0;
+            if (rel) { bool thrown = g_handSpeed[h] > g_keepThrowSpeed, hol = Holster_OffZone() != 0 && g_lgLeftZone;
                 g_lgSticky = !(thrown || hol);
                 if (thrown) Log("Dual wield: other hand's weapon thrown (%.1f m/s)", g_handSpeed[h]); }
         }
