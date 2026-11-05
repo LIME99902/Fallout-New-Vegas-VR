@@ -10819,6 +10819,45 @@ static char *LG_BodyNodeIn(char *node, int depth)
     return NULL;
 }
 static char *LG_BodyNode(char *ref) { char *root = LG_Root(ref); char *b = root ? LG_BodyNodeIn(root, 0) : NULL; return b ? b : root; }
+/* (diagnostic) a weapon model's parts: names, which carry a skin and which bones that skin follows */
+static void Mdl_DumpWalk(char *n, int depth, int *lines)
+{
+    if (!n || depth > 10 || *lines > 120 || IsBadReadPtr(n, 0xC0)) return;
+    const char *nm = *(const char **)(n + 0x08); if (nm && IsBadStringPtrA(nm, 80)) nm = "?";
+    char pad[24]; int d = depth < 10 ? depth : 10; memset(pad, ' ', d * 2); pad[d * 2] = 0;
+    uint32_t vt = *(uint32_t *)n;
+    if (AsNode(n)) {
+        Log("MDL %s%s [node %08X]", pad, nm ? nm : "", vt); (*lines)++;
+        char **kids = *(char ***)(n + 0xA0); unsigned count = *(uint16_t *)(n + 0xA6);
+        for (unsigned i = 0; kids && i < count && i < 64; i++) Mdl_DumpWalk(kids[i], depth + 1, lines);
+        return;
+    }
+    char *gd = *(char **)(n + 0xB8), *sk = *(char **)(n + 0xBC);
+    int nv = gd && !IsBadReadPtr(gd, 0x10) ? *(uint16_t *)(gd + 0x08) : -1;
+    Log("MDL %s%s [shape %08X] verts %d, skin %s", pad, nm ? nm : "", vt, nv, sk && !IsBadReadPtr(sk, 0x20) ? "YES" : "no"); (*lines)++;
+    if (sk && !IsBadReadPtr(sk, 0x20)) {
+        const uint32_t *r = (const uint32_t *)sk;
+        Log("MDL %s  skin %08X %08X %08X %08X %08X %08X %08X %08X", pad, r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7]);
+        char *sd = *(char **)(sk + 0x08); unsigned nb = 0;
+        if (sd && !IsBadReadPtr(sd, 0x50)) { const uint32_t *q = (const uint32_t *)sd; Log("MDL %s  skin data %08X %08X %08X %08X %08X %08X %08X %08X", pad, q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]); }
+        char **bones = *(char ***)(sk + 0x14);
+        char line[600]; size_t L = 0; line[0] = 0;
+        for (unsigned i = 0; bones && !IsBadReadPtr(bones, 4 * (i + 1)) && i < 40; i++) {
+            char *b = bones[i]; if (!b || IsBadReadPtr(b, 0x10)) break;
+            const char *bn = *(const char **)(b + 0x08); if (!bn || IsBadStringPtrA(bn, 64)) break;
+            L += (size_t)snprintf(line + L, sizeof line - L, "%s%s", nb ? ", " : "", bn); nb++;
+            if (L > sizeof line - 70) break;
+        }
+        Log("MDL %s  skin bones (%u): %s", pad, nb, line); (*lines)++;
+    }
+}
+static void Mdl_Dump(const char *what, char *root)
+{
+    static char *done[6]; static int nd = 0;
+    for (int i = 0; i < nd; i++) if (done[i] == root) return;
+    if (nd < 6) done[nd++] = root; else return;
+    Log("MDL ---- %s ----", what); int lines = 0; Mdl_DumpWalk(root, 0, &lines);
+}
 static bool LG_SetGrip(int h, char *ref)
 {
     Held *g = &g_held[h];
@@ -10834,6 +10873,7 @@ static bool LG_SetGrip(int h, char *ref)
     char *pn = FindBone(root, "ProjectileNode", 0);
     int wt0 = *(BYTE *)(*(char **)(ref + 0x20) + 0xF4);
     g_lg.melee = wt0 <= 2; g_lg.len = 20.0f;
+    if (wt0 == 0) Mdl_Dump("other hand's power fist (world model)", LG_Root(ref));
     if (g_lg.melee) {   /* a melee weapon: its long axis, away from the grip */
         for (int i = 0; i < 3; i++) { g_melMn[i] = 1e9f; g_melMx[i] = -1e9f; } g_melVerts = 0;
         MelExt_Walk(root, NULL, NULL, 0);
@@ -10978,6 +11018,7 @@ static void RG_Capture(void)
     if (V3Len(g) > 30.0f) return;   /* (the gun isn't in the hand right now) */
     int c = RG_Class(t);
     RGrip *r = &g_rg[c];
+    if (c == 2) { Mdl_Dump("gun hand's power fist (first person)", g_weaponNode); char *pr = *(char **)(g_weaponNode + NIAV_PARENT); if (pr) Mdl_Dump("gun hand's power fist: its parent", pr); }
     if (c >= 2) {   /* (melee: the weapon's whole turn in the hand's axes, Hr^T W) */
         float Rn[9]; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) Rn[i * 3 + j] = Hr[0 * 3 + i] * W[0 * 3 + j] + Hr[1 * 3 + i] * W[1 * 3 + j] + Hr[2 * 3 + i] * W[2 * 3 + j];
         float kr = r->n < 30 || !r->rok ? 1.0f : 0.05f;
