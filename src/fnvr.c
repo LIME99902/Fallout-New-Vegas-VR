@@ -2498,9 +2498,15 @@ static void VR_Tick(void)
             if (!g_pipOpen) {
                 lostSince = 0;
                 bool weapBusy = g_animAction == 0 || g_animAction == 1 || (g_animIdleSince && now - g_animIdleSince < 400.0 && g_animAction == -1 && g_animLastBusy);   /* (drawing or holstering a weapon: wait for it) */
-                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen && !weapBusy) {
+                /* a swing of the left hand (melee, or waving a held gun) passes the wrist across your face: only open
+                   once the hand has been still for a moment, and hold the pose longer while the left hand is armed */
+                static double lastFast = 0;
+                if (g_handSpeed[0] > (g_lg.on ? 0.8f : 1.5f)) lastFast = now;
+                bool swinging = lastFast && now - lastFast < (g_lg.on ? 700.0 : 350.0);
+                double holdMs = g_lg.on ? 450.0 : 180.0;
+                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen && !weapBusy && !swinging) {
                     if (!since) since = now;
-                    if (now - since > 180.0) {
+                    if (now - since > holdMs) {
                         g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = now + 250.0; since = 0; g_pipExpectUntil = now + 1000.0;
                         rearmed = false;
                         { char *pr = player ? *(char **)((char *)player + 0x68) : NULL; char *cc = pr ? *(char **)(pr + 0x138) : NULL;
@@ -6310,6 +6316,19 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
     if (V3Len(pole) < 0.01f) { float down[3] = { 0, 0, -1 }; float dd = V3Dot(down, dir); for (int i = 0; i < 3; i++) pole[i] = down[i] - dd * dir[i]; }
     float pl = V3Len(pole);
     for (int i = 0; i < 3; i++) pole[i] /= pl;
+    /* the off hand holding its own weapon: the game animates that arm as the support arm reaching across to the gun
+       hand's weapon, so its elbow bend says nothing about your arm - use a real arm's: elbow down and a little out
+       to the side, as when you aim a pistol one-handed */
+    bool offArmed = g_lg.on && side == (g_leftHanded ? 1 : 0);
+    if (offArmed) {
+        float upv[3] = { 0, 0, 1 }, outv[3], nat[3];
+        V3Cross(outv, upv, dir);                                   /* (left of the reach line) */
+        if (side == 1) for (int i = 0; i < 3; i++) outv[i] = -outv[i];
+        for (int i = 0; i < 3; i++) nat[i] = -upv[i] * 0.85f + outv[i] * 0.5f;
+        float nd = V3Dot(nat, dir); for (int i = 0; i < 3; i++) nat[i] -= nd * dir[i];
+        float nl = V3Len(nat);
+        if (nl > 0.2f) for (int i = 0; i < 3; i++) pole[i] = nat[i] / nl;
+    }
     if (g_armFollowHand > 0.0f && g_fingerDirOk[side]) {
         /* a real forearm runs back from the hand along the way the fingers point: put the elbow there
            (as far as the arm's reach allows), so the forearm lines up with the wrist and hand */
@@ -6405,7 +6424,7 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
         M3T(FT, Wfn);  M3Mul(R1n, FT, Wh);             /* now: hand relative to the turned forearm */
         /* the Pip-Boy animation changes the arm's own pose; keep using the everyday wrist/forearm relation */
         static M3 R0Base[2]; static bool R0Have[2] = { false, false };
-        if (g_pipModeRaw == 0 && !g_pipOpen && !(g_meleeHoldPose && side == (g_leftHanded ? 0 : 1))) { memcpy(R0Base[side], R0, sizeof R0); R0Have[side] = true; }
+        if (g_pipModeRaw == 0 && !g_pipOpen && !(g_meleeHoldPose && side == (g_leftHanded ? 0 : 1)) && !(offArmed && R0Have[side])) { memcpy(R0Base[side], R0, sizeof R0); R0Have[side] = true; }   /* (armed off hand: keep the empty-hand relation, not the support pose) */
         else if (R0Have[side]) memcpy(R0, R0Base[side], sizeof R0);
         /* How far the wrist has turned around the forearm since the everyday pose: the twist part of
            (now x everyday^-1), measured with a quaternion so bending the wrist doesn't read as turning. */
