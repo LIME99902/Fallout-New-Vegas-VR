@@ -575,6 +575,13 @@ static float g_seatCrouchDepth = 0.85f;        /* INI [Seated] fCrouchDepth: how
 static volatile bool g_seatCrouchWant = false; static float g_seatCrouchK = 0.0f;
 static float g_lhGunFwd = 0.0f, g_lhGunUp = 0.0f, g_lhGunSide = 0.0f;   /* INI [LeftHanded] fGunForward/fGunUp/fGunSide (cm): fine-tuning the gun in the left hand */
 static bool  g_startSetup = true;              /* INI [Startup] bShowSetup: the setup screen before the main menu */
+static int   g_gfxHeadset = 0;                 /* [Startup] iHeadset: 0 = from SteamVR, then the headset list below */
+static int   g_gfxWirelessI = 0;               /* [Startup] bWirelessI: 1 = streamed over Wi-Fi (Air Link, Virtual Desktop, Steam Link) */
+static int   g_gfxTier = 1;                    /* [Startup] iPCTier: 0 low end, 1 medium, 2 high end, 3 very high end */
+static bool  g_gfxDof = false;                 /* [Startup] bDepthOfField: the game's depth-of-field blur (blurry in VR) */
+static float g_recPxPerTan = 0;                /* (SteamVR's recommended sharpness for this headset) */
+static float g_eyeTanSpan = 0;                 /* (one eye's width in view tangents, from SteamVR) */
+static bool  g_calSkip = false;                /* (calibration skipped this session: average body) */
 static float g_bodyReach[2] = { 0, 0 };        /* game shoulder -> hand with the arm straight (m), left / right */
 static bool  g_bodyScaleWorld = true;          /* match the world's size to your height */
 static bool  g_bodyArmMatch = true;            /* in-game arms sized to yours */
@@ -772,6 +779,10 @@ static void LoadSettings(void)
     { char gb[32]; GetPrivateProfileStringA("Grapple", "fAimUp", "0", gb, sizeof gb, g_iniPath); g_grapAimUp = (float)atof(gb);
       GetPrivateProfileStringA("Grapple", "fAimRight", "0", gb, sizeof gb, g_iniPath); g_grapAimRight = (float)atof(gb); }
     g_ltBullet = GetPrivateProfileIntA("Controls", "bLeftTriggerBulletTime", 1, g_iniPath) != 0;
+    g_gfxHeadset = GetPrivateProfileIntA("Startup", "iHeadset", 0, g_iniPath); if (g_gfxHeadset < 0 || g_gfxHeadset > 12) g_gfxHeadset = 0;
+    g_gfxWirelessI = GetPrivateProfileIntA("Startup", "bWirelessI", 0, g_iniPath) ? 1 : 0;
+    g_gfxTier = GetPrivateProfileIntA("Startup", "iPCTier", 1, g_iniPath); if (g_gfxTier < 0 || g_gfxTier > 3) g_gfxTier = 1;
+    g_gfxDof = GetPrivateProfileIntA("Startup", "bDepthOfField", 0, g_iniPath) != 0;
     g_bulletKey = GetPrivateProfileIntA("Controls", "iBulletTimeKey", 46, g_iniPath);
     { char cb[32]; GetPrivateProfileStringA("Controls", "fChestDown", "0.32", cb, sizeof cb, g_iniPath); g_chestDown = (float)atof(cb);
       GetPrivateProfileStringA("Controls", "fChestForward", "0.10", cb, sizeof cb, g_iniPath); g_chestFwd = (float)atof(cb);
@@ -1990,7 +2001,7 @@ static void Controllers_Poll(bool menu)
         bool ltDown = ltPrev ? lt > 0.40f : lt > 0.75f;
         bool fist = Pressed(mv, EVRButtonId_k_EButton_Grip) || mv->rAxis[2].x > 0.5f;   /* a fist (grip + trigger) isn't a bullet-time pull */
         static double fistAt = 0; if (fist) fistAt = QpcMs();   /* (not right after a grapple fist, nor while being pulled) */
-        if (g_ltBullet && !g_adsEnabled && !menu && g_inGameplay && !g_pipOpen && !g_wristUp && !fist && !expl && ltDown && !ltPrev && QpcMs() - fistAt > 300.0 && !g_grapPulling) BulletKey_Press();
+        if (g_ltBullet && !g_adsEnabled && !menu && g_inGameplay && !g_pipOpen && !g_wristUp && (g_lg.on ? (fist && g_keepWeapons) : (!fist && QpcMs() - fistAt > 300.0)) && !expl && ltDown && !ltPrev && !g_grapPulling) BulletKey_Press();   /* (dual wielding: the trigger fires the gun - squeeze the grip first for bullet time) */
         ltPrev = ltDown;
         BulletKey_Tick();
         Key_TapTick(); Key_RealTick();
@@ -2814,6 +2825,7 @@ static bool Display_InitD3D11(void)
     uint32_t recW = 0, recH = 0;
     g_vrSystem->GetRecommendedRenderTargetSize(&recW, &recH);
     if (!recW) recW = 2000;
+    g_recPxPerTan = (float)recW / (r[0] - l[0]); g_eyeTanSpan = r[0] - l[0];
     if (g_pixelDensityPct > 0) {
         g_pxPerTan = (float)recW / (r[0] - l[0]) * (g_pixelDensityPct / 100.0f);
     } else {
@@ -11545,6 +11557,7 @@ static void LG_Input(bool menu, bool gripNow, bool gripEdge, float trig, bool *l
     }
     if (g_lg.on || g_lg.pickReq) *lGrip = false;   /* (no VATS) */
     bool t = trig > (g_lg.trig ? 0.35f : 0.7f);
+    if (g_keepWeapons && gripNow && !g_lg.trig) t = false;   /* (grip squeezed first: the trigger is bullet time, not a shot) */
     if (g_lg.on && t && !g_lg.trig) g_lg.fireReq = true;
     g_lg.trig = t && g_lg.on;
 }
@@ -15071,7 +15084,7 @@ static void Profile_Load(int s)
     if (!g_profName[s][0]) snprintf(g_profName[s], sizeof g_profName[s], "Player %d", s);
     bool exists = (int)GetPrivateProfileIntA(sec, "bMatchWorld", -1, g_iniPath) != -1;
     if (exists) {
-        g_bodyEye = IniF(sec, "fEyeHeight", 0); if (!(g_bodyEye > 0.8f && g_bodyEye < 2.4f)) g_bodyEye = 0;
+        g_bodyEye = IniF(sec, "fEyeHeight", 0); if (!(g_bodyEye > 0.8f && g_bodyEye < 2.6f)) g_bodyEye = 0;
         g_bodyReach[0] = IniF(sec, "fArmReachL", 0); g_bodyReach[1] = IniF(sec, "fArmReachR", 0);
         for (int i = 0; i < 2; i++) if (!(g_bodyReach[i] > 0.2f && g_bodyReach[i] < 1.5f)) g_bodyReach[i] = 0;
         g_bodyScaleWorld = GetPrivateProfileIntA(sec, "bMatchWorld", 1, g_iniPath) != 0;
@@ -15080,7 +15093,7 @@ static void Profile_Load(int s)
         g_leftHanded = GetPrivateProfileIntA(sec, "bLeftHanded", g_leftHanded ? 1 : 0, g_iniPath) != 0;
         float a = IniF(sec, "fAimPitchOffset", g_aimPitchOffsetDeg); if (a >= -90 && a <= 90) g_aimPitchOffsetDeg = a;
         g_seated = GetPrivateProfileIntA(sec, "bSeated", 0, g_iniPath) != 0;
-        g_seatEye = IniF(sec, "fSeatedEyeHeight", 0); if (!(g_seatEye > 0.4f && g_seatEye < 2.0f)) g_seatEye = 0;
+        g_seatEye = IniF(sec, "fSeatedEyeHeight", 0); if (!(g_seatEye > 0.3f && g_seatEye < 2.2f)) g_seatEye = 0;
     } else {   /* a new person: start from the current settings, body not measured yet */
         g_bodyEye = 0; g_bodyReach[0] = g_bodyReach[1] = 0; g_seated = false; g_seatEye = 0;
     }
@@ -15119,12 +15132,14 @@ static float Body_ArmScale(int side, float gameLen)
 #define SET_ROW_Y0 150
 #define SET_ROW_H 62
 #define SET_ROWS 14
-enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_HUD, SP_START, SP_COUNT };
+enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_HUD, SP_START, SP_ADV, SP_COUNT };
 static const char *const g_setPageName[SP_COUNT] = { "FNVR SETTINGS", "BODY & PROFILES", "PIP-BOY", "CONTROLS", "HOLSTERS & GESTURES", "HANDS & OBJECTS",
-                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC" };
-enum { ST_BOOL, ST_FLOAT, ST_INT, ST_PAGE, ST_ACTION, ST_SIGN, ST_PROFILE, ST_INFO };
+                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC", "ADVANCED: HEADSET & CONTROLS" };
+enum { ST_BOOL, ST_FLOAT, ST_INT, ST_PAGE, ST_ACTION, ST_SIGN, ST_PROFILE, ST_INFO, ST_CHOICE, ST_RES };
 enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16, SF_MELEE = 32, SF_HOLM = 64 };
-enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_START_PLAY };
+enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP };
+#define GFX_HEADSETS "From SteamVR (auto)|Meta Quest 3|Meta Quest 3S / Quest 2|Meta Quest Pro|Meta Quest 1|Pico 4 / 4 Ultra|Valve Index|HTC Vive|HTC Vive Pro / Pro 2|HP Reverb G2|Windows Mixed Reality|Oculus Rift / Rift S|Pimax / Bigscreen Beyond"
+static int g_gfxResPct = 0;   /* [Startup] iResolutionPercent: 0 = from your PC tier, else this much of the headset's own sharpness */
 typedef struct {
     int page, type; const char *label; const char *sec, *key; void *var;
     float mn, mx, step; const char *fmt; int flags, arg; const char *help;
@@ -15133,8 +15148,33 @@ static const SetOpt g_setOpts[] = {
     { SP_START, ST_PROFILE, "Who's playing", 0, 0, 0, 0, 0, 0, 0, 0, 0, "Pick your profile with left/right. A profile that isn't calibrated yet is a new player - up to four, each with their own body, play style and hand." },
     { SP_START, ST_BOOL, "Play style", 0, 0, &g_seated, 0, 0, 0, 0, SF_PROFILE | SF_BODY, 0, "STANDING: play on your feet - really crouch to reach low things. SEATED: play sitting down at your character's full height; hold the right stick DOWN to crouch and reach low things." },
     { SP_START, ST_BOOL, "Left-handed", 0, 0, &g_leftHanded, 0, 0, 0, 0, SF_PROFILE, 0, "Swap hands: the left hand aims and shoots, the right stick moves." },
+    { SP_START, ST_CHOICE, "VR headset", "Startup", "iHeadset", &g_gfxHeadset, 0, 12, 1, GFX_HEADSETS, 0, 0, "Which headset you play on - sets how sharp the game is drawn for it. From SteamVR uses what SteamVR recommends for your headset." },
+    { SP_START, ST_CHOICE, "Connection", "Startup", "bWirelessI", &g_gfxWirelessI, 0, 1, 1, "Wired (Link cable, DisplayPort)|Wireless (Air Link, Virtual Desktop, Steam Link)", 0, 0, "Wireless streaming compresses the picture, so slightly less resolution is used - it looks the same and runs smoother." },
+    { SP_START, ST_CHOICE, "PC power", "Startup", "iPCTier", &g_gfxTier, 0, 3, 1, "Low end|Medium|High end|Very high end", 0, 0, "How strong your PC is. Higher = sharper picture in the headset, but harder on your graphics card. If the game stutters, pick one lower." },
+    { SP_START, ST_RES, "Game resolution", 0, 0, 0, 0, 0, 0, 0, 0, 0, "The size the game is drawn at - the headset picture can only be as sharp as this. A change needs a game restart (done for you when you press Start playing - just restart once)." },
+    { SP_START, ST_PAGE, "Advanced settings", 0, 0, 0, 0, 0, 0, 0, 0, SP_ADV, "Everything about the headset picture and motion controls: resolution, sharpness, 3D, field of view, aiming, fingers." },
     { SP_START, ST_ACTION, "Calibrate height and arms", 0, 0, 0, 0, 0, 0, 0, 0, SA_CAL_BODY, "Two quick steps: your height (standing straight, or sitting up straight for seated play), then both arms straight out in front." },
-    { SP_START, ST_ACTION, "Start playing", 0, 0, 0, 0, 0, 0, 0, 0, SA_START_PLAY, "Go to the main menu. A profile that isn't calibrated is calibrated first. (Change any of this later: hold both thumbsticks in for a second.)" },
+    { SP_START, ST_ACTION, "Start playing", 0, 0, 0, 0, 0, 0, 0, 0, SA_START_PLAY, "Go to the main menu (and save the headset and PC choices). A profile that isn't calibrated is calibrated first. (Change any of this later: hold both thumbsticks in for a second.)" },
+    { SP_START, ST_ACTION, "Skip calibration (average body)", 0, 0, 0, 0, 0, 0, 0, 0, SA_CAL_SKIP, "Play without calibrating - an average height and arm length are used. Calibrate later from Body & profiles if things feel the wrong size." },
+    { SP_MAIN, ST_PAGE, "Advanced: headset & controls", 0, 0, 0, 0, 0, 0, 0, 0, SP_ADV, "Every headset picture and motion control setting in one place: resolution, sharpness, 3D, field of view, aiming, fingers." },
+    { SP_ADV, ST_CHOICE, "VR headset", "Startup", "iHeadset", &g_gfxHeadset, 0, 12, 1, GFX_HEADSETS, 0, 0, "Which headset you play on - sets how sharp the game is drawn for it." },
+    { SP_ADV, ST_CHOICE, "Connection", "Startup", "bWirelessI", &g_gfxWirelessI, 0, 1, 1, "Wired|Wireless", 0, 0, "Wireless streaming compresses the picture, so slightly less resolution is used." },
+    { SP_ADV, ST_CHOICE, "PC power", "Startup", "iPCTier", &g_gfxTier, 0, 3, 1, "Low end|Medium|High end|Very high end", 0, 0, "Higher = sharper but harder on your graphics card." },
+    { SP_ADV, ST_INT, "Resolution (% of headset)", "Startup", "iResolutionPercent", &g_gfxResPct, 0, 120, 5, "%.0f %%", 0, 0, "Overrides the PC power choice: how sharp the game is drawn compared with what your headset can show (100% = full sharpness, very demanding). 0 = from PC power." },
+    { SP_ADV, ST_RES, "Game resolution", 0, 0, 0, 0, 0, 0, 0, 0, 0, "The size the game is drawn at. Use Apply below, then restart the game." },
+    { SP_ADV, ST_ACTION, "Apply resolution (restart after)", 0, 0, 0, 0, 0, 0, 0, 0, SA_GFX_APPLY, "Writes the resolution to the game's settings, turns off v-sync (it holds the game to your monitor's refresh rate - stutter in the headset) and sets windowed mode (needed for sizes bigger than your monitor). Restart the game to use it." },
+    { SP_ADV, ST_BOOL, "Depth of field blur", "Startup", "bDepthOfField", &g_gfxDof, 0, 0, 0, 0, 0, 0, "The game's blur on distant things. Looks smeared in VR - OFF recommended. Applied with the resolution (restart)." },
+    { SP_ADV, ST_INT, "Sharpness", "Display", "iPixelDensityPercent", &g_pixelDensityPct, 0, 200, 5, "%.0f %%", SF_RESTART, 0, "Size of the picture sent to the headset. 0 = automatic (matches the game's resolution, recommended). Restart to apply." },
+    { SP_ADV, ST_BOOL, "Full 3D (both eyes every frame)", "Stereo", "bFullStereo", &g_stereoFull, 0, 0, 0, 0, 0, 0, "Real 3D: the world is drawn from each eye every frame. About twice the drawing work - for high end PCs." },
+    { SP_ADV, ST_BOOL, "3D depth (experimental)", "Stereo", "bStereo", &g_stereo, 0, 0, 0, 0, 0, 0, "3D depth by drawing each eye in turn (fast movement can shimmer)." },
+    { SP_ADV, ST_BOOL, "Match headset field of view", "Display", "bMatchHeadsetFOV", &g_matchHeadsetFov, 0, 0, 0, 0, SF_FOV, 0, "Widen the game's view so it fills your headset." },
+    { SP_ADV, ST_BOOL, "Copy frames in background", "Display", "bAsyncCapture", &g_asyncCapture, 0, 0, 0, 0, SF_RESTART, 0, "Faster frame copying to the headset. Restart to apply." },
+    { SP_ADV, ST_BOOL, "Curved menus and HUD", "Display", "bCurvedUI", &g_curvedUI, 0, 0, 0, 0, SF_RESTART, 0, "Menus and the HUD on a curved panel in front of you. Restart to apply." },
+    { SP_ADV, ST_BOOL, "Motion controls", "Controls", "bMotionControls", &g_motionControls, 0, 0, 0, 0, 0, 0, "Your VR controllers drive the game." },
+    { SP_ADV, ST_BOOL, "Aim with your hand", "Controls", "bHandAim", &g_handAim, 0, 0, 0, 0, 0, 0, "Guns shoot where your hand points." },
+    { SP_ADV, ST_FLOAT, "Aim angle", "Controls", "fAimPitchOffset", &g_aimPitchOffsetDeg, -90.0f, 90.0f, 0.5f, "%.1f deg", SF_PROFILE, 0, "Tilts where your hand aims, for controllers held at a different angle." },
+    { SP_ADV, ST_BOOL, "Finger tracking", "Controls", "bFingerTracking", &g_fingerTracking, 0, 0, 0, 0, 0, 0, "Fingers follow your fingers on the controller." },
+    { SP_ADV, ST_BOOL, "Left trigger = bullet time", "Controls", "bLeftTriggerBulletTime", &g_ltBullet, 0, 0, 0, 0, 0, 0, "The left trigger presses the bullet-time key (needs a bullet-time mod). While dual wielding: squeeze the left grip, then pull the trigger." },
     { SP_MAIN, ST_PAGE, "Body & profiles", 0, 0, 0, 0, 0, 0, 0, 0, SP_BODY, "Your height and arm reach, so the world and your arms fit you. Up to four people, each with their own." },
     { SP_MAIN, ST_PAGE, "Pip-Boy", 0, 0, 0, 0, 0, 0, 0, 0, SP_PIP, "The Pip-Boy on your wrist: its screen, how it opens, how your forearm turns." },
     { SP_MAIN, ST_PAGE, "Controls", 0, 0, 0, 0, 0, 0, 0, 0, SP_CONTROLS, "Motion controls, aiming, melee swings, buttons and fingers." },
@@ -15383,6 +15423,78 @@ static int Set_PageRows(int page, int *idx, int max)
 static void Set_Toast(const char *msg) { snprintf(g_setToast, sizeof g_setToast, "%s", msg); g_setToastUntil = QpcMs() + 3500.0; g_setDirty = true; }
 static void Set_Buzz(unsigned short us) { int h = g_leftHanded ? 0 : 1; if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
 
+
+/* ---- Headset sharpness: the game's resolution for your headset and PC -----------------------------------------------
+   The headset picture is cut from the game's own frame, so it can only be as sharp as the resolution the game runs at:
+   a game at 1920x1080 looks blurry in any headset. From the headset (what SteamVR recommends for it, or the one picked),
+   the connection and how strong the PC is, FNVR works out a resolution and writes it to the game's FalloutPrefs.ini,
+   with v-sync off (it held the game to the monitor's refresh rate - stutter in the headset) and windowed mode (sizes
+   bigger than the monitor need it). The game reads these when it starts, so a change needs one restart. */
+static void Gfx_PrefsPath(char *out, size_t cap)
+{
+    char doc[MAX_PATH] = "";
+    if (FAILED(SHGetFolderPathA(NULL, CSIDL_PERSONAL, NULL, 0, doc))) doc[0] = 0;
+    snprintf(out, cap, "%s\\My Games\\FalloutNV\\FalloutPrefs.ini", doc);
+}
+static void Gfx_TargetFor(int tier, int *w, int *h);
+static void Gfx_Target(int *w, int *h)
+{
+    static bool inferred = false;
+    if (!inferred && g_bbW > 0) {   /* (first time: the PC choice starts at what this PC already runs, so nothing gets worse) */
+        inferred = true;
+        if (GetPrivateProfileIntA("Startup", "iPCTier", -1, g_iniPath) == -1) {
+            int best = 0, bd = 1 << 30;
+            for (int t = 0; t < 4; t++) { int tw, th; Gfx_TargetFor(t, &tw, &th); int d = abs(tw - (int)g_bbW); if (d < bd) { bd = d; best = t; } }
+            g_gfxTier = best; SaveInt("Startup", "iPCTier", best);
+            Log("Graphics: PC power starts at %d (closest to the %ux%u the game runs at)", best, g_bbW, g_bbH);
+        }
+    }
+    Gfx_TargetFor(g_gfxTier, w, h);
+}
+static void Gfx_TargetFor(int tier, int *w, int *h)
+{
+    static const int panel[13] = { 0, 2064, 1832, 1800, 1440, 2160, 1440, 1080, 1800, 2160, 1440, 1280, 2560 };
+    float span = g_eyeTanSpan > 0.5f ? g_eyeTanSpan : 2.2f;
+    float pxpt = (g_gfxHeadset == 0 && g_recPxPerTan > 50.0f) ? g_recPxPerTan : (panel[g_gfxHeadset ? g_gfxHeadset : 1] * 1.35f / span);
+    static const float tierF[4] = { 0.45f, 0.60f, 0.75f, 0.90f };
+    float f = g_gfxResPct > 0 ? g_gfxResPct / 100.0f : tierF[tier < 0 ? 0 : tier > 3 ? 3 : tier];
+    if (g_gfxWirelessI && g_gfxResPct <= 0) f *= 0.9f;
+    float ht = TargetHTan(16.0f / 9.0f); if (!(ht > 0.5f && ht < 4.0f)) ht = 1.3f;
+    float W = f * pxpt * 2.0f * ht;
+    if (W < 1280) W = 1280; if (W > 5760) W = 5760;
+    int wi = ((int)W + 8) / 16 * 16, hi = (wi * 9 / 16 + 8) / 16 * 16;
+    *w = wi; *h = hi;
+}
+/* the resolution the game is running at now and the one in its settings for the next start */
+static void Gfx_Text(char *out, size_t cap)
+{
+    int w, h; Gfx_Target(&w, &h);
+    char pp[MAX_PATH]; Gfx_PrefsPath(pp, sizeof pp);
+    int sw = GetPrivateProfileIntA("Display", "iSize W", 0, pp), sh = GetPrivateProfileIntA("Display", "iSize H", 0, pp);
+    if (sw == w && sh == h && (int)g_bbW == w) snprintf(out, cap, "%dx%d", w, h);
+    else if (sw == w && sh == h) snprintf(out, cap, "%dx%d after restart", w, h);
+    else snprintf(out, cap, "%ux%u -> %dx%d", g_bbW, g_bbH, w, h);
+}
+/* write it to the game's settings; true when the game needs a restart to use it */
+static bool Gfx_Apply(void)
+{
+    int w, h; Gfx_Target(&w, &h);
+    char pp[MAX_PATH]; Gfx_PrefsPath(pp, sizeof pp);
+    if (GetFileAttributesA(pp) == INVALID_FILE_ATTRIBUTES) { Log("Graphics: the game's settings file wasn't found (%s)", pp); return false; }
+    bool change = false;
+    #define GFX_SET(sec, key, val) do { if (GetPrivateProfileIntA(sec, key, -12345, pp) != (val)) { char b_[16]; snprintf(b_, sizeof b_, "%d", (val)); WritePrivateProfileStringA(sec, key, b_, pp); change = true; } } while (0)
+    GFX_SET("Display", "iSize W", w);
+    GFX_SET("Display", "iSize H", h);
+    GFX_SET("Display", "bFull Screen", 0);
+    GFX_SET("Display", "iPresentInterval", 0);
+    GFX_SET("Imagespace", "bDoDepthOfField", g_gfxDof ? 1 : 0);
+    #undef GFX_SET
+    static const char *const tn[4] = { "low end", "medium", "high end", "very high end" };
+    Log("Graphics: %s, %s, %s PC -> game resolution %dx%d (running at %ux%u)%s", g_gfxHeadset ? "headset picked" : "headset from SteamVR",
+        g_gfxWirelessI ? "wireless" : "wired", tn[g_gfxTier & 3], w, h, g_bbW, g_bbH, change ? " - written to FalloutPrefs.ini, restart to use it" : "");
+    return change || (int)g_bbW != w || (int)g_bbH != h;
+}
+static bool g_setFromStart = false;   /* (the advanced page was opened from the startup screen: Back goes there) */
 static void Set_ValueText(const SetOpt *o, char *out, size_t cap)
 {
     switch (o->type) {
@@ -15405,6 +15517,13 @@ static void Set_ValueText(const SetOpt *o, char *out, size_t cap)
     case ST_INT: snprintf(out, cap, o->fmt ? o->fmt : "%.0f", (float)*(int *)o->var); break;
     case ST_PROFILE: snprintf(out, cap, "%s", g_profName[g_profActive]); break;
     case ST_PAGE: snprintf(out, cap, ">"); break;
+    case ST_CHOICE: {   /* (the n-th name of the list) */
+        int v = *(int *)o->var; const char *p = o->fmt ? o->fmt : "";
+        for (int k = 0; k < v && p; k++) { p = strchr(p, '|'); if (p) p++; }
+        if (!p) p = "?";
+        const char *e = strchr(p, '|'); size_t L = e ? (size_t)(e - p) : strlen(p); if (L >= cap) L = cap - 1;
+        memcpy(out, p, L); out[L] = 0; break; }
+    case ST_RES: Gfx_Text(out, cap); break;
     default: out[0] = 0; break;
     }
 }
@@ -15414,7 +15533,7 @@ static void Set_Changed(const SetOpt *o)
         switch (o->type) {
         case ST_BOOL: SaveInt(o->sec, o->key, *(bool *)o->var ? 1 : 0); break;
         case ST_SIGN: SaveInt(o->sec, o->key, *(float *)o->var < 0 ? 1 : 0); break;
-        case ST_INT: SaveInt(o->sec, o->key, *(int *)o->var); break;
+        case ST_INT: case ST_CHOICE: SaveInt(o->sec, o->key, *(int *)o->var); break;
         case ST_FLOAT: IniFW(o->sec, o->key, *(float *)o->var, "%.3f"); break;
         default: break;
         }
@@ -15450,6 +15569,10 @@ static void Set_Step(const SetOpt *o, int dir, float mult)
         int nv = *v + dir * (step ? step : 1);
         if (nv < (int)o->mn) nv = (int)o->mn; if (nv > (int)o->mx) nv = (int)o->mx;
         *v = nv; break; }
+    case ST_CHOICE: {
+        int *v = (int *)o->var, nv = *v + (dir >= 0 ? 1 : -1);
+        if (nv < (int)o->mn) nv = (int)o->mx; if (nv > (int)o->mx) nv = (int)o->mn;
+        *v = nv; break; }
     case ST_PROFILE: {
         int s = g_profActive + dir; if (s < 1) s = 4; if (s > 4) s = 1;
         Profile_Save(); Profile_Load(s);
@@ -15462,22 +15585,27 @@ static void Set_Step(const SetOpt *o, int dir, float mult)
 }
 static void Settings_Close(void);
 static bool g_startAfterCal = false;   /* the startup screen's "Start playing" asked for a calibration first */
-static bool Body_Calibrated(void) { return Body_StandRef() > 0.3f && g_bodyReach[0] > 0.2f && g_bodyReach[1] > 0.2f; }
+static bool Body_Calibrated(void) { return g_calSkip || (Body_StandRef() > 0.3f && g_bodyReach[0] > 0.2f && g_bodyReach[1] > 0.2f); }
+static void Start_Graphics(void)   /* (Start playing: the headset/PC choice goes into the game's settings) */
+{
+    if (Gfx_Apply()) { int w, h; Gfx_Target(&w, &h); char m[160]; snprintf(m, sizeof m, "FNVR: game resolution set to %dx%d for your headset - restart the game once to use it", w, h); UIMessage(m); }
+}
 static void Set_Activate(int optIdx, int part)
 {
-    if (optIdx < 0) { g_setPageSel[g_setPage] = g_setSel; g_setPage = SP_MAIN; g_setSel = g_setPageSel[SP_MAIN]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); return; }
+    if (optIdx < 0) { int back = (g_setPage == SP_ADV && g_setFromStart) ? SP_START : SP_MAIN; g_setFromStart = false;
+        g_setPageSel[g_setPage] = g_setSel; g_setPage = back; g_setSel = g_setPageSel[back]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); return; }
     const SetOpt *o = &g_setOpts[optIdx];
     switch (o->type) {
-    case ST_PAGE: g_setPageSel[g_setPage] = g_setSel; g_setPage = o->arg; g_setSel = g_setPageSel[o->arg]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); break;
+    case ST_PAGE: if (o->arg == SP_ADV) g_setFromStart = g_setPage == SP_START; g_setPageSel[g_setPage] = g_setSel; g_setPage = o->arg; g_setSel = g_setPageSel[o->arg]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); break;
     case ST_BOOL: case ST_SIGN: Set_Step(o, 1, 1); break;
     case ST_FLOAT: case ST_INT: if (part) Set_Step(o, part, 1); break;
-    case ST_PROFILE: Set_Step(o, part ? part : 1, 1); break;
+    case ST_PROFILE: case ST_CHOICE: Set_Step(o, part ? part : 1, 1); break;
     case ST_ACTION:
         Set_Buzz(1200);
         switch (o->arg) {
         case SA_CLOSE: Settings_Close(); break;
         case SA_START_PLAY:
-            if (Body_Calibrated()) { Profile_Save(); Settings_Close(); Log("Startup: %s is playing %s", g_profName[g_profActive], g_seated ? "seated" : "standing"); }
+            if (Body_Calibrated()) { Profile_Save(); Settings_Close(); Start_Graphics(); Log("Startup: %s is playing %s", g_profName[g_profActive], g_seated ? "seated" : "standing"); }
             else { g_startAfterCal = true; g_setCal = 1; g_setCalAt = QpcMs(); g_setDirty = true; }
             break;
         case SA_CAL_BODY: case SA_CAL_HEIGHT: g_setCal = 1; g_setCalAt = QpcMs(); g_setDirty = true; break;
@@ -15488,6 +15616,13 @@ static void Set_Activate(int optIdx, int part)
             else Set_Toast("Open your Pip-Boy, then click the LEFT stick to adjust its screen");
             break;
         case SA_PIP_RESET: PipScr_Forget(); Set_Toast("Pip-Boy screen: back to the automatic spot"); break;
+        case SA_GFX_APPLY: { int w, h; Gfx_Target(&w, &h); char m[128];
+            if (Gfx_Apply()) snprintf(m, sizeof m, "Saved %dx%d - restart the game to use it", w, h); else snprintf(m, sizeof m, "Already running at %dx%d", w, h);
+            Set_Toast(m); break; }
+        case SA_CAL_SKIP:
+            g_calSkip = true; g_startAfterCal = false; Body_Apply();
+            Log("Startup: calibration skipped - average body for %s", g_profName[g_profActive]);
+            Profile_Save(); Settings_Close(); Start_Graphics(); break;
         }
         break;
     default: break;
@@ -15555,7 +15690,7 @@ static void Set_Draw(void)
             const SetOpt *o = &g_setOpts[oi];
             Set_ValueText(o, val, sizeof val);
             if (o->type == ST_BOOL || o->type == ST_SIGN) { if (!strcmp(val, "OFF")) vc = sel ? SC_DARK : SC_DIM; }
-            arrows = o->type == ST_FLOAT || o->type == ST_INT || o->type == ST_PROFILE;
+            arrows = o->type == ST_FLOAT || o->type == ST_INT || o->type == ST_PROFILE || o->type == ST_CHOICE;
             if (o->type == ST_INFO) vc = sel ? SC_DARK : SC_DIM;
             if (o->flags & SF_RESTART) { char t[80]; snprintf(t, sizeof t, "%s *", val); snprintf(val, sizeof val, "%s", t); }
         }
@@ -15653,7 +15788,8 @@ static void Settings_OpenStart(void)
 {
     Settings_Open();
     if (!g_setOpen) return;
-    g_setPage = SP_START; g_setSel = Body_Calibrated() ? 4 : 0; g_setScroll = 0; g_setDirty = true;
+    int sp = 0, ci = 0; { int idx[64]; int n = Set_PageRows(SP_START, idx, 64); for (int k = 0; k < n; k++) if (idx[k] >= 0 && g_setOpts[idx[k]].type == ST_ACTION) { if (g_setOpts[idx[k]].arg == SA_START_PLAY) sp = k; if (g_setOpts[idx[k]].arg == SA_CAL_BODY) ci = k; } (void)ci; }
+    g_setPage = SP_START; g_setSel = Body_Calibrated() ? sp : 0; g_setScroll = 0; g_setDirty = true;
     g_setToastUntil = 0;
     Log("Startup: setup screen shown (%s, %s, %s)", g_profName[g_profActive], g_seated ? "seated" : "standing", Body_Calibrated() ? "calibrated" : "not calibrated");
 }
@@ -15702,14 +15838,19 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
         if (g_setCal == 1 && trigEdge && !trigL) {
             TrackedDevicePose_t hp; g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, &hp, 1);
             float hy = hp.mDeviceToAbsoluteTracking.m[1][3];
-            bool ok = hp.bPoseIsValid && (g_seated ? (hy > 0.4f && hy < 2.0f) : (hy > 0.8f && hy < 2.4f));
+            bool ok = hp.bPoseIsValid && (g_seated ? (hy > 0.3f && hy < 2.2f) : (hy > 0.81f && hy < 2.6f));
             if (ok) {
                 if (g_seated) g_seatEye = hy; else g_bodyEye = hy;
                 g_standY = hy; g_haveLeanAnchor = false;
                 Body_Apply(); Profile_Save(); Set_Buzz(3000);
                 Log("Body: %s eye height measured %.3f m (world %.1f units/m)", g_seated ? "sitting" : "standing", hy, g_unitsPerMeter);
                 g_setCal = 2; g_setCalAt = now;
-            } else Set_Toast("Couldn't read the headset height - try again");
+            } else {
+                char m[200];
+                if (!hp.bPoseIsValid) snprintf(m, sizeof m, "The headset isn't being tracked right now - look around, then pull the trigger again");
+                else snprintf(m, sizeof m, "Your headset reads %.2f m above the floor - SteamVR's floor height looks wrong. Fix it in SteamVR (Room setup / floor), or use Skip calibration.", hy);
+                Set_Toast(m); Log("Body: height calibration refused - headset %s at %.3f m", hp.bPoseIsValid ? "tracked" : "NOT tracked", hy);
+            }
             g_setDirty = true; return true;
         }
         if (g_setCal == 2 && (!g_inGameplay || g_menuCached)) {   /* main menu: measured from the headset and controllers */
@@ -15731,14 +15872,19 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
                         S[1] -= 0.204f * E;
                         for (int i = 0; i < 3; i++) d[i] = ps[di].mDeviceToAbsoluteTracking.m[i][3] - S[i];
                         float r = V3Len(d);
-                        if (r > 0.3f && r < 1.3f) { g_bodyReach[sd] = r; got++; }
+                        if (r > 0.25f && r < 1.45f) { g_bodyReach[sd] = r; got++; }
+                        Log("Body: arm calibration - %s controller %.2f m from the shoulder%s", sd ? "right" : "left", r, r > 0.25f && r < 1.45f ? "" : " (out of range - ignored)");
+                    }
+                    if (got == 1) {   /* (one controller not seen: both arms are the same length) */
+                        if (!(g_bodyReach[0] > 0.2f)) g_bodyReach[0] = g_bodyReach[1];
+                        if (!(g_bodyReach[1] > 0.2f)) g_bodyReach[1] = g_bodyReach[0];
                     }
                     if (got) {
                         g_setCal = 0; Body_Apply(); Profile_Save(); Set_Buzz(3500);
                         char e1[32], e2[32], e3[32]; FmtLen(e1, sizeof e1, Body_StandRef(), 2); FmtLen(e2, sizeof e2, g_bodyReach[0], 2); FmtLen(e3, sizeof e3, g_bodyReach[1], 2);
                         char m[160]; snprintf(m, sizeof m, "Saved to %s: %s eye height %s, arm reach %s / %s", g_profName[g_profActive], g_seated ? "sitting" : "standing", e1, e2, e3);
                         Set_Toast(m); Log("Body: %s (arms measured on the main menu)", m);
-                        if (g_startAfterCal && Body_Calibrated()) { g_startAfterCal = false; Settings_Close(); Log("Startup: %s is playing %s", g_profName[g_profActive], g_seated ? "seated" : "standing"); }
+                        if (g_startAfterCal && Body_Calibrated()) { g_startAfterCal = false; Settings_Close(); Start_Graphics(); Log("Startup: %s is playing %s", g_profName[g_profActive], g_seated ? "seated" : "standing"); }
                     } else Set_Toast("Couldn't see your controllers - hold both arms out and try again");
                     g_setDirty = true;
                 }
@@ -15754,7 +15900,7 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
                 char e1[32], e2[32], e3[32]; FmtLen(e1, sizeof e1, g_bodyEye, 2); FmtLen(e2, sizeof e2, g_bodyReach[0], 2); FmtLen(e3, sizeof e3, g_bodyReach[1], 2);
                 char m[160]; snprintf(m, sizeof m, "Saved to %s: eye height %s, arm reach %s / %s", g_profName[g_profActive], e1, e2, e3);
                 Set_Toast(m); Log("Body: %s", m);
-                if (g_startAfterCal && Body_Calibrated()) { g_startAfterCal = false; Settings_Close(); }
+                if (g_startAfterCal && Body_Calibrated()) { g_startAfterCal = false; Settings_Close(); Start_Graphics(); }
             }
             return true;
         }
@@ -15813,7 +15959,7 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
     else if (nd && now - navAt > 380.0) { navAt = now - 290.0; g_setSel = (g_setSel + nd + n) % n; g_setDirty = true; Set_Buzz(200); }
     if (vd != valDir) { valDir = vd; valAt = now; valSince = now; if (vd && g_setSel < n && idx[g_setSel] >= 0) {
             const SetOpt *o = &g_setOpts[idx[g_setSel]];
-            if (o->type == ST_FLOAT || o->type == ST_INT || o->type == ST_PROFILE || o->type == ST_BOOL || o->type == ST_SIGN) Set_Step(o, vd, 1); } }
+            if (o->type == ST_FLOAT || o->type == ST_INT || o->type == ST_PROFILE || o->type == ST_BOOL || o->type == ST_SIGN || o->type == ST_CHOICE) Set_Step(o, vd, 1); } }
     else if (vd && now - valAt > 400.0 && g_setSel < n && idx[g_setSel] >= 0) {
         const SetOpt *o = &g_setOpts[idx[g_setSel]];
         if (o->type == ST_FLOAT || o->type == ST_INT) { valAt = now - 330.0; Set_Step(o, vd, now - valSince > 1800.0 ? 5.0f : 1.0f); }
