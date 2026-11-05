@@ -10873,12 +10873,18 @@ static bool LG_SetGrip(int h, char *ref)
    their own Z axis, so the same numbers with Z flipped put the gun in the left hand the way it sits in the right, and the
    left fingers wrap it the way the right ones do. 0 = one-handed (pistols, knives), 1 = two-handed (rifles, sledges).
    Saved in FNVR.ini [Arms] sGunGripHand0/1 and sGunFingers0/1. */
-typedef struct { bool ok; float b[3], u[3], g[3]; int n; bool fok; float fing[5][3][9]; } RGrip;
-static RGrip g_rg[3];   /* 0 one-handed, 1 two-handed, 2 worn on the hand (power fists) */
+typedef struct { bool ok; float b[3], u[3], g[3]; int n; bool fok; float fing[5][3][9]; bool rok; float R[9]; } RGrip;
+#define RG_N 5
+static RGrip g_rg[RG_N];   /* 0 one-handed guns, 1 two-handed guns, 2 worn on the hand (power fists), 3 one-handed melee, 4 two-handed melee */
+/* melee weapons are copied by the model's whole turn in the hand (their shape doesn't show a "barrel" reliably) */
+static int RG_Class(int t) { return t == 0 ? 2 : t == 1 ? 3 : t == 2 ? 4 : t >= 5 ? 1 : 0; }
 static void RG_Load(void)
 {
-    for (int c = 0; c < 3; c++) {
+    for (int c = 0; c < RG_N; c++) {
         char key[24], buf[2400]; RGrip *r = &g_rg[c];
+        snprintf(key, sizeof key, "sGunGripRot%d", c);
+        GetPrivateProfileStringA("Arms", key, "", buf, sizeof buf, g_iniPath);
+        r->rok = sscanf(buf, "%f %f %f %f %f %f %f %f %f", &r->R[0], &r->R[1], &r->R[2], &r->R[3], &r->R[4], &r->R[5], &r->R[6], &r->R[7], &r->R[8]) == 9;
         snprintf(key, sizeof key, "sGunGripHand%d", c);
         GetPrivateProfileStringA("Arms", key, "", buf, sizeof buf, g_iniPath);
         r->ok = sscanf(buf, "%f %f %f %f %f %f %f %f %f", &r->b[0], &r->b[1], &r->b[2], &r->u[0], &r->u[1], &r->u[2], &r->g[0], &r->g[1], &r->g[2]) == 9 && V3Len(r->b) > 0.5f;
@@ -10896,6 +10902,11 @@ static void RG_Save(int c)
     snprintf(key, sizeof key, "sGunGripHand%d", c);
     snprintf(buf, sizeof buf, "%.4f %.4f %.4f %.4f %.4f %.4f %.2f %.2f %.2f", r->b[0], r->b[1], r->b[2], r->u[0], r->u[1], r->u[2], r->g[0], r->g[1], r->g[2]);
     WritePrivateProfileStringA("Arms", key, buf, g_iniPath);
+    if (r->rok) {
+        snprintf(key, sizeof key, "sGunGripRot%d", c);
+        snprintf(buf, sizeof buf, "%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f", r->R[0], r->R[1], r->R[2], r->R[3], r->R[4], r->R[5], r->R[6], r->R[7], r->R[8]);
+        WritePrivateProfileStringA("Arms", key, buf, g_iniPath);
+    }
     if (r->fok) {
         size_t L = 0; const float *v = &r->fing[0][0][0];
         for (int i = 0; i < 135 && L < sizeof buf - 16; i++) L += (size_t)snprintf(buf + L, sizeof buf - L, "%s%.4f", i ? " " : "", v[i]);
@@ -10932,8 +10943,18 @@ static void RG_Capture(void)
                                   u[i] = Hr[0 * 3 + i] * uw[0] + Hr[1 * 3 + i] * uw[1] + Hr[2 * 3 + i] * uw[2];
                                   g[i] = Hr[0 * 3 + i] * gw[0] + Hr[1 * 3 + i] * gw[1] + Hr[2 * 3 + i] * gw[2]; }
     if (V3Len(g) > 30.0f) return;   /* (the gun isn't in the hand right now) */
-    int c = t == 0 ? 2 : (t == 2 || t >= 5) ? 1 : 0;
+    int c = RG_Class(t);
     RGrip *r = &g_rg[c];
+    if (c >= 2) {   /* (melee: the weapon's whole turn in the hand's axes, Hr^T W) */
+        float Rn[9]; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) Rn[i * 3 + j] = Hr[0 * 3 + i] * W[0 * 3 + j] + Hr[1 * 3 + i] * W[1 * 3 + j] + Hr[2 * 3 + i] * W[2 * 3 + j];
+        float kr = r->n < 30 || !r->rok ? 1.0f : 0.05f;
+        for (int i = 0; i < 9; i++) r->R[i] += (Rn[i] - r->R[i]) * kr;
+        for (int j = 0; j < 3; j++) {   /* (keep it a clean turn: columns unit and square to each other) */
+            for (int q = 0; q < j; q++) { float d = r->R[0 * 3 + j] * r->R[0 * 3 + q] + r->R[1 * 3 + j] * r->R[1 * 3 + q] + r->R[2 * 3 + j] * r->R[2 * 3 + q]; for (int i = 0; i < 3; i++) r->R[i * 3 + j] -= d * r->R[i * 3 + q]; }
+            float L = sqrtf(r->R[j] * r->R[j] + r->R[3 + j] * r->R[3 + j] + r->R[6 + j] * r->R[6 + j]); if (L > 1e-4f) for (int i = 0; i < 3; i++) r->R[i * 3 + j] /= L;
+        }
+        r->rok = true;
+    }
     float k = r->n < 30 ? 0.25f : 0.03f;   /* (settles quickly at first, then only drifts slowly) */
     if (!r->ok) { memcpy(r->b, b, 12); memcpy(r->u, u, 12); memcpy(r->g, g, 12); r->ok = true; }
     else for (int i = 0; i < 3; i++) { r->b[i] += (b[i] - r->b[i]) * k; r->u[i] += (u[i] - r->u[i]) * k; r->g[i] += (g[i] - r->g[i]) * k; }
@@ -10945,15 +10966,18 @@ static void RG_Capture(void)
         for (int f = 0; f < 5; f++) for (int j = 0; j < 3; j++) { char *bn = g_fingers[1][f][j]; if (bn) { memcpy(r->fing[f][j], bn + NIAV_LOCAL_ROTATE, 36); got++; } }
         r->fok = got >= 12;
     }
-    static double savedAt[3] = { 0, 0, 0 };
+    static double savedAt[RG_N] = { 0 };
     if (r->n == 30 || now - savedAt[c] > 20000.0) { savedAt[c] = now; RG_Save(c);
-        if (r->n == 30) Log("Dual wield: the gun hand's grip measured (%s, fingers %s) - the other hand mirrors it", c == 2 ? "power fists" : c ? "two-handed weapons" : "one-handed weapons", r->fok ? "too" : "not yet"); }
+        if (r->n == 30) Log("Dual wield: the gun hand's grip measured (%s, fingers %s) - the other hand mirrors it", c == 2 ? "power fists" : c == 3 ? "one-handed melee" : c == 4 ? "two-handed melee" : c ? "two-handed guns" : "one-handed guns", r->fok ? "too" : "not yet"); }
 }
 static RGrip *RG_ForLeft(void)
 {
     static bool loaded = false; if (!loaded) { loaded = true; RG_Load(); }
-    int lt = g_lg.base ? *(BYTE *)((char *)g_lg.base + 0xF4) : 3, cls = lt == 0 ? 2 : (lt == 2 || lt >= 5) ? 1 : 0;
+    int lt = g_lg.base ? *(BYTE *)((char *)g_lg.base + 0xF4) : 3, cls = RG_Class(lt);
     if (g_rg[cls].ok) return &g_rg[cls];
+    if (cls == 3 && g_rg[4].ok) return &g_rg[4];
+    if (cls == 4 && g_rg[3].ok) return &g_rg[3];
+    if (cls >= 2) return NULL;   /* (a melee weapon not held in the gun hand yet: from the controller until it has been) */
     return g_rg[0].ok ? &g_rg[0] : g_rg[1].ok ? &g_rg[1] : NULL;
 }
 /* (render hook, right after the arms are posed) the left fingers wrap the gun the way the right ones wrap theirs */
@@ -10976,7 +11000,23 @@ static bool LG_Pose(float *org, M3 W, float *aim)
     int h = g_leftHanded ? 1 : 0;
     if (!g_handWOk[h]) return false;
     RGrip *rg = RG_ForLeft();
-    if (rg && !g_leftHanded && g_bones[h][B_HAND] && !g_lgPoseCtrl) {   /* the mirror image of how the gun hand holds its gun, in the drawn hand's own axes (Z flipped) */
+    if (rg && rg->rok && g_lg.melee && !g_leftHanded && g_bones[h][B_HAND] && !g_lgPoseCtrl) {
+        /* melee: the mirror image of the weapon's whole turn in the gun hand - across the hand's Z, with the weapon's axis that
+           lies most along it flipped too, so it stays a real turn */
+        const float *Hl = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_ROTATE), *Hb = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_TRANSLATE);
+        int jf = 0; for (int j = 1; j < 3; j++) if (fabsf(rg->R[6 + j]) > fabsf(rg->R[6 + jf])) jf = j;
+        float Lm[9]; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) Lm[i * 3 + j] = rg->R[i * 3 + j] * (i == 2 ? -1.0f : 1.0f) * (j == jf ? -1.0f : 1.0f);
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) W[i][j] = Hl[i * 3] * Lm[0 * 3 + j] + Hl[i * 3 + 1] * Lm[1 * 3 + j] + Hl[i * 3 + 2] * Lm[2 * 3 + j];
+        float gm[3] = { rg->g[0], rg->g[1], -rg->g[2] };
+        for (int i = 0; i < 3; i++) org[i] = Hb[i] + Hl[i * 3] * gm[0] + Hl[i * 3 + 1] * gm[1] + Hl[i * 3 + 2] * gm[2];
+        float f[3], uh[3], sw[3]; for (int i = 0; i < 3; i++) { f[i] = W[i][0] * g_lg.barrelL[0] + W[i][1] * g_lg.barrelL[1] + W[i][2] * g_lg.barrelL[2]; uh[i] = W[i][0] * g_lg.upL[0] + W[i][1] * g_lg.upL[1] + W[i][2] * g_lg.upL[2]; }
+        V3Cross(sw, f, uh);
+        float U = g_unitsPerMeter / 100.0f;
+        for (int i = 0; i < 3; i++) org[i] += (f[i] * g_lhGunFwd + uh[i] * g_lhGunUp + sw[i] * g_lhGunSide) * U;
+        if (aim) memcpy(aim, f, 12);
+        return true;
+    }
+    if (rg && !g_lg.melee && !g_leftHanded && g_bones[h][B_HAND] && !g_lgPoseCtrl) {   /* the mirror image of how the gun hand holds its gun, in the drawn hand's own axes (Z flipped) */
         float bm[3] = { rg->b[0], rg->b[1], -rg->b[2] }, um[3] = { rg->u[0], rg->u[1], -rg->u[2] }, gm[3] = { rg->g[0], rg->g[1], -rg->g[2] };
         const float *Hl = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_ROTATE);
         float f[3], uh[3], sw[3], sl[3];
