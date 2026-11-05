@@ -2498,9 +2498,15 @@ static void VR_Tick(void)
             if (!g_pipOpen) {
                 lostSince = 0;
                 bool weapBusy = g_animAction == 0 || g_animAction == 1 || (g_animIdleSince && now - g_animIdleSince < 400.0 && g_animAction == -1 && g_animLastBusy);   /* (drawing or holstering a weapon: wait for it) */
-                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen && !weapBusy) {
+                /* a swing of the left hand (melee, or waving a held gun) passes the wrist across your face: only open
+                   once the hand has been still for a moment, and hold the pose longer while the left hand is armed */
+                static double lastFast = 0;
+                if (g_handSpeed[0] > (g_lg.on ? 0.8f : 1.5f)) lastFast = now;
+                bool swinging = lastFast && now - lastFast < (g_lg.on ? 700.0 : 350.0);
+                double holdMs = g_lg.on ? 450.0 : 180.0;
+                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen && !weapBusy && !swinging) {
                     if (!since) since = now;
-                    if (now - since > 180.0) {
+                    if (now - since > holdMs) {
                         g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = now + 250.0; since = 0; g_pipExpectUntil = now + 1000.0;
                         rearmed = false;
                         { char *pr = player ? *(char **)((char *)player + 0x68) : NULL; char *cc = pr ? *(char **)(pr + 0x138) : NULL;
@@ -9561,7 +9567,7 @@ static float HB_Gain(const HrActor *A, int b)   { return A->gen ? 0.55f : g_hrDe
 static HrActor g_hr[HR_ACT];
 static Probe g_hrPrev[2][PROBES_MAX]; static int g_hrPrevN[2];
 static double g_hrScanAt = 0, g_hrLastApply = 0;
-static void *g_hrEnchScr = NULL;
+static void *g_hrEnchScr = NULL, *g_hrCritScr = NULL;
 static void *g_hrStrikeW = NULL;   /* (the other hand's weapon, for its blows) */
 static void *g_hrStatusScr = NULL, *g_hrPushScr[4], *g_hrKoPushScr = NULL, *g_hrSndScr = NULL, *g_hrDmgScr = NULL, *g_hrBaseScr = NULL, *g_hrKoScr = NULL, *g_hrWakeScr = NULL, *g_hrDayScr = NULL;
 static int g_hrScrState = 0;   /* 0 not yet, 1 ok, -1 failed */
@@ -9598,6 +9604,8 @@ static bool Hit_Scripts(void)
     for (int i = 0; i < 4; i++) { char b[128]; snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho %d\nEnd\n", force[i]); g_hrPushScr[i] = g_scriptIntf->CompileScript(b); }
     g_hrKoPushScr = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho 4\nEnd\n");
     /* the weapon's own effect on whoever it hits (super-heated fire, shock, poison, bleeding...) - its enchantment, cast on them */
+    g_hrCritScr = g_scriptIntf->CompileScript("ref rWho\nref rS\nint iM\nint iR\nfloat fC\nBegin Function { rWho, rS, iM }\nset fC to player.GetAV CritChance\nset fC to fC * iM\nset fC to fC / 100\nset iR to GetRandomPercent\nif iR < fC\nrWho.CastImmediateOnSelf rS\nendif\nEnd\n");
+    Log("Hit reactions: critical effects %s", g_hrCritScr ? "ok" : "FAILED");
     g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rWeap\nref rE\nBegin Function { rWho, rWeap }\nset rE to GetEnchantment rWeap\nif rE\nrWho.CastImmediateOnSelf rE\nendif\nEnd\n");
     g_hrSndScr = g_scriptIntf->CompileScript("ref rWho\nref rSnd\nBegin Function { rWho, rSnd }\nrWho.PlaySound3D rSnd\nEnd\n");
     /* the blow's damage (tenths of a point), on the part it hit; a killing blow is yours; anyone you hit (not companions) fights back */
@@ -9653,6 +9661,20 @@ static void Hit_Flush(void)
         if (e->snd && g_hrSndScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrSndScr, GetPlayer(), 2, e->ref, e->snd);
         if (e->dmg10 > 0 && g_hrDmgScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrDmgScr, GetPlayer(), 3, e->ref, e->dmg10, e->part);
         if (e->dmg10 > 0 && e->weap && g_hrEnchScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, e->weap);   /* (its fire, shock, poison...) */
+        if (e->dmg10 > 0 && e->weap && g_hrCritScr && g_scriptIntf->CallFunctionAlt) {
+            /* its critical effect (the Super-Heated Saturnite Fist's fire, ...): on a critical hit - the game's chance (your crit
+               chance x the weapon's crit multiplier), and always on a knockout blow */
+            char *w = (char *)e->weap, *ce = NULL; float cm = 1.0f;
+            if (!IsBadReadPtr(w, 0x1D0)) { ce = *(char **)(w + 0x1CC); cm = *(float *)(w + 0x1C4);
+                if (ce && (IsBadReadPtr(ce, 0x10) || *(BYTE *)(ce + 4) != 0x14)) ce = NULL; }   /* (TESObjectWEAP criticalEffect: a SPEL) */
+            static void *seenW[8]; static int ns = 0; bool seen = false;
+            for (int q = 0; q < ns; q++) if (seenW[q] == w) seen = true;
+            if (!seen && ns < 8) { seenW[ns++] = w; Log("Hit reactions: weapon %08X critical effect %s (crit multiplier %.2f)", *(uint32_t *)(w + 0x0C), ce ? "found - cast on critical hits" : "none", cm); }
+            if (ce) {
+                int mult = (e->action == HA_KO) ? 100000 : (int)(fminf(fmaxf(cm, 0.0f), 50.0f) * 100.0f);
+                g_scriptIntf->CallFunctionAlt(g_hrCritScr, GetPlayer(), 3, e->ref, ce, mult);
+            }
+        }
         if (e->action == HA_PUSH || e->action == HA_KO) {
             int lv = e->lvl < 0 ? 0 : e->lvl > 3 ? 3 : e->lvl;
             void *s = e->action == HA_KO && g_hrKoPushScr ? g_hrKoPushScr : g_hrPushScr[lv] ? g_hrPushScr[lv] : g_hrPushScr[0];
@@ -11018,7 +11040,7 @@ static bool LG_Pose(float *org, M3 W, float *aim)
            of the hand (the game's own power fist in the gun hand is part of that hand, so there's no hold to copy) */
         const float *Hl = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_ROTATE), *Hb = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_TRANSLATE);
         float fx[3], up[3], sd[3];
-        for (int i = 0; i < 3; i++) { fx[i] = Hl[i * 3 + 0]; up[i] = -Hl[i * 3 + 2]; }
+        for (int i = 0; i < 3; i++) { fx[i] = Hl[i * 3 + 0]; up[i] = Hl[i * 3 + 2]; }   /* (its top: turned half way round the forearm from the right hand's, so it faces the way a left glove does) */
         float pd = V3Dot(up, fx); for (int i = 0; i < 3; i++) up[i] -= pd * fx[i];
         float L = V3Len(up); if (L < 0.2f) return false; for (int i = 0; i < 3; i++) up[i] /= L;
         float bk[3] = { -fx[0], -fx[1], -fx[2] };   /* (its long way - the cuff - runs back along the forearm) */
