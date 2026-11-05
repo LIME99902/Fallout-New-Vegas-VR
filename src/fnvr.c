@@ -11670,7 +11670,14 @@ static void LG_Tick(void)
             Log("Dual wield: reloading with left Y %s", load ? "ready" : "couldn't be set up"); }
         if (g_lg.reloadReq) {
             g_lg.reloadReq = false;
-            if (g_lg.on && !g_lg.melee && !g_lg.reloadAt) {
+            static void *have = NULL; static bool ht = false;
+            if (!ht) { ht = true; have = g_scriptIntf->CompileScript(   /* (how much ammo for it you carry) */
+                "ref rWeap\nref rAmmo\nref rList\nint iN\nint iI\nint iGot\nBegin Function { rWeap }\nset iGot to 0\nset rList to GetWeaponAmmo rWeap\n"
+                "if rList\nset iN to 0\nif GetType rList == 85\nset iN to ListGetCount rList\nendif\n"
+                "if iN == 0\nset iGot to player.GetItemCount rList\nelse\nset iI to 0\nwhile iI < iN\nset rAmmo to ListGetNthForm rList iI\nset iGot to iGot + player.GetItemCount rAmmo\nset iI to iI + 1\nloop\nendif\nendif\nSetFunctionValue iGot\nEnd\n"); }
+            double hv = -1; bool noAmmo = have && Scr_Num(have, g_lg.base, &hv) && hv < 1;
+            if (noAmmo && g_lg.on && !g_lg.melee) { static double nl = 0; if (now > nl) { nl = now + 3000.0; UIMessage("No ammo for your other hand's gun"); } }
+            else if (g_lg.on && !g_lg.melee && !g_lg.reloadAt) {
                 if (g_lg.rounds >= g_lg.clip) { if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 500); }
                 else { g_lg.reloadAt = now + LG_RELOAD_MS; if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2500); Log("Dual wield: reloading the other hand's gun");
                     static void *ps = NULL; if (!ps) ps = g_scriptIntf->CompileScript("ref rSnd\nBegin Function { rSnd }\nPlaySound rSnd\nEnd\n");
@@ -11775,6 +11782,7 @@ static void LG_Tick(void)
         static int wl = 0; if (wl++ < 3) Log("Dual wield: this gun's bullet type wasn't found - can't fire it from the other hand");
     }
     g_lg.lastShot = now; g_lg.rounds--;
+    if (g_lg.rounds <= 0) g_lg.reloadReq = true;   /* (empty: reloads by itself from the ammo you carry, like the gun hand's gun) */
     LGA_Shot();   /* (the kick and moving parts, drawn in the hand) */
     {   /* the gun's own shot sound */
         static void *p2 = NULL, *p3 = NULL; static bool t2 = false;
