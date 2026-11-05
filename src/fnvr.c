@@ -5776,6 +5776,7 @@ static void Arms_Restore(void);
 typedef void (__attribute__((thiscall)) *FireWeapon_t)(void *weapon, void *actor);
 static FireWeapon_t o_FireWeapon = NULL;
 static unsigned g_shotsRedirected = 0;
+static bool Barrel_Aim(float *h, float *p);
 
 static bool g_scopeSighting;
 static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unusedEdx, void *actor)
@@ -5790,6 +5791,10 @@ static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unused
         char *sg = *(char **)SCENEGRAPH_PTR_ADDR;
         char *cam = sg ? *(char **)(sg + SCENEGRAPH_CAMERA) : NULL;
         bool arms = cam && Arms_Apply((char *)player, cam);
+        float aimH0 = g_handAimHeading, aimP0 = g_handAimPitch; bool brl = false;
+        if (!g_scopeSighting && !g_scopeAtEye) { float bh, bp; if (Barrel_Aim(&bh, &bp)) {   /* straight out of the barrel you see */
+            static int bl2 = 0; if (bl2++ < 3) Log("Shot along the drawn barrel (heading %.1f pitch %.1f; hand aim was %.1f / %.1f)", bh * RAD2DEG, bp * RAD2DEG, aimH0 * RAD2DEG, aimP0 * RAD2DEG);
+            g_handAimHeading = bh; g_handAimPitch = bp; brl = true; } }
         *rz = g_handAimHeading + g_shotYawTrimDeg / RAD2DEG;
         *rx = g_handAimPitch + g_shotPitchTrimDeg / RAD2DEG;
         /* perfect accuracy: no weapon spread for your shots (min spread +0x104, spread +0x108) */
@@ -5853,6 +5858,7 @@ static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unused
         if (camTurned) memcpy(cam + NIAV_WORLD_ROTATE, camSave, sizeof camSave);
         spr[0] = sp0; spr[1] = sp1;
         *rx = sx; *rz = sz;
+        if (brl) { g_handAimHeading = aimH0; g_handAimPitch = aimP0; }
         if (arms) Arms_Restore();
         if (g_shotsRedirected++ < 3)
             Log("Shot fired along hand aim (heading %.1f pitch %.1f; head was %.1f / %.1f)",
@@ -11048,6 +11054,40 @@ static void RG_Capture(void)
     if (r->n == 30 || now - savedAt[c] > 20000.0) { savedAt[c] = now; RG_Save(c);
         if (r->n == 30) Log("Dual wield: the gun hand's grip measured (%s, fingers %s) - the other hand mirrors it", c == 2 ? "power fists" : c == 3 ? "one-handed melee" : c == 4 ? "two-handed melee" : c ? "two-handed guns" : "one-handed guns", r->fok ? "too" : "not yet"); }
 }
+/* (render hook) which way the gun-hand gun's barrel points, as drawn - kept relative to your controller, so a shot leaves
+   straight out of the barrel you see (like the other hand's gun) */
+static float g_brlH[3]; static double g_brlAt = 0; static bool g_shotsFromBarrel = true;
+static void Barrel_Capture(void)
+{
+    if (g_leftHanded || !g_weaponNode || !g_weaponOutThisFrame || !g_handWOk[1]) return;
+    int t = PlayerWeaponType(); if (t < 3 || t > 9) return;
+    static char *axFor = NULL; static float bl[3]; static bool axOk = false;
+    if (axFor != g_weaponNode) {
+        axFor = g_weaponNode; float ul[3], len; axOk = LG_ModelAxes(g_weaponNode, bl, ul, &len);
+        char *pn = axOk ? FindBone(g_weaponNode, "ProjectileNode", 0) : NULL;
+        if (pn) {   /* (the muzzle point settles which end is the front) */
+            M3 Wr, WrT; memcpy(Wr, g_weaponNode + NIAV_WORLD_ROTATE, sizeof Wr); M3T(WrT, Wr);
+            float d[3], l[3]; V3Sub(d, (const float *)(pn + NIAV_WORLD_TRANSLATE), (const float *)(g_weaponNode + NIAV_WORLD_TRANSLATE));
+            for (int i = 0; i < 3; i++) l[i] = WrT[i][0] * d[0] + WrT[i][1] * d[1] + WrT[i][2] * d[2];
+            if (V3Dot(l, bl) < 0) for (int i = 0; i < 3; i++) bl[i] = -bl[i];
+        }
+    }
+    if (!axOk) return;
+    const float *W = (const float *)(g_weaponNode + NIAV_WORLD_ROTATE);
+    float bw[3]; for (int i = 0; i < 3; i++) bw[i] = W[i * 3] * bl[0] + W[i * 3 + 1] * bl[1] + W[i * 3 + 2] * bl[2];
+    float L = V3Len(bw); if (L < 0.5f) return;
+    for (int i = 0; i < 3; i++) g_brlH[i] = (g_handWR[1][0][i] * bw[0] + g_handWR[1][1][i] * bw[1] + g_handWR[1][2][i] * bw[2]) / L;   /* (into the controller's axes) */
+    g_brlAt = QpcMs();
+}
+static bool Barrel_Aim(float *h, float *p)
+{
+    if (!g_shotsFromBarrel || QpcMs() - g_brlAt > 300.0 || !g_handWOk[1]) return false;
+    float d[3]; for (int i = 0; i < 3; i++) d[i] = g_handWR[1][i][0] * g_brlH[0] + g_handWR[1][i][1] * g_brlH[1] + g_handWR[1][i][2] * g_brlH[2];
+    float L = V3Len(d); if (L < 0.5f) return false; for (int i = 0; i < 3; i++) d[i] /= L;
+    *h = atan2f(d[0], d[1]); if (*h < 0) *h += 2.0f * PI_F;   /* (game: forward = sin h cos p, cos h cos p, -sin p) */
+    *p = -asinf(fminf(fmaxf(d[2], -1.0f), 1.0f));
+    return true;
+}
 static RGrip *RG_ForLeft(void)
 {
     static bool loaded = false; if (!loaded) { loaded = true; RG_Load(); }
@@ -13538,7 +13578,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             LG_Visual();
             if (armsDone) MeleeAngle_Apply();
             if (armsDone) Lighter_Apply((char *)player);   /* (the dynamite's lighter in your other hand) */
-            if (armsDone) RG_Capture();
+            if (armsDone) { RG_Capture(); Barrel_Capture(); }
             if (g_hitReact) Hit_Apply();
             Holster_Models((char *)player);
             {   /* grappling: the body below you is hidden (it can't keep up at grapple speed); back a moment after */
