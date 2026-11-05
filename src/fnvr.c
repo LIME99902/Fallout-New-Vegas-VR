@@ -2498,15 +2498,9 @@ static void VR_Tick(void)
             if (!g_pipOpen) {
                 lostSince = 0;
                 bool weapBusy = g_animAction == 0 || g_animAction == 1 || (g_animIdleSince && now - g_animIdleSince < 400.0 && g_animAction == -1 && g_animLastBusy);   /* (drawing or holstering a weapon: wait for it) */
-                /* a swing of the left hand (melee, or waving a held gun) passes the wrist across your face: only open
-                   once the hand has been still for a moment, and hold the pose longer while the left hand is armed */
-                static double lastFast = 0;
-                if (g_handSpeed[0] > (g_lg.on ? 0.8f : 1.5f)) lastFast = now;
-                bool swinging = lastFast && now - lastFast < (g_lg.on ? 700.0 : 350.0);
-                double holdMs = g_lg.on ? 450.0 : 180.0;
-                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen && !weapBusy && !swinging) {
+                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen && !weapBusy) {
                     if (!since) since = now;
-                    if (now - since > holdMs) {
+                    if (now - since > 180.0) {
                         g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = now + 250.0; since = 0; g_pipExpectUntil = now + 1000.0;
                         rearmed = false;
                         { char *pr = player ? *(char **)((char *)player + 0x68) : NULL; char *cc = pr ? *(char **)(pr + 0x138) : NULL;
@@ -6316,19 +6310,6 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
     if (V3Len(pole) < 0.01f) { float down[3] = { 0, 0, -1 }; float dd = V3Dot(down, dir); for (int i = 0; i < 3; i++) pole[i] = down[i] - dd * dir[i]; }
     float pl = V3Len(pole);
     for (int i = 0; i < 3; i++) pole[i] /= pl;
-    /* the off hand holding its own weapon: the game animates that arm as the support arm reaching across to the gun
-       hand's weapon, so its elbow bend says nothing about your arm - use a real arm's: elbow down and a little out
-       to the side, as when you aim a pistol one-handed */
-    bool offArmed = g_lg.on && side == (g_leftHanded ? 1 : 0);
-    if (offArmed) {
-        float upv[3] = { 0, 0, 1 }, outv[3], nat[3];
-        V3Cross(outv, upv, dir);                                   /* (left of the reach line) */
-        if (side == 1) for (int i = 0; i < 3; i++) outv[i] = -outv[i];
-        for (int i = 0; i < 3; i++) nat[i] = -upv[i] * 0.85f + outv[i] * 0.5f;
-        float nd = V3Dot(nat, dir); for (int i = 0; i < 3; i++) nat[i] -= nd * dir[i];
-        float nl = V3Len(nat);
-        if (nl > 0.2f) for (int i = 0; i < 3; i++) pole[i] = nat[i] / nl;
-    }
     if (g_armFollowHand > 0.0f && g_fingerDirOk[side]) {
         /* a real forearm runs back from the hand along the way the fingers point: put the elbow there
            (as far as the arm's reach allows), so the forearm lines up with the wrist and hand */
@@ -6424,7 +6405,7 @@ static void Arm_Reach(int side, const float *target, M3 handDelta, M3 Bh)
         M3T(FT, Wfn);  M3Mul(R1n, FT, Wh);             /* now: hand relative to the turned forearm */
         /* the Pip-Boy animation changes the arm's own pose; keep using the everyday wrist/forearm relation */
         static M3 R0Base[2]; static bool R0Have[2] = { false, false };
-        if (g_pipModeRaw == 0 && !g_pipOpen && !(g_meleeHoldPose && side == (g_leftHanded ? 0 : 1)) && !(offArmed && R0Have[side])) { memcpy(R0Base[side], R0, sizeof R0); R0Have[side] = true; }   /* (armed off hand: keep the empty-hand relation, not the support pose) */
+        if (g_pipModeRaw == 0 && !g_pipOpen && !(g_meleeHoldPose && side == (g_leftHanded ? 0 : 1))) { memcpy(R0Base[side], R0, sizeof R0); R0Have[side] = true; }
         else if (R0Have[side]) memcpy(R0, R0Base[side], sizeof R0);
         /* How far the wrist has turned around the forearm since the everyday pose: the twist part of
            (now x everyday^-1), measured with a quaternion so bending the wrist doesn't read as turning. */
@@ -9580,7 +9561,7 @@ static float HB_Gain(const HrActor *A, int b)   { return A->gen ? 0.55f : g_hrDe
 static HrActor g_hr[HR_ACT];
 static Probe g_hrPrev[2][PROBES_MAX]; static int g_hrPrevN[2];
 static double g_hrScanAt = 0, g_hrLastApply = 0;
-static void *g_hrEnchScr = NULL, *g_hrCritScr = NULL;
+static void *g_hrEnchScr = NULL;
 static void *g_hrStrikeW = NULL;   /* (the other hand's weapon, for its blows) */
 static void *g_hrStatusScr = NULL, *g_hrPushScr[4], *g_hrKoPushScr = NULL, *g_hrSndScr = NULL, *g_hrDmgScr = NULL, *g_hrBaseScr = NULL, *g_hrKoScr = NULL, *g_hrWakeScr = NULL, *g_hrDayScr = NULL;
 static int g_hrScrState = 0;   /* 0 not yet, 1 ok, -1 failed */
@@ -9617,9 +9598,7 @@ static bool Hit_Scripts(void)
     for (int i = 0; i < 4; i++) { char b[128]; snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho %d\nEnd\n", force[i]); g_hrPushScr[i] = g_scriptIntf->CompileScript(b); }
     g_hrKoPushScr = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho 4\nEnd\n");
     /* the weapon's own effect on whoever it hits (super-heated fire, shock, poison, bleeding...) - its enchantment, cast on them */
-    g_hrCritScr = g_scriptIntf->CompileScript("ref rWho\nref rS\nint iM\nint iR\nfloat fC\nBegin Function { rWho, rS, iM }\nset fC to player.GetAV CritChance\nset fC to fC * iM\nset fC to fC / 100\nset iR to GetRandomPercent\nif iR < fC\nrWho.CastImmediateOnSelf rS\nendif\nEnd\n");
-    Log("Hit reactions: critical effects %s", g_hrCritScr ? "ok" : "FAILED");
-    g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rE\nBegin Function { rWho, rE }\nrWho.CastImmediateOnSelf rE\nEnd\n");
+    g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rWeap\nref rE\nBegin Function { rWho, rWeap }\nset rE to GetEnchantment rWeap\nif rE\nrWho.CastImmediateOnSelf rE\nendif\nEnd\n");
     g_hrSndScr = g_scriptIntf->CompileScript("ref rWho\nref rSnd\nBegin Function { rWho, rSnd }\nrWho.PlaySound3D rSnd\nEnd\n");
     /* the blow's damage (tenths of a point), on the part it hit; a killing blow is yours; anyone you hit (not companions) fights back */
     g_hrDmgScr = g_scriptIntf->CompileScript(
@@ -9673,27 +9652,7 @@ static void Hit_Flush(void)
         if (loading || LookupForm(e->id) != (void *)e->ref) continue;
         if (e->snd && g_hrSndScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrSndScr, GetPlayer(), 2, e->ref, e->snd);
         if (e->dmg10 > 0 && g_hrDmgScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrDmgScr, GetPlayer(), 3, e->ref, e->dmg10, e->part);
-        if (e->dmg10 > 0 && e->weap && g_hrEnchScr && g_scriptIntf->CallFunctionAlt) {   /* (its fire, shock, poison...) */
-            char *w = (char *)e->weap, *en = NULL;
-            if (!IsBadReadPtr(w, 0x80)) { en = *(char **)(w + 0x78); if (en && (IsBadReadPtr(en, 0x10) || *(BYTE *)(en + 4) != 0x13)) en = NULL; }   /* (the weapon's object effect: TESEnchantableForm) */
-            static void *loggedFor[8]; static int nl = 0; bool seen = false;
-            for (int q = 0; q < nl; q++) if (loggedFor[q] == w) seen = true;
-            if (!seen && nl < 8) { loggedFor[nl++] = w;
-                Log("Hit reactions: weapon %08X %s", *(uint32_t *)(w + 0x0C), en ? "has an effect of its own - cast on whoever it hits" : "has no effect of its own (enchantment) to cast"); }
-            if (en) {
-                g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, en);
-            }
-            /* its critical effect (the Super-Heated Saturnite Fist's fire, ...): on a critical hit - the game's chance (your
-               crit chance x the weapon's crit multiplier), and always on a knockout blow */
-            char *ce = NULL; float cm = 1.0f;
-            if (!IsBadReadPtr(w, 0x1D0)) { ce = *(char **)(w + 0x1CC); cm = *(float *)(w + 0x1C4);
-                if (ce && (IsBadReadPtr(ce, 0x10) || *(BYTE *)(ce + 4) != 0x14)) ce = NULL; }   /* (TESObjectWEAP criticalEffect: a SPEL) */
-            if (!seen && nl <= 8) Log("Hit reactions: weapon %08X critical effect %s (crit multiplier %.2f)", *(uint32_t *)(w + 0x0C), ce ? "found - cast on critical hits" : "none", cm);
-            if (ce && g_hrCritScr) {
-                int mult = (e->action == HA_KO) ? 100000 : (int)(fminf(fmaxf(cm, 0.0f), 50.0f) * 100.0f);
-                g_scriptIntf->CallFunctionAlt(g_hrCritScr, GetPlayer(), 3, e->ref, ce, mult);
-            }
-        }
+        if (e->dmg10 > 0 && e->weap && g_hrEnchScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, e->weap);   /* (its fire, shock, poison...) */
         if (e->action == HA_PUSH || e->action == HA_KO) {
             int lv = e->lvl < 0 ? 0 : e->lvl > 3 ? 3 : e->lvl;
             void *s = e->action == HA_KO && g_hrKoPushScr ? g_hrKoPushScr : g_hrPushScr[lv] ? g_hrPushScr[lv] : g_hrPushScr[0];
@@ -10930,14 +10889,8 @@ typedef struct { bool ok; float b[3], u[3], g[3]; int n; bool fok; float fing[5]
 static RGrip g_rg[RG_N];   /* 0 one-handed guns, 1 two-handed guns, 2 worn on the hand (power fists), 3 one-handed melee, 4 two-handed melee */
 /* melee weapons are copied by the model's whole turn in the hand (their shape doesn't show a "barrel" reliably) */
 static int RG_Class(int t) { return t == 0 ? 2 : t == 1 ? 3 : t == 2 ? 4 : t >= 5 ? 1 : 0; }
-static bool g_rgUndoFlip = false;
 static void RG_Load(void)
 {
-    {   /* (a test build turned guns it thought were back to front round and saved the one-handed grip turned: put it back) */
-        char tb[64]; GetPrivateProfileStringA("Arms", "sGunReversed", "", tb, sizeof tb, g_iniPath);
-        g_rgUndoFlip = tb[0] != 0;
-        if (g_rgUndoFlip) WritePrivateProfileStringA("Arms", "sGunReversed", NULL, g_iniPath);
-    }
     for (int c = 0; c < RG_N; c++) {
         char key[24], buf[2400]; RGrip *r = &g_rg[c];
         snprintf(key, sizeof key, "sGunGripRot%d", c);
@@ -10946,7 +10899,6 @@ static void RG_Load(void)
         snprintf(key, sizeof key, "sGunGripHand%d", c);
         GetPrivateProfileStringA("Arms", key, "", buf, sizeof buf, g_iniPath);
         r->ok = sscanf(buf, "%f %f %f %f %f %f %f %f %f", &r->b[0], &r->b[1], &r->b[2], &r->u[0], &r->u[1], &r->u[2], &r->g[0], &r->g[1], &r->g[2]) == 9 && V3Len(r->b) > 0.5f;
-        if (r->ok && c == 0 && g_rgUndoFlip) { for (int i = 0; i < 3; i++) { r->b[i] = -r->b[i]; r->u[i] = -r->u[i]; } Log("Dual wield: one-handed grip put back as it was"); }
         r->n = r->ok ? 100 : 0;
         snprintf(key, sizeof key, "sGunFingers%d", c);
         GetPrivateProfileStringA("Arms", key, "", buf, sizeof buf, g_iniPath);
@@ -11066,7 +11018,7 @@ static bool LG_Pose(float *org, M3 W, float *aim)
            of the hand (the game's own power fist in the gun hand is part of that hand, so there's no hold to copy) */
         const float *Hl = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_ROTATE), *Hb = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_TRANSLATE);
         float fx[3], up[3], sd[3];
-        for (int i = 0; i < 3; i++) { fx[i] = Hl[i * 3 + 0]; up[i] = Hl[i * 3 + 2]; }   /* (its top: turned half way round the forearm from the right hand's, so it faces the way a left glove does) */
+        for (int i = 0; i < 3; i++) { fx[i] = Hl[i * 3 + 0]; up[i] = -Hl[i * 3 + 2]; }
         float pd = V3Dot(up, fx); for (int i = 0; i < 3; i++) up[i] -= pd * fx[i];
         float L = V3Len(up); if (L < 0.2f) return false; for (int i = 0; i < 3; i++) up[i] /= L;
         float bk[3] = { -fx[0], -fx[1], -fx[2] };   /* (its long way - the cuff - runs back along the forearm) */
