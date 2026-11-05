@@ -1871,7 +1871,7 @@ static void Controllers_Poll(bool menu)
                let go to drop it, or hand it to the other hand; a quick tap still activates */
             static bool eqHold = false, eqPrev = false; static double eqAt = 0; double tnow = QpcMs();
             int wtE = PlayerWeaponType();
-            bool can = !menu && g_gunGrab && g_inGameplay && g_weaponOutThisFrame && !g_gun.on && !g_gun.holding && !g_gun.finding && wtE >= 1 && wtE <= 9 && !g_pipOpen;
+            bool can = !menu && g_gunGrab && g_inGameplay && g_weaponOutThisFrame && !g_gun.on && !g_gun.holding && !g_gun.finding && wtE >= 0 && wtE <= 9 && !g_pipOpen;
             if (can && gripNow[amH] && !eqPrev && Holster_Zone() == 0) { eqHold = true; eqAt = tnow; }
             if (eqHold) {
                 if (!can && !g_gun.holding) eqHold = false;
@@ -10668,7 +10668,7 @@ static void Gun_Tick(void)
         {   /* the other hand is on it as the gun hand lets go: it takes the gun (hand-over) */
             int amH = g_leftHanded ? 0 : 1, mvH = 1 - amH, wt = PlayerWeaponType();
             float a[3], b[3], d[3]; Gun_Palm(mvH, a); Gun_Palm(amH, b); V3Sub(d, a, b);
-            if (g_dualOn && g_lgGrip && !g_lg.on && !g_holding[mvH] && wt >= 3 && wt <= 9 && (g_twoHandWant || g_twoHand || V3Len(d) < 14.0f)) {
+            if (g_dualOn && g_lgGrip && !g_lg.on && !g_holding[mvH] && wt >= 0 && wt <= 9 && (g_twoHandWant || g_twoHand || V3Len(d) < 14.0f)) {
                 g_gun.on = false; g_gun.two = false; g_lg.passReq = true; return;
             }
         }
@@ -10712,7 +10712,7 @@ static bool LG_IsGunRef(char *ref)
 {   /* guns and melee weapons you hold (not worn ones like power fists) */
     if (!Gun_IsWeaponRef(ref)) return false;
     int t = *(BYTE *)(*(char **)(ref + 0x20) + 0xF4);
-    return t >= 1 && t <= 9;
+    return t >= 0 && t <= 9;   /* (power fists too) */
 }
 static char *LG_Root(char *ref) { char *rs = *(char **)(ref + 0x64); char *root = (rs && !IsBadReadPtr(rs, 0x18)) ? *(char **)(rs + 0x14) : NULL; return root && !IsBadReadPtr(root, 0xA0) ? root : NULL; }
 /* hold the gun by its grip: grip at the palm, barrel along the hand's pointing direction, top up */
@@ -10874,10 +10874,10 @@ static bool LG_SetGrip(int h, char *ref)
    left fingers wrap it the way the right ones do. 0 = one-handed (pistols, knives), 1 = two-handed (rifles, sledges).
    Saved in FNVR.ini [Arms] sGunGripHand0/1 and sGunFingers0/1. */
 typedef struct { bool ok; float b[3], u[3], g[3]; int n; bool fok; float fing[5][3][9]; } RGrip;
-static RGrip g_rg[2];
+static RGrip g_rg[3];   /* 0 one-handed, 1 two-handed, 2 worn on the hand (power fists) */
 static void RG_Load(void)
 {
-    for (int c = 0; c < 2; c++) {
+    for (int c = 0; c < 3; c++) {
         char key[24], buf[2400]; RGrip *r = &g_rg[c];
         snprintf(key, sizeof key, "sGunGripHand%d", c);
         GetPrivateProfileStringA("Arms", key, "", buf, sizeof buf, g_iniPath);
@@ -10908,7 +10908,7 @@ static void RG_Capture(void)
 {
     static bool loaded = false; if (!loaded) { loaded = true; RG_Load(); }
     if (g_leftHanded || !g_weaponNode || !g_weaponOutThisFrame) return;
-    int t = PlayerWeaponType(); if (t < 1 || t > 9) return;
+    int t = PlayerWeaponType(); if (t < 0 || t > 9) return;
     double now = QpcMs();
     if (g_twoHand || g_twoHandWant || g_adsActive || g_scopeAtEye || g_pipOpen || g_wristUp || g_animAction != -1 || now - g_animIdleSince < 800.0 || g_meleeHoldPose) return;
     if (QpcMs() < g_weaponSettleUntil || !g_handWOk[1] || !g_bones[1][B_HAND]) return;
@@ -10932,7 +10932,7 @@ static void RG_Capture(void)
                                   u[i] = Hr[0 * 3 + i] * uw[0] + Hr[1 * 3 + i] * uw[1] + Hr[2 * 3 + i] * uw[2];
                                   g[i] = Hr[0 * 3 + i] * gw[0] + Hr[1 * 3 + i] * gw[1] + Hr[2 * 3 + i] * gw[2]; }
     if (V3Len(g) > 30.0f) return;   /* (the gun isn't in the hand right now) */
-    int c = (t == 2 || t >= 5) ? 1 : 0;
+    int c = t == 0 ? 2 : (t == 2 || t >= 5) ? 1 : 0;
     RGrip *r = &g_rg[c];
     float k = r->n < 30 ? 0.25f : 0.03f;   /* (settles quickly at first, then only drifts slowly) */
     if (!r->ok) { memcpy(r->b, b, 12); memcpy(r->u, u, 12); memcpy(r->g, g, 12); r->ok = true; }
@@ -10945,15 +10945,16 @@ static void RG_Capture(void)
         for (int f = 0; f < 5; f++) for (int j = 0; j < 3; j++) { char *bn = g_fingers[1][f][j]; if (bn) { memcpy(r->fing[f][j], bn + NIAV_LOCAL_ROTATE, 36); got++; } }
         r->fok = got >= 12;
     }
-    static double savedAt[2] = { 0, 0 };
+    static double savedAt[3] = { 0, 0, 0 };
     if (r->n == 30 || now - savedAt[c] > 20000.0) { savedAt[c] = now; RG_Save(c);
-        if (r->n == 30) Log("Dual wield: the gun hand's grip measured (%s, fingers %s) - the other hand mirrors it", c ? "two-handed weapons" : "one-handed weapons", r->fok ? "too" : "not yet"); }
+        if (r->n == 30) Log("Dual wield: the gun hand's grip measured (%s, fingers %s) - the other hand mirrors it", c == 2 ? "power fists" : c ? "two-handed weapons" : "one-handed weapons", r->fok ? "too" : "not yet"); }
 }
 static RGrip *RG_ForLeft(void)
 {
     static bool loaded = false; if (!loaded) { loaded = true; RG_Load(); }
-    int lt = g_lg.base ? *(BYTE *)((char *)g_lg.base + 0xF4) : 3, cls = (lt == 2 || lt >= 5) ? 1 : 0;
-    return g_rg[cls].ok ? &g_rg[cls] : g_rg[1 - cls].ok ? &g_rg[1 - cls] : NULL;
+    int lt = g_lg.base ? *(BYTE *)((char *)g_lg.base + 0xF4) : 3, cls = lt == 0 ? 2 : (lt == 2 || lt >= 5) ? 1 : 0;
+    if (g_rg[cls].ok) return &g_rg[cls];
+    return g_rg[0].ok ? &g_rg[0] : g_rg[1].ok ? &g_rg[1] : NULL;
 }
 /* (render hook, right after the arms are posed) the left fingers wrap the gun the way the right ones wrap theirs */
 static void LG_Fingers(void)
@@ -11835,7 +11836,7 @@ static void LHud_Tick(void)
         char *w = sel ? Scr_Ref(sel, GetPlayer()) : NULL;
         int t = (w && !IsBadReadPtr(w, 0x100) && *(BYTE *)(w + 4) == 0x28) ? *(BYTE *)(w + 0xF4) : -1;
         const char *nm = (t >= 0 && *(const char **)(w + 0x34) && !IsBadStringPtrA(*(const char **)(w + 0x34), 64)) ? *(const char **)(w + 0x34) : "";
-        if (t >= 1 && t <= 9) {
+        if (t >= 0 && t <= 9) {
             g_lgAssign = w;
             char m[128]; snprintf(m, sizeof m, "Other hand: %s (close the Pip-Boy to draw it)", nm); UIMessage(m);
             if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2000);
