@@ -272,6 +272,7 @@ static bool g_lgDropForSwap = false; static bool g_lhudShow = true; static float
 static volatile bool g_lgAssignReq;
 static void LHud_Draw(IDirect3DDevice9 *dev);
 static void Gun_Palm(int h, float *palm); static char *LG_Root(char *ref); static bool LG_Pose(float *org, M3 W, float *aim);
+static bool RG_IsReversed(uint32_t id);
 static bool LG_PoseNow(float *org, M3 W, float *aim);   /* (the other hand's weapon as last drawn - for shots and blows) */
 static struct { bool pending; int rounds; double at; } g_lgToRight;
 static struct { bool req; char *ref; uint32_t id; void *base; int zone, rounds; int drawReq; } g_lgHol;
@@ -9617,7 +9618,7 @@ static bool Hit_Scripts(void)
     for (int i = 0; i < 4; i++) { char b[128]; snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho %d\nEnd\n", force[i]); g_hrPushScr[i] = g_scriptIntf->CompileScript(b); }
     g_hrKoPushScr = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho 4\nEnd\n");
     /* the weapon's own effect on whoever it hits (super-heated fire, shock, poison, bleeding...) - its enchantment, cast on them */
-    g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rWeap\nref rE\nBegin Function { rWho, rWeap }\nset rE to GetEnchantment rWeap\nif rE\nrWho.CastImmediateOnSelf rE\nendif\nEnd\n");
+    g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rE\nBegin Function { rWho, rE }\nrWho.CastImmediateOnSelf rE\nEnd\n");
     g_hrSndScr = g_scriptIntf->CompileScript("ref rWho\nref rSnd\nBegin Function { rWho, rSnd }\nrWho.PlaySound3D rSnd\nEnd\n");
     /* the blow's damage (tenths of a point), on the part it hit; a killing blow is yours; anyone you hit (not companions) fights back */
     g_hrDmgScr = g_scriptIntf->CompileScript(
@@ -9671,7 +9672,17 @@ static void Hit_Flush(void)
         if (loading || LookupForm(e->id) != (void *)e->ref) continue;
         if (e->snd && g_hrSndScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrSndScr, GetPlayer(), 2, e->ref, e->snd);
         if (e->dmg10 > 0 && g_hrDmgScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrDmgScr, GetPlayer(), 3, e->ref, e->dmg10, e->part);
-        if (e->dmg10 > 0 && e->weap && g_hrEnchScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, e->weap);   /* (its fire, shock, poison...) */
+        if (e->dmg10 > 0 && e->weap && g_hrEnchScr && g_scriptIntf->CallFunctionAlt) {   /* (its fire, shock, poison...) */
+            char *w = (char *)e->weap, *en = NULL;
+            if (!IsBadReadPtr(w, 0x80)) { en = *(char **)(w + 0x78); if (en && (IsBadReadPtr(en, 0x10) || *(BYTE *)(en + 4) != 0x13)) en = NULL; }   /* (the weapon's object effect: TESEnchantableForm) */
+            static void *loggedFor[8]; static int nl = 0; bool seen = false;
+            for (int q = 0; q < nl; q++) if (loggedFor[q] == w) seen = true;
+            if (!seen && nl < 8) { loggedFor[nl++] = w;
+                Log("Hit reactions: weapon %08X %s", *(uint32_t *)(w + 0x0C), en ? "has an effect of its own - cast on whoever it hits" : "has no effect of its own (enchantment) to cast"); }
+            if (en) {
+                g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, en);
+            }
+        }
         if (e->action == HA_PUSH || e->action == HA_KO) {
             int lv = e->lvl < 0 ? 0 : e->lvl > 3 ? 3 : e->lvl;
             void *s = e->action == HA_KO && g_hrKoPushScr ? g_hrKoPushScr : g_hrPushScr[lv] ? g_hrPushScr[lv] : g_hrPushScr[0];
@@ -10856,6 +10867,10 @@ static bool LG_SetGrip(int h, char *ref)
             if (g_lg.melee) g_lg.len = fminf(fmaxf(ml, 8.0f), 90.0f);
         }
     }
+    if (!g_lg.melee && RG_IsReversed(*(uint32_t *)(*(char **)(ref + 0x20) + 0x0C))) {   /* (read back to front in the gun hand too: turn it round) */
+        for (int i = 0; i < 3; i++) { bl[i] = -bl[i]; ul[i] = -ul[i]; }
+        Log("Dual wield: this gun's shape reads back to front - turned round");
+    }
     float L = V3Len(bl); for (int i = 0; i < 3; i++) bl[i] /= L;
     float pd = V3Dot(ul, bl); for (int i = 0; i < 3; i++) ul[i] -= pd * bl[i];
     if (V3Len(ul) < 0.3f) { ul[0] = 1; ul[1] = ul[2] = 0; pd = V3Dot(ul, bl); for (int i = 0; i < 3; i++) ul[i] -= pd * bl[i]; }
@@ -10908,6 +10923,24 @@ typedef struct { bool ok; float b[3], u[3], g[3]; int n; bool fok; float fing[5]
 static RGrip g_rg[RG_N];   /* 0 one-handed guns, 1 two-handed guns, 2 worn on the hand (power fists), 3 one-handed melee, 4 two-handed melee */
 /* melee weapons are copied by the model's whole turn in the hand (their shape doesn't show a "barrel" reliably) */
 static int RG_Class(int t) { return t == 0 ? 2 : t == 1 ? 3 : t == 2 ? 4 : t >= 5 ? 1 : 0; }
+/* guns whose shape reads back to front (by base form): FNVR.ini [Arms] sGunReversed */
+static uint32_t g_rgRev[64]; static int g_rgRevN = -1;
+static void RG_RevLoad(void)
+{
+    if (g_rgRevN >= 0) return;
+    g_rgRevN = 0; char buf[1024]; GetPrivateProfileStringA("Arms", "sGunReversed", "", buf, sizeof buf, g_iniPath);
+    char *p = buf; while (*p && g_rgRevN < 64) { char *e; unsigned long v = strtoul(p, &e, 16); if (e == p) break; if (v) g_rgRev[g_rgRevN++] = (uint32_t)v; p = e; while (*p == ' ' || *p == ',') p++; }
+}
+static bool RG_IsReversed(uint32_t id) { RG_RevLoad(); for (int i = 0; i < g_rgRevN; i++) if (g_rgRev[i] == id) return true; return false; }
+static void RG_MarkReversed(uint32_t id)
+{
+    if (!id || RG_IsReversed(id) || g_rgRevN >= 64) return;
+    g_rgRev[g_rgRevN++] = id;
+    char buf[1024]; size_t L = 0; buf[0] = 0;
+    for (int i = 0; i < g_rgRevN && L < sizeof buf - 12; i++) L += (size_t)snprintf(buf + L, sizeof buf - L, "%s%08X", i ? " " : "", g_rgRev[i]);
+    WritePrivateProfileStringA("Arms", "sGunReversed", buf, g_iniPath);
+    Log("Dual wield: gun %08X's shape reads back to front - turned round (in either hand)", id);
+}
 static void RG_Load(void)
 {
     for (int c = 0; c < RG_N; c++) {
@@ -10918,6 +10951,7 @@ static void RG_Load(void)
         snprintf(key, sizeof key, "sGunGripHand%d", c);
         GetPrivateProfileStringA("Arms", key, "", buf, sizeof buf, g_iniPath);
         r->ok = sscanf(buf, "%f %f %f %f %f %f %f %f %f", &r->b[0], &r->b[1], &r->b[2], &r->u[0], &r->u[1], &r->u[2], &r->g[0], &r->g[1], &r->g[2]) == 9 && V3Len(r->b) > 0.5f;
+        if (r->ok && c <= 1 && r->b[0] < 0.0f) { r->ok = false; Log("Dual wield: the saved %s grip was backwards - measuring it again", c ? "two-handed" : "one-handed"); }
         r->n = r->ok ? 100 : 0;
         snprintf(key, sizeof key, "sGunFingers%d", c);
         GetPrivateProfileStringA("Arms", key, "", buf, sizeof buf, g_iniPath);
@@ -10975,6 +11009,13 @@ static void RG_Capture(void)
     if (V3Len(g) > 30.0f) return;   /* (the gun isn't in the hand right now) */
     int c = RG_Class(t);
     RGrip *r = &g_rg[c];
+    if (c <= 1 && b[0] < 0.0f) {   /* a gun's barrel always points out past the fingers (the hand's +X), never back at the wrist: this
+                                     gun's shape was read the wrong way round (front and top) - turn it round, and remember the
+                                     model so the other hand turns it round too */
+        for (int i = 0; i < 3; i++) { b[i] = -b[i]; u[i] = -u[i]; }
+        char *wf = (char *)PlayerWeaponForm();
+        if (wf) RG_MarkReversed(*(uint32_t *)(wf + 0x0C));
+    }
     if (c >= 2) {   /* (melee: the weapon's whole turn in the hand's axes, Hr^T W) */
         float Rn[9]; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) Rn[i * 3 + j] = Hr[0 * 3 + i] * W[0 * 3 + j] + Hr[1 * 3 + i] * W[1 * 3 + j] + Hr[2 * 3 + i] * W[2 * 3 + j];
         float kr = r->n < 30 || !r->rok ? 1.0f : 0.05f;
