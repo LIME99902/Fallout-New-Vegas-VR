@@ -4749,7 +4749,7 @@ static void Far_UiTick(void)
             ((TileSound_t)0x00A0B110)(tile, 0xFCB /* clicksound */);
             ((TileSetFloat_t)0x00A012D0)(tile, 0xFC7 /* clicked */, 1.0f, false);
             ((TileSetFloat_t)0x00A012D0)(tile, 0xFC7, 0.0f, false);
-            if (menu && id >= 0) { void **vt = *(void ***)menu; ((MenuClick_t)vt[3])(menu, id, tile); }   /* (a tile without an id isn't a button - clicking it crashed the game) */
+            if (menu) { void **vt = *(void ***)menu; ((MenuClick_t)vt[3])(menu, id, tile); }
             hover = NULL;   /* the menu may have changed - pick again next frame */
         }
     }
@@ -9252,8 +9252,33 @@ static void Thrown_Update(char *player)
     }
 }
 
+/* ---- No "Take ..." prompt for what's in your hands ------------------------------------------------------------------
+   A held object (the other hand's gun, a stimpak, anything picked up) sits right in front of you, so the game kept
+   offering to take it whenever you looked or aimed past it. While it's held it's marked as not usable (the game's own
+   "destroyed" mark, which takes away its prompt) and it's never the game's crosshair target; let go and it's back. */
+static char *g_npRef[2]; static bool g_npSet[2];
+static void NoPrompt_Restore(int h)
+{
+    char *r = g_npRef[h];
+    if (r && g_npSet[h] && !IsBadReadPtr(r, 0x10)) *(uint32_t *)(r + 0x08) &= ~0x00800000u;
+    g_npRef[h] = NULL; g_npSet[h] = false;
+}
+static void NoPrompt_Tick(void)
+{
+    char *im = *(char **)0x011D8A80;
+    if (IsMenuMode() || g_menuCached) { NoPrompt_Restore(0); NoPrompt_Restore(1); return; }   /* (never saved with the mark: menus, saving) */
+    for (int h = 0; h < 2; h++) {
+        char *want = (g_holding[h] && g_held[h].ref && !IsBadReadPtr(g_held[h].ref, 0x30)) ? g_held[h].ref : NULL;
+        if (want != g_npRef[h]) {
+            NoPrompt_Restore(h);
+            if (want) { g_npRef[h] = want; uint32_t *fl = (uint32_t *)(want + 0x08); if (!(*fl & 0x00800000u)) { *fl |= 0x00800000u; g_npSet[h] = true; } }
+        }
+        if (want && im && !IsBadReadPtr(im, 0xD4) && *(char **)(im + 0xD0) == want) *(char **)(im + 0xD0) = NULL;   /* (not the crosshair target) */
+    }
+}
 static void Grab_Drop(int h, bool throwIt)
 {
+    NoPrompt_Restore(h);
     Held *g = &g_held[h];
     if (g->rb && g_heldFilterRb[h] == g->rb) Held_Collide(h);
     if (g->ref && throwIt && g->rb) Thrown_Start(g, V3Len(g->vel) * g_throwStrength);
@@ -9272,7 +9297,7 @@ static int g_nearCount;
 static void Grab_ClearAll(void)
 {
     g_nearCount = 0;
-    for (int h = 0; h < 2; h++) { if (g_held[h].ref && LookupForm(g_held[h].refID) == (void *)g_held[h].ref) Held_Collide(h); else g_heldFilterRb[h] = NULL;
+    for (int h = 0; h < 2; h++) { if (g_held[h].ref && LookupForm(g_held[h].refID) == (void *)g_held[h].ref) { Held_Collide(h); NoPrompt_Restore(h); } else { g_heldFilterRb[h] = NULL; g_npRef[h] = NULL; g_npSet[h] = false; }
         memset(&g_held[h], 0, sizeof g_held[h]); g_holding[h] = false; g_grabCand[h] = NULL; }
 }
 
@@ -12998,7 +13023,7 @@ static void PowerArmor_NoFall(char *player)
 /* ---- stimpaks (drawing side: holding it, stabbing) ---- */
 static void Stim_Release(int h, int what)
 {   /* the hand lets go of it; the main loop then uses it or puts it back */
-    if (g_holding[h] && g_held[h].ref == g_stimRef) { Held_Collide(h); memset(&g_held[h], 0, sizeof g_held[h]); g_holding[h] = false; }
+    if (g_holding[h] && g_held[h].ref == g_stimRef) { Held_Collide(h); NoPrompt_Restore(h); memset(&g_held[h], 0, sizeof g_held[h]); g_holding[h] = false; }
     g_stimDoRef = g_stimRef; g_stimDoID = g_stimRefID; g_stimDoType = g_stimType; g_stimDo = what;
     g_stimHand = -1; g_stimRef = NULL; g_stimHeld = false;
 }
@@ -13068,6 +13093,7 @@ static void Grab_Update(char *player, char *cam)
             Grab_Drop(h, g_handWOk[h]);
         }
     }
+    NoPrompt_Tick();
     static unsigned scanTick = 0;
     if ((scanTick++ % 3) == 0) Near_Scan(player, 160.0f);   /* the object search doesn't need every frame */
     Collide_Update(dt, !noWeapon);
@@ -16412,6 +16438,8 @@ static void Crouch_Tick(void)
    touches an object that no longer exists. */
 static void World_Reset(const char *why)
 {
+    if (strstr(why, "loading") == NULL) { NoPrompt_Restore(0); NoPrompt_Restore(1); }
+    g_npRef[0] = g_npRef[1] = NULL; g_npSet[0] = g_npSet[1] = false;   /* (those objects are gone) */
     Grab_ClearAll(); Hit_Clear();
     memset(&g_lg, 0, sizeof g_lg); memset(&g_gun, 0, sizeof g_gun); g_gun.findHand = -1;
     memset(&g_lgHol, 0, sizeof g_lgHol); memset(&g_lgToRight, 0, sizeof g_lgToRight);
@@ -16444,6 +16472,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         Bleed_Tick();
         Gun_Tick();
         LG_Tick();
+        if (g_inGameplay) NoPrompt_Tick();
         LHud_Tick();
         Hit_Flush();
         LootMenu_Tick(); Hud_Tick(); FireRate_Tick();
@@ -16494,7 +16523,11 @@ static void OnNVSEMessage(NVSEMessage *msg)
         RestoreGameFov("exit to main menu");
         g_inGameplay = false;
         break;
+    case kMessage_SaveGame:
+        NoPrompt_Restore(0); NoPrompt_Restore(1);
+        break;
     case kMessage_PreLoadGame:
+        NoPrompt_Restore(0); NoPrompt_Restore(1);
         g_newGameWait = false;
         World_Reset("loading a save");
         HeadOffset_Reset();
