@@ -262,6 +262,7 @@ static double g_lgKickAt = 0;         /* (the other hand's last shot, for its ki
 #define LG_RELOAD_MS 1300.0               /* how long reloading the other hand's gun takes */
 static char *g_lgCand = NULL; static bool g_lgGrip = false; static bool g_lgEat = false;
 static bool g_lgSticky = false;
+static int g_lgThin = -1; static float g_lgMid[3];   /* (the other hand's melee weapon: its thinnest axis - the one its sides mirror across - and its middle) */
 static bool g_lgLeftZone = false;   /* (the other hand's gun has been away from the holsters since it was taken - letting go right where you drew it doesn't put it back) */
 static bool  g_keepWeapons = true;     /* [Grab] bKeepWeaponsInHand: letting go of the grip never drops a weapon - only a throw does */
 static float g_keepThrowSpeed = 2.0f;  /* [Grab] fWeaponThrowSpeed: how fast (m/s) your hand must move as you let go to throw it */   /* (a gun drawn from a holster or handed over stays in the other hand until you squeeze and let go) */
@@ -10807,7 +10808,10 @@ static bool LG_SetGrip(int h, char *ref)
     if (g_lg.melee) {   /* a melee weapon: its long axis, away from the grip */
         for (int i = 0; i < 3; i++) { g_melMn[i] = 1e9f; g_melMx[i] = -1e9f; } g_melVerts = 0;
         MelExt_Walk(root, NULL, NULL, 0);
+        g_lgThin = -1;
         if (g_melVerts > 8) {
+            { int Tn = 0; for (int q = 1; q < 3; q++) if (g_melMx[q] - g_melMn[q] < g_melMx[Tn] - g_melMn[Tn]) Tn = q;
+              g_lgThin = Tn; for (int q = 0; q < 3; q++) g_lgMid[q] = (g_melMn[q] + g_melMx[q]) * 0.5f; }
             int A = 0; for (int i = 1; i < 3; i++) if (g_melMx[i] - g_melMn[i] > g_melMx[A] - g_melMn[A]) A = i;
             bl[0] = bl[1] = bl[2] = 0; bool pos = g_melMx[A] >= -g_melMn[A]; bl[A] = pos ? 1.0f : -1.0f;
             g_lg.len = fminf(fmaxf(pos ? g_melMx[A] : -g_melMn[A], 8.0f), 90.0f);
@@ -10984,6 +10988,7 @@ static RGrip *RG_ForLeft(void)
 static void LG_Fingers(void)
 {
     if (g_leftHanded || !g_lg.on || !g_holding[0] || g_held[0].ref != g_lg.ref || !g_fingersApplied[0]) return;
+    if (g_lg.base && *(BYTE *)((char *)g_lg.base + 0xF4) == 0) return;   /* (a power fist is worn: the fingers keep following yours) */
     RGrip *rg = RG_ForLeft(); if (!rg || !rg->fok) return;
     for (int f = 0; f < 5; f++) for (int j = 0; j < 3; j++) {
         char *bn = g_fingers[0][f][j]; if (!bn) continue;   /* (thumb base too: the thumb sits like the gun hand's) */
@@ -11000,11 +11005,30 @@ static bool LG_Pose(float *org, M3 W, float *aim)
     int h = g_leftHanded ? 1 : 0;
     if (!g_handWOk[h]) return false;
     RGrip *rg = RG_ForLeft();
+    int ltype = g_lg.base ? *(BYTE *)((char *)g_lg.base + 0xF4) : 3;
+    if (ltype == 0 && !g_leftHanded && g_bones[h][B_HAND] && !g_lgPoseCtrl) {
+        /* a power fist is worn, not held: the glove goes over the hand - knuckles forward along the hand, its top on the back
+           of the hand (the game's own power fist in the gun hand is part of that hand, so there's no hold to copy) */
+        const float *Hl = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_ROTATE), *Hb = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_TRANSLATE);
+        float fx[3], up[3], sd[3];
+        for (int i = 0; i < 3; i++) { fx[i] = Hl[i * 3 + 0]; up[i] = -Hl[i * 3 + 2]; }
+        float pd = V3Dot(up, fx); for (int i = 0; i < 3; i++) up[i] -= pd * fx[i];
+        float L = V3Len(up); if (L < 0.2f) return false; for (int i = 0; i < 3; i++) up[i] /= L;
+        V3Cross(sd, fx, up);
+        float sl[3]; V3Cross(sl, g_lg.barrelL, g_lg.upL);
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) W[i][j] = fx[i] * g_lg.barrelL[j] + up[i] * g_lg.upL[j] + sd[i] * sl[j];
+        float U = g_unitsPerMeter / 100.0f;
+        for (int i = 0; i < 3; i++) org[i] = Hb[i] + fx[i] * 4.0f - (W[i][0] * g_lgMid[0] + W[i][1] * g_lgMid[1] + W[i][2] * g_lgMid[2])
+                                      + (fx[i] * g_lhGunFwd + up[i] * g_lhGunUp + sd[i] * g_lhGunSide) * U;
+        if (aim) memcpy(aim, fx, 12);
+        return true;
+    }
     if (rg && rg->rok && g_lg.melee && !g_leftHanded && g_bones[h][B_HAND] && !g_lgPoseCtrl) {
         /* melee: the mirror image of the weapon's whole turn in the gun hand - across the hand's Z, with the weapon's axis that
            lies most along it flipped too, so it stays a real turn */
         const float *Hl = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_ROTATE), *Hb = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_TRANSLATE);
         int jf = 0; for (int j = 1; j < 3; j++) if (fabsf(rg->R[6 + j]) > fabsf(rg->R[6 + jf])) jf = j;
+        if (g_lgThin >= 0) jf = g_lgThin;   /* (a blade or hammer is the same seen from either side: flip it across its thin way, so it isn't turned upside down) */
         float Lm[9]; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) Lm[i * 3 + j] = rg->R[i * 3 + j] * (i == 2 ? -1.0f : 1.0f) * (j == jf ? -1.0f : 1.0f);
         for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) W[i][j] = Hl[i * 3] * Lm[0 * 3 + j] + Hl[i * 3 + 1] * Lm[1 * 3 + j] + Hl[i * 3 + 2] * Lm[2 * 3 + j];
         float gm[3] = { rg->g[0], rg->g[1], -rg->g[2] };
