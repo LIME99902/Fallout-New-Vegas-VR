@@ -276,6 +276,7 @@ static bool LG_PoseNow(float *org, M3 W, float *aim);   /* (the other hand's wea
 static struct { bool pending; int rounds; double at; } g_lgToRight;
 static struct { bool req; char *ref; uint32_t id; void *base; int zone, rounds; int drawReq; } g_lgHol;
 static void LG_Input(bool menu, bool gripNow, bool gripEdge, float trig, bool *lGrip);
+static double g_lgGripEdgeAt = -1e9;   /* (the other hand's grip last squeezed) */
 static int LG_RoundsOf(uint32_t id); static void LG_SetRounds(uint32_t id, int r);
 static volatile bool g_worldReset = false;
 static bool  g_thrOn = true;          /* [Throwing] bVRThrowing */
@@ -2002,8 +2003,11 @@ static void Controllers_Poll(bool menu)
         g_grapTrigH[g_leftHanded ? 0 : 1] = menu ? 0.0f : am->rAxis[1].x;
         bool ltDown = ltPrev ? lt > 0.40f : lt > 0.75f;
         bool fist = Pressed(mv, EVRButtonId_k_EButton_Grip) || mv->rAxis[2].x > 0.5f;   /* a fist (grip + trigger) isn't a bullet-time pull */
-        static double fistAt = 0; if (fist) fistAt = QpcMs();   /* (not right after a grapple fist, nor while being pulled) */
-        if (g_ltBullet && !g_adsEnabled && !menu && g_inGameplay && !g_pipOpen && !g_wristUp && (g_lg.on ? (fist && g_keepWeapons) : (!fist && QpcMs() - fistAt > 300.0)) && !expl && ltDown && !ltPrev && !g_grapPulling) BulletKey_Press();   /* (dual wielding: the trigger fires the gun - squeeze the grip first for bullet time) */
+        static double fistAt = 0; if (fist) fistAt = QpcMs();
+        { static bool fistPrev = false; if (fist && !fistPrev) g_lgGripEdgeAt = QpcMs(); fistPrev = fist; }   /* (when the grip was last squeezed) */
+        bool gripFresh = QpcMs() - g_lgGripEdgeAt < 700.0;   /* bullet time with a gun in the other hand: squeeze the grip, THEN pull - a hand
+                                                                 resting on the grip while you shoot doesn't count */   /* (not right after a grapple fist, nor while being pulled) */
+        if (g_ltBullet && !g_adsEnabled && !menu && g_inGameplay && !g_pipOpen && !g_wristUp && (g_lg.on ? (fist && g_keepWeapons && gripFresh) : (!fist && QpcMs() - fistAt > 300.0)) && !expl && ltDown && !ltPrev && !g_grapPulling) BulletKey_Press();   /* (dual wielding: the trigger fires the gun - squeeze the grip first for bullet time) */
         ltPrev = ltDown;
         BulletKey_Tick();
         Key_TapTick(); Key_RealTick();
@@ -11720,7 +11724,7 @@ static void LG_Input(bool menu, bool gripNow, bool gripEdge, float trig, bool *l
     }
     if (g_lg.on || g_lg.pickReq) *lGrip = false;   /* (no VATS) */
     bool t = trig > (g_lg.trig ? 0.35f : 0.7f);
-    if (g_keepWeapons && gripNow && !g_lg.trig) t = false;   /* (grip squeezed first: the trigger is bullet time, not a shot) */
+    if (g_keepWeapons && gripNow && !g_lg.trig && QpcMs() - g_lgGripEdgeAt < 700.0) t = false;   /* (grip squeezed just before: the trigger is bullet time, not a shot) */
     if (g_lg.on && t && !g_lg.trig) g_lg.fireReq = true;
     g_lg.trig = t && g_lg.on;
 }
