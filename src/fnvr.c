@@ -277,6 +277,7 @@ static void Gun_Palm(int h, float *palm); static char *LG_Root(char *ref); stati
 static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket */
 static float g_mrPocketSide = 0.14f, g_mrPocketDown = 0.70f, g_mrPocketFwd = 0.10f, g_mrPocketR = 0.13f, g_mrLoadR = 0.10f;
 static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
+static bool g_olOn = true;   /* [Reload] bOutlines */ static void Ol_Draw(IDirect3DDevice9 *dev); static void Ol_Collect(char *cam);
 static void MR_LeftHud(char *out, size_t n); static bool MR_LeftBlocksAutoReload(void); static void InstallReloadHook(void);
 static bool LG_PoseNow(float *org, M3 W, float *aim);   /* (the other hand's weapon as last drawn - for shots and blows) */
 static struct { bool pending; int rounds; double at; } g_lgToRight;
@@ -656,6 +657,7 @@ static void LoadSettings(void)
     g_lgWithArms = GetPrivateProfileIntA("Grab", "bOtherHandWithArms", 1, g_iniPath) != 0;
     g_lgMotion = GetPrivateProfileIntA("Grab", "bOtherHandGunMotion", 1, g_iniPath) != 0;
     g_mrOn = GetPrivateProfileIntA("Reload", "bManualReload", 1, g_iniPath) != 0;
+    g_olOn = GetPrivateProfileIntA("Reload", "bOutlines", 1, g_iniPath) != 0;
     { char rb[32]; struct { const char *k; float *v; const char *d; } rk[5] = { { "fPocketSide", &g_mrPocketSide, "0.14" }, { "fPocketDown", &g_mrPocketDown, "0.70" },
           { "fPocketForward", &g_mrPocketFwd, "0.10" }, { "fPocketRadius", &g_mrPocketR, "0.13" }, { "fLoadRadius", &g_mrLoadR, "0.10" } };
       for (int i = 0; i < 5; i++) { GetPrivateProfileStringA("Reload", rk[i].k, rk[i].d, rb, sizeof rb, g_iniPath); *rk[i].v = (float)atof(rb); } }
@@ -1421,7 +1423,8 @@ static void Melee_Update(bool menu)
     float sp = g_vrHandOk[aim] ? g_handSpeed[aim] : 0.0f;
     if (wt == -1 && g_vrHandOk[off]) sp = fmaxf(sp, g_handSpeed[off]);   /* fists: either hand punches */
     DWORD now = GetTickCount();
-    if (g_contactDmg && g_hitReact && !PlayerWeaponAutomatic() && QpcMs() - g_hrNoBodyAt > 2000.0) return;   /* (your blows do the damage themselves - unless someone
+    if (g_contactDmg && g_hitReact && !PlayerWeaponAutomatic() && QpcMs() - g_hrNoBodyAt > 2000.0 && wt != 0) return;   /* (power fists and other hand-to-hand weapons: the game's own punch
+                                                                                                                 still runs - its piston / blast animation, its damage and its critical effects) */   /* (your blows do the damage themselves - unless someone
                                                                                                                  close by has a body FNVR can't find parts on: then the game's swing hits them) */
     if (sp > g_swingSpeed && now - g_lastSwing > 450) {
         g_lastSwing = now;
@@ -5370,6 +5373,7 @@ static void Display_Frame_(IDirect3DDevice9 *dev)
     if (g_dlgSnapWant) { g_dlgSnapWant = false; SaveBackbuffer(dev, "FNVR_dialogue.bmp"); Log("Dialogue: picture saved (FNVR_dialogue.bmp)"); }
     g_frameId++;
     Rope_Draw(dev);
+    Ol_Draw(dev);   /* (manual reloading: orange outlines) */
     LHud_Draw(dev);
     Pip_Snapshot(dev);   /* (after the menu is drawn, so the pictures show what you see) */
     Pip_Record(dev);
@@ -9994,7 +9998,8 @@ static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float 
     else if (canKnock && kind == HK_LEG && I >= kd * 0.6f) { action = HA_PUSH; lvl = 0; }   /* legs taken out: down they go */
     bool stagger = !action && I >= kd * 0.45f;
     int dmg10 = 0;
-    if (g_contactDmg && armed && A->alive) {
+    bool gamePunch = !g_hrStrikeW && h == (g_leftHanded ? 0 : 1) && PlayerWeaponType() == 0;   /* (a power fist in the gun hand: the game's own punch does the damage) */
+    if (g_contactDmg && armed && A->alive && !gamePunch) {
         int wt = PlayerWeaponType();
         float base = g_hrStrikeW ? Hit_BaseDamageOf(g_hrStrikeW, *(BYTE *)((char *)g_hrStrikeW + 0xF4), 1) : Hit_BaseDamage(wt), spdF = fminf(fmaxf(I / 3.0f, 0.35f), 1.6f);
         float pm = part == 1 ? 1.6f : part == 0 ? 1.0f : 0.7f;
@@ -13610,6 +13615,225 @@ static void Rope_Draw(IDirect3DDevice9 *dev)
     IDirect3DSurface9_Release(bb);
 }
 
+/* ---- Orange outlines on the parts you work by hand (like Titanfall 2 VR) -----------------------------------------------
+   While a gun waits for its slide, pump or lever to be worked, that part is outlined in orange; while you carry a magazine,
+   speedloader, shell or round to the gun, an orange ring marks where it goes in (and a revolver's open cylinder / a break-
+   action's barrels are outlined). The outline is the part's silhouette: the edges between its sides that face you and the
+   ones that face away, worked out from the model's triangles where the part is drawn this frame, and drawn over the picture.
+   [Reload] bOutlines */
+#define OL_MAXSEG 4000
+static struct { int n; float s[OL_MAXSEG][4]; bool ring; float rx, ry, rr; bool on; double at; } g_ol;
+#define OLM_PIECES 16
+typedef struct { char *node, *gd; const float *V; int nv, i0, ni, e0, ne; } OlPiece;
+static struct { char *top; int n, idxN, edgeN; OlPiece p[OLM_PIECES]; } g_olm[4];
+static uint16_t g_olIdx[4][24000]; static int32_t g_olEdge[4][36000][4];   /* (edge: welded vertices a, b, its triangles t0, t1) */
+static int g_olNext = 0;
+static int32_t g_olWeld[12000];
+static float g_olW[12000][3];
+static void Olm_Walk(int m, char *n, int depth)
+{
+    if (!n || depth > 10 || g_olm[m].n >= OLM_PIECES || IsBadReadPtr(n, 0xC0)) return;
+    uintptr_t vt = *(uintptr_t *)n;
+    if (vt == 0x0109D454 || vt == 0x0109CD44) {
+        char *gd = *(char **)(n + 0xB8);
+        if (!gd || IsBadReadPtr(gd, 0x60)) return;
+        int nv = *(uint16_t *)(gd + 0x08); const float *V = *(const float **)(gd + 0x20);
+        if (nv < 3 || nv > 12000 || !V || IsBadReadPtr(V, (UINT_PTR)nv * 12)) return;
+        int i0 = g_olm[m].idxN, room = 24000 - i0, ni = 0; uint16_t *out = g_olIdx[m] + i0;
+        uintptr_t dvt = *(uintptr_t *)gd;
+        if (dvt == 0x0109DAC4) { int nt = *(uint16_t *)(gd + 0x40); const uint16_t *tri = *(const uint16_t **)(gd + 0x48);
+            if (nt > 0 && nt * 3 <= room && Lgd_IdxOk(tri, nt * 3, nv)) { memcpy(out, tri, (size_t)nt * 6); ni = nt * 3; } }
+        else if (dvt == 0x0109D8AC) { int ns = *(uint16_t *)(gd + 0x44); const uint16_t *lens = *(const uint16_t **)(gd + 0x48), *lists = *(const uint16_t **)(gd + 0x4C);
+            if (ns > 0 && ns < 4000 && lens && !IsBadReadPtr(lens, (UINT_PTR)ns * 2)) { int total = 0; for (int q = 0; q < ns; q++) total += lens[q];
+                if (total >= 3 && total < 100000 && Lgd_IdxOk(lists, total, nv)) { int k = 0;
+                    for (int q = 0; q < ns; q++) { for (int j = 2; j < lens[q] && ni + 3 <= room; j++) { uint16_t a = lists[k + j - 2], b = lists[k + j - 1], c = lists[k + j];
+                        if (a == b || b == c || a == c) continue; out[ni] = a; out[ni + 1] = b; out[ni + 2] = c; ni += 3; } k += lens[q]; } } } }
+        if (ni < 3) return;
+        /* weld vertices that sit at the same spot (texture seams), then pair up the triangles' edges */
+        int nw = 0;
+        for (int k = 0; k < nv; k++) { g_olWeld[k] = k;
+            for (int j = (k > 400 ? k - 400 : 0); j < k; j++) { const float *a = V + k * 3, *b = V + j * 3;
+                if (fabsf(a[0] - b[0]) < 1e-3f && fabsf(a[1] - b[1]) < 1e-3f && fabsf(a[2] - b[2]) < 1e-3f) { g_olWeld[k] = g_olWeld[j]; nw++; break; } } }
+        int e0 = g_olm[m].edgeN, ne = 0, nt = ni / 3;
+        for (int t = 0; t < nt; t++) for (int s = 0; s < 3; s++) {
+            int a = g_olWeld[out[t * 3 + s]], b = g_olWeld[out[t * 3 + (s + 1) % 3]]; if (a == b) continue;
+            int lo = a < b ? a : b, hi = a < b ? b : a, found = -1;
+            for (int q = e0; q < e0 + ne; q++) if (g_olEdge[m][q][0] == lo && g_olEdge[m][q][1] == hi && g_olEdge[m][q][3] < 0) { found = q; break; }
+            if (found >= 0) g_olEdge[m][found][3] = t;
+            else if (e0 + ne < 36000) { int32_t *e = g_olEdge[m][e0 + ne++]; e[0] = lo; e[1] = hi; e[2] = t; e[3] = -1; }
+        }
+        (void)nw;
+        OlPiece *p = &g_olm[m].p[g_olm[m].n++]; p->node = n; p->gd = gd; p->V = V; p->nv = nv; p->i0 = i0; p->ni = ni; p->e0 = e0; p->ne = ne;
+        g_olm[m].idxN += ni; g_olm[m].edgeN += ne;
+        return;
+    }
+    if (!AsNode(n)) return;
+    char **kids = *(char ***)(n + 0xA0); unsigned kc = *(uint16_t *)(n + 0xA6);
+    for (unsigned i = 0; kids && i < kc && i < 64; i++) Olm_Walk(m, kids[i], depth + 1);
+}
+static int Olm_For(char *top)
+{
+    for (int m = 0; m < 4; m++) if (g_olm[m].top == top) return m;
+    int m = g_olNext++ & 3; g_olm[m].top = top; g_olm[m].n = g_olm[m].idxN = g_olm[m].edgeN = 0;
+    Olm_Walk(m, top, 0);
+    const char *nm = *(const char **)(top + 0x08);
+    Log("Outline: part %s - %d pieces, %d triangles, %d edges", nm && !IsBadStringPtrA(nm, 64) ? nm : "?", g_olm[m].n, g_olm[m].idxN / 3, g_olm[m].edgeN);
+    return m;
+}
+/* a world point on the screen (the camera as it is for this frame) */
+static bool Ol_Project(char *cam, const float *P, float *x, float *y, float *z)
+{
+    const float *C = (const float *)(cam + NIAV_WORLD_TRANSLATE), *Cw = (const float *)(cam + NIAV_WORLD_ROTATE);
+    float F[3] = { Cw[0], Cw[3], Cw[6] }, Up[3] = { Cw[1], Cw[4], Cw[7] }, Rt[3] = { Cw[2], Cw[5], Cw[8] };
+    const float *fr = (const float *)(cam + NICAMERA_FRUSTUM);
+    float l = fr[0], r = fr[1], t = fr[2], b = fr[3];
+    if (!(r > l) || !(t > b)) return false;
+    float q[3]; V3Sub(q, P, C); float zz = V3Dot(q, F); if (zz < 1.0f) return false;
+    *x = (V3Dot(q, Rt) / zz - l) / (r - l) * g_bbW; *y = (t - V3Dot(q, Up) / zz) / (t - b) * g_bbH; if (z) *z = zz;
+    return true;
+}
+static void Ol_Part(char *cam, char *top)
+{
+    if (!MR_Ok(top) || (*(uint32_t *)(top + 0x30) & 1)) return;
+    int m = Olm_For(top);
+    const float *C = (const float *)(cam + NIAV_WORLD_TRANSLATE);
+    for (int q = 0; q < g_olm[m].n; q++) {
+        OlPiece *p = &g_olm[m].p[q]; char *n = p->node;
+        if (!MR_Ok(n) || *(char **)(n + 0xB8) != p->gd || *(const float **)(p->gd + 0x20) != p->V || (*(uint32_t *)(n + 0x30) & 1)) continue;
+        const float *R = (const float *)(n + NIAV_WORLD_ROTATE), *T = (const float *)(n + NIAV_WORLD_TRANSLATE);
+        float sc = *(const float *)(n + NIAV_WORLD_SCALE); if (!(sc > 0.0001f && sc < 1000.0f)) sc = 1.0f;
+        for (int k = 0; k < p->nv; k++) { const float *v = p->V + k * 3; for (int i = 0; i < 3; i++) g_olW[k][i] = T[i] + sc * (R[i * 3] * v[0] + R[i * 3 + 1] * v[1] + R[i * 3 + 2] * v[2]); }
+        const uint16_t *ix = g_olIdx[m] + p->i0;
+        for (int e = p->e0; e < p->e0 + p->ne && g_ol.n < OL_MAXSEG; e++) {
+            const int32_t *E = g_olEdge[m][e]; bool sil;
+            int fs[2] = { 0, 0 };
+            for (int s = 0; s < 2; s++) { int t = E[2 + s]; if (t < 0) { fs[s] = -1; continue; }
+                const float *a = g_olW[ix[t * 3]], *b = g_olW[ix[t * 3 + 1]], *c = g_olW[ix[t * 3 + 2]];
+                float u[3], v[3], nn[3], d[3]; V3Sub(u, b, a); V3Sub(v, c, a); V3Cross(nn, u, v); V3Sub(d, C, a); fs[s] = V3Dot(nn, d) > 0 ? 1 : 0; }
+            sil = fs[1] < 0 ? true : fs[0] != fs[1];   /* (the outer edge of an open surface, or where it turns away from you) */
+            if (!sil) continue;
+            float x0, y0, x1, y1; if (!Ol_Project(cam, g_olW[E[0]], &x0, &y0, NULL) || !Ol_Project(cam, g_olW[E[1]], &x1, &y1, NULL)) continue;
+            float *S = g_ol.s[g_ol.n++]; S[0] = x0; S[1] = y0; S[2] = x1; S[3] = y1;
+        }
+    }
+}
+/* (render hook, right after the frame is drawn, with its parts still where they were drawn) */
+static void Ol_Collect(char *cam)
+{
+    g_ol.n = 0; g_ol.ring = false; g_ol.on = false;
+    if (!g_olOn || !g_mrOn || !cam || !g_bbW) return;
+    for (int g = 0; g < 2; g++) {
+        MRGun *G = &g_mr.g[g]; if (!G->base || G->cls == MRC_NONE || !G->magFor) continue;
+        int h = MR_GunHand(g);
+        if (G->st == MRS_RACK) {
+            char *part = G->cls == MRC_TUBE ? (G->pumpNode ? G->pumpNode : G->leverNode ? G->leverNode : G->slideNode) : G->slideNode;
+            Ol_Part(cam, part);
+        }
+        if (g_mr.item && g_mr.itemGun == g) {
+            if (G->cls == MRC_REVOLVER) Ol_Part(cam, G->cylNode);
+            if (G->cls == MRC_BREAK) Ol_Part(cam, G->barrelNode);
+            if (g_handWOk[h]) {   /* the ring where it goes in */
+                float off[3];
+                if (G->magOffOk && (G->cls == MRC_MAG || G->cls == MRC_CELL)) memcpy(off, G->magOff, 12);
+                else if (G->insOk) memcpy(off, G->insOff, 12);
+                else continue;
+                float w[3]; for (int i = 0; i < 3; i++) w[i] = g_handW[h][i] + (g_handWR[h][i][0] * off[0] + g_handWR[h][i][1] * off[1] + g_handWR[h][i][2] * off[2]) * g_unitsPerMeter;
+                float x, y, z; const float *fr = (const float *)(cam + NICAMERA_FRUSTUM);
+                if (Ol_Project(cam, w, &x, &y, &z) && fr[1] > fr[0]) {
+                    g_ol.ring = true; g_ol.rx = x; g_ol.ry = y;
+                    g_ol.rr = fmaxf(0.025f * g_unitsPerMeter * (g_bbW / (fr[1] - fr[0])) / z, 6.0f);
+                }
+            }
+        }
+    }
+    g_ol.on = g_ol.n > 0 || g_ol.ring; g_ol.at = QpcMs();
+}
+static void Ol_Draw(IDirect3DDevice9 *dev)
+{
+    if (!g_ol.on || QpcMs() - g_ol.at > 100.0) { g_ol.on = false; return; }
+    g_ol.on = false;
+    IDirect3DSurface9 *bb = NULL;
+    if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
+    static const D3DRENDERSTATETYPE rsList[] = { D3DRS_ZENABLE, D3DRS_ZWRITEENABLE, D3DRS_ALPHABLENDENABLE, D3DRS_ALPHATESTENABLE,
+        D3DRS_STENCILENABLE, D3DRS_SCISSORTESTENABLE, D3DRS_CULLMODE, D3DRS_LIGHTING, D3DRS_FOGENABLE, D3DRS_SRGBWRITEENABLE, D3DRS_COLORWRITEENABLE,
+        D3DRS_SRCBLEND, D3DRS_DESTBLEND, D3DRS_BLENDOP, D3DRS_SEPARATEALPHABLENDENABLE };
+    enum { NRS = sizeof rsList / sizeof rsList[0] };
+    DWORD rsSave[NRS]; for (int i = 0; i < NRS; i++) IDirect3DDevice9_GetRenderState(dev, rsList[i], &rsSave[i]);
+    DWORD t0c, t0a1, t0a, t0aa1, t1c;
+    IDirect3DDevice9_GetTextureStageState(dev, 0, D3DTSS_COLOROP, &t0c); IDirect3DDevice9_GetTextureStageState(dev, 0, D3DTSS_COLORARG1, &t0a1);
+    IDirect3DDevice9_GetTextureStageState(dev, 0, D3DTSS_ALPHAOP, &t0a); IDirect3DDevice9_GetTextureStageState(dev, 0, D3DTSS_ALPHAARG1, &t0aa1);
+    IDirect3DDevice9_GetTextureStageState(dev, 1, D3DTSS_COLOROP, &t1c);
+    IDirect3DSurface9 *rtSave = NULL; IDirect3DDevice9_GetRenderTarget(dev, 0, &rtSave);
+    D3DVIEWPORT9 vpSave; IDirect3DDevice9_GetViewport(dev, &vpSave);
+    IDirect3DVertexShader9 *vsSave = NULL; IDirect3DDevice9_GetVertexShader(dev, &vsSave);
+    IDirect3DPixelShader9 *psSave = NULL; IDirect3DDevice9_GetPixelShader(dev, &psSave);
+    IDirect3DVertexDeclaration9 *declSave = NULL; IDirect3DDevice9_GetVertexDeclaration(dev, &declSave);
+    DWORD fvfSave = 0; IDirect3DDevice9_GetFVF(dev, &fvfSave);
+    IDirect3DBaseTexture9 *texSave = NULL; IDirect3DDevice9_GetTexture(dev, 0, &texSave);
+    IDirect3DVertexBuffer9 *vbSave = NULL; UINT vbOff = 0, vbStride = 0; IDirect3DDevice9_GetStreamSource(dev, 0, &vbSave, &vbOff, &vbStride);
+    IDirect3DDevice9_SetRenderTarget(dev, 0, bb);
+    D3DVIEWPORT9 vp = { 0, 0, g_bbW, g_bbH, 0.0f, 1.0f }; IDirect3DDevice9_SetViewport(dev, &vp);
+    IDirect3DDevice9_SetVertexShader(dev, NULL); IDirect3DDevice9_SetPixelShader(dev, NULL);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ZENABLE, FALSE); IDirect3DDevice9_SetRenderState(dev, D3DRS_ZWRITEENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ALPHABLENDENABLE, TRUE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_SRCBLEND, D3DBLEND_SRCALPHA); IDirect3DDevice9_SetRenderState(dev, D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_BLENDOP, D3DBLENDOP_ADD); IDirect3DDevice9_SetRenderState(dev, D3DRS_SEPARATEALPHABLENDENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ALPHATESTENABLE, FALSE); IDirect3DDevice9_SetRenderState(dev, D3DRS_STENCILENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_SCISSORTESTENABLE, FALSE); IDirect3DDevice9_SetRenderState(dev, D3DRS_CULLMODE, D3DCULL_NONE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_LIGHTING, FALSE); IDirect3DDevice9_SetRenderState(dev, D3DRS_FOGENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_SRGBWRITEENABLE, FALSE); IDirect3DDevice9_SetRenderState(dev, D3DRS_COLORWRITEENABLE, 0x7);
+    IDirect3DDevice9_SetTexture(dev, 0, NULL);
+    IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_COLOROP, D3DTOP_SELECTARG1); IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_COLORARG1, D3DTA_DIFFUSE);
+    IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1); IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_ALPHAARG1, D3DTA_DIFFUSE);
+    IDirect3DDevice9_SetTextureStageState(dev, 1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+    IDirect3DDevice9_SetFVF(dev, D3DFVF_XYZRHW | D3DFVF_DIFFUSE);
+    if (SUCCEEDED(IDirect3DDevice9_BeginScene(dev))) {
+        /* a soft orange glow, then the bright line (pulsing gently) */
+        float pulse = 0.75f + 0.25f * sinf((float)(QpcMs() / 1000.0) * 6.0f);
+        float scale = g_bbH / 1080.0f; if (scale < 1.0f) scale = 1.0f;
+        static const struct { float w; DWORD a; } layer[2] = { { 3.2f, 0x50 }, { 1.2f, 0xF0 } };
+        static VtxC buf[6 * 512];
+        for (int li = 0; li < 2; li++) {
+            float w = layer[li].w * scale; DWORD c = ((DWORD)(layer[li].a * pulse) << 24) | 0x00FF8A1E;
+            int nb = 0;
+            for (int i = 0; i < g_ol.n; i++) {
+                float *S = g_ol.s[i]; float dx = S[2] - S[0], dy = S[3] - S[1], L = sqrtf(dx * dx + dy * dy); if (L < 0.5f) continue;
+                float nx = -dy / L * w, ny = dx / L * w, ex = dx / L * w * 0.5f, ey = dy / L * w * 0.5f;
+                float ax = S[0] - ex, ay = S[1] - ey, bx = S[2] + ex, by = S[3] + ey;
+                VtxC q[6] = { { ax - nx, ay - ny, 0, 1, c }, { bx - nx, by - ny, 0, 1, c }, { bx + nx, by + ny, 0, 1, c },
+                              { ax - nx, ay - ny, 0, 1, c }, { bx + nx, by + ny, 0, 1, c }, { ax + nx, ay + ny, 0, 1, c } };
+                memcpy(buf + nb, q, sizeof q); nb += 6;
+                if (nb >= 6 * 512) { IDirect3DDevice9_DrawPrimitiveUP(dev, D3DPT_TRIANGLELIST, (UINT)(nb / 3), buf, sizeof(VtxC)); nb = 0; }
+            }
+            if (g_ol.ring) {   /* the ring: 32 short pieces */
+                for (int k = 0; k < 32; k++) {
+                    float a0 = k * 6.2832f / 32, a1 = (k + 1) * 6.2832f / 32, r0 = g_ol.rr - w, r1 = g_ol.rr + w;
+                    float c0 = cosf(a0), s0 = sinf(a0), c1 = cosf(a1), s1 = sinf(a1), X = g_ol.rx, Y = g_ol.ry;
+                    VtxC q[6] = { { X + c0 * r0, Y + s0 * r0, 0, 1, c }, { X + c1 * r0, Y + s1 * r0, 0, 1, c }, { X + c1 * r1, Y + s1 * r1, 0, 1, c },
+                                  { X + c0 * r0, Y + s0 * r0, 0, 1, c }, { X + c1 * r1, Y + s1 * r1, 0, 1, c }, { X + c0 * r1, Y + s0 * r1, 0, 1, c } };
+                    memcpy(buf + nb, q, sizeof q); nb += 6;
+                    if (nb >= 6 * 512) { IDirect3DDevice9_DrawPrimitiveUP(dev, D3DPT_TRIANGLELIST, (UINT)(nb / 3), buf, sizeof(VtxC)); nb = 0; }
+                }
+            }
+            if (nb) IDirect3DDevice9_DrawPrimitiveUP(dev, D3DPT_TRIANGLELIST, (UINT)(nb / 3), buf, sizeof(VtxC));
+        }
+        IDirect3DDevice9_EndScene(dev);
+    }
+    for (int i = 0; i < NRS; i++) IDirect3DDevice9_SetRenderState(dev, rsList[i], rsSave[i]);
+    IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_COLOROP, t0c); IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_COLORARG1, t0a1);
+    IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_ALPHAOP, t0a); IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_ALPHAARG1, t0aa1);
+    IDirect3DDevice9_SetTextureStageState(dev, 1, D3DTSS_COLOROP, t1c);
+    if (rtSave) { IDirect3DDevice9_SetRenderTarget(dev, 0, rtSave); IDirect3DSurface9_Release(rtSave); }
+    IDirect3DDevice9_SetViewport(dev, &vpSave);
+    IDirect3DDevice9_SetVertexShader(dev, vsSave); if (vsSave) IDirect3DVertexShader9_Release(vsSave);
+    IDirect3DDevice9_SetPixelShader(dev, psSave); if (psSave) IDirect3DPixelShader9_Release(psSave);
+    if (declSave) { IDirect3DDevice9_SetVertexDeclaration(dev, declSave); IDirect3DVertexDeclaration9_Release(declSave); }
+    else if (fvfSave) IDirect3DDevice9_SetFVF(dev, fvfSave);
+    IDirect3DDevice9_SetTexture(dev, 0, texSave); if (texSave) IDirect3DBaseTexture9_Release(texSave);
+    IDirect3DDevice9_SetStreamSource(dev, 0, vbSave, vbOff, vbStride); if (vbSave) IDirect3DVertexBuffer9_Release(vbSave);
+    IDirect3DSurface9_Release(bb);
+}
+
 /* ---- Grappling hook (left hand, like Dying Light's) ----------------------------------------------------
    Make a fist with the left hand (grip) and pull the left trigger: a line shoots straight out where the hand
    points and pulls you to that spot, speeding up as you go. Let go of the trigger (or grip) on the way and
@@ -14310,6 +14534,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                 if (eye == aimEye) Scope_Draw(dev); else g_scope.active = false;
                 PipScr_Draw(dev);
                 g_rope.on = ropeOn; Rope_Draw(dev);
+                Ol_Collect(cam); Ol_Draw(dev);
                 if (eye == 0) ok0 = Capture_Eye(dev, 0); else ok1 = ok0 && Capture_Eye(dev, 1);
             }
             for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
@@ -14317,7 +14542,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             g_stereoCapturedThisFrame = ok0;
             {   static int fl = 0; static double nl = 0;
                 if (QpcMs() > nl) { nl = QpcMs() + 10000.0; if (fl++ < 30) Log("Full 3D: left eye drawn in %.1f ms, right eye %.1f ms (%s)", te[0], te[1], ok0 && ok1 ? "both captured" : "capture failed"); } }
-        } else { Lgd_FrameBegin(); o_DoRenderFrame(osGlobals, renderer, a, b); Lgd_FrameEnd(); }
+        } else { Lgd_FrameBegin(); o_DoRenderFrame(osGlobals, renderer, a, b); Lgd_FrameEnd(); if (grabVis) Ol_Collect(cam); }
         g_inRenderFrame = false; g_lgdWant = false;
         t4 = QpcMs(); g_tGame += t4 - t3;
         MeleeAngle_Restore(); Lighter_Restore();
@@ -16211,6 +16436,7 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: left/right", "LeftHanded", "fGunSide", &g_lhGunSide, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Moves the gun in your left hand to the right (+) or left (-) - the second gun when dual wielding, or your gun in left-handed play." },
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: tilt (dual wield)", "Grab", "fOtherHandTilt", &g_lgTilt, -90.0f, 90.0f, 1.0f, "%.0f deg", 0, 0, "Dual wielding: tips the second gun in your left hand up (+) or down (-)." },
     { SP_WEAPONS, ST_BOOL, "Left hand gun: fingers go behind it", "Grab", "bOtherHandWithArms", &g_lgWithArms, 0, 0, 0, 0, 0, 0, "ON: fingers wrapped behind the second gun or melee weapon in your left hand are hidden by it, like with the gun in your gun hand (the game draws your hands over the world, so without this they show through it). OFF: as the game draws it." },
+    { SP_WEAPONS, ST_BOOL, "Reload: orange outlines", "Reload", "bOutlines", &g_olOn, 0, 0, 0, 0, 0, 0, "ON: the part to work by hand (slide, pump, lever) is outlined in orange, and an orange ring marks where a magazine, speedloader or shell goes in while you carry it. OFF: no outlines." },
     { SP_WEAPONS, ST_BOOL, "Manual reloading", "Reload", "bManualReload", &g_mrOn, 0, 0, 0, 0, 0, 0, "ON: reload every gun by hand - B (Y for the left-hand gun) drops the magazine or opens the gun, take a magazine / speedloader / shells from the pocket on your left hip with your free hand's grip, push it in, work the slide or pump if it was empty. Dual wielding: touch the gun itself to the pocket. OFF: the game reloads for you." },
     { SP_SPOTS, ST_FLOAT, "Ammo pocket: below eyes", "Reload", "fPocketDown", &g_mrPocketDown, 0.3f, 1.2f, 0.02f, "%.2f m", 0, 0, "How far below your eyes the ammo pocket on your left hip is." },
     { SP_SPOTS, ST_FLOAT, "Ammo pocket: to the side", "Reload", "fPocketSide", &g_mrPocketSide, 0.0f, 0.4f, 0.01f, "%.2f m", 0, 0, "How far to the side of your head the ammo pocket is." },

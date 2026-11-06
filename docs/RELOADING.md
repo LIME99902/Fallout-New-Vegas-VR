@@ -50,6 +50,9 @@ For each: does the step happen, does it feel right, and what does `FNVR.log` say
 10. **Left-hand gun alone** (right hand empty): Y, right hand to the left pocket, into the left gun.
 
 ## What you see
+- **Orange outlines** (like Titanfall 2 VR): while a gun waits for its slide, pump or lever, that part glows orange; while you carry
+  a magazine, speedloader, shell or round to the gun, an orange ring marks where it goes in (a revolver's open cylinder and a
+  break-action's barrels are outlined too). Off: *Weapons → Reload: orange outlines* (`[Reload] bOutlines=0`).
 - **Magazines** drop out of the gun, and the new one sits in your free hand on its way in (when the gun's model has a magazine part).
 - **Shells, speedloaders, rounds** show in your hand when the gun's model has such a part (many first-person models carry them for the
   game's reload animation). The log lists what each gun's model has: `Reload: gun hand's gun model parts - ...`.
