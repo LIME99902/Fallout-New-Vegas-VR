@@ -9616,7 +9616,7 @@ static bool Hit_Scripts(void)
     /* the weapon's own effect on whoever it hits (super-heated fire, shock, poison, bleeding...) - its enchantment, cast on them */
     g_hrCritScr = g_scriptIntf->CompileScript("ref rWho\nref rS\nint iM\nint iR\nfloat fC\nBegin Function { rWho, rS, iM }\nset fC to player.GetAV CritChance\nset fC to fC * iM\nset fC to fC / 100\nset iR to GetRandomPercent\nif iR < fC\nrWho.CastImmediateOnSelf rS\nendif\nEnd\n");
     Log("Hit reactions: critical effects %s", g_hrCritScr ? "ok" : "FAILED");
-    g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rWeap\nref rE\nBegin Function { rWho, rWeap }\nset rE to GetEnchantment rWeap\nif rE\nrWho.CastImmediateOnSelf rE\nendif\nEnd\n");
+    g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rE\nBegin Function { rWho, rE }\nrWho.CastImmediateOnSelf rE\nEnd\n");
     g_hrSndScr = g_scriptIntf->CompileScript("ref rWho\nref rSnd\nBegin Function { rWho, rSnd }\nrWho.PlaySound3D rSnd\nEnd\n");
     /* the blow's damage (tenths of a point), on the part it hit; a killing blow is yours; anyone you hit (not companions) fights back */
     g_hrDmgScr = g_scriptIntf->CompileScript(
@@ -9670,13 +9670,17 @@ static void Hit_Flush(void)
         if (loading || LookupForm(e->id) != (void *)e->ref) continue;
         if (e->snd && g_hrSndScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrSndScr, GetPlayer(), 2, e->ref, e->snd);
         if (e->dmg10 > 0 && g_hrDmgScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrDmgScr, GetPlayer(), 3, e->ref, e->dmg10, e->part);
-        if (e->dmg10 > 0 && e->weap && g_hrEnchScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, e->weap);   /* (its fire, shock, poison...) */
+        if (e->dmg10 > 0 && e->weap && g_hrEnchScr && g_scriptIntf->CallFunctionAlt) {   /* (its object effect: fire, shock, poison...) */
+            char *w = (char *)e->weap, *en = NULL;   /* TESObjectWEAP +0x74 TESEnchantableForm, its EnchantmentItem at +0x78 (checked against fnv_decomp) */
+            if (!IsBadReadPtr(w, 0x80)) { en = *(char **)(w + 0x78); if (en && (IsBadReadPtr(en, 0x10) || *(BYTE *)(en + 4) != 0x13)) en = NULL; }
+            if (en) g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, en);
+        }
         if (e->dmg10 > 0 && e->weap && g_hrCritScr && g_scriptIntf->CallFunctionAlt) {
             /* its critical effect (the Super-Heated Saturnite Fist's fire, ...): on a critical hit - the game's chance (your crit
                chance x the weapon's crit multiplier), and always on a knockout blow */
             char *w = (char *)e->weap, *ce = NULL; float cm = 1.0f;
             if (!IsBadReadPtr(w, 0x1D0)) { ce = *(char **)(w + 0x1CC); cm = *(float *)(w + 0x1C4);
-                if (ce && (IsBadReadPtr(ce, 0x10) || *(BYTE *)(ce + 4) != 0x14)) ce = NULL; }   /* (TESObjectWEAP criticalEffect: a SPEL) */
+                if (ce && (IsBadReadPtr(ce, 0x10) || *(BYTE *)(ce + 4) != 0x14)) ce = NULL; }   /* (TESObjectWEAP +0x1CC criticalEffect: a SPEL; +0x1C4 criticalPercent - checked against fnv_decomp) */
             static void *seenW[8]; static int ns = 0; bool seen = false;
             for (int q = 0; q < ns; q++) if (seenW[q] == w) seen = true;
             if (!seen && ns < 8) { seenW[ns++] = w; Log("Hit reactions: weapon %08X critical effect %s (crit multiplier %.2f)", *(uint32_t *)(w + 0x0C), ce ? "found - cast on critical hits" : "none", cm); }
