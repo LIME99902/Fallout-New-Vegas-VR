@@ -181,3 +181,11 @@ The voice add-on zip is `FNVR_Voice.exe` plus the unmodified `libvosk.dll`, `lib
 - Fallout: New Vegas © Bethesda Softworks / Obsidian Entertainment. This project is not affiliated with them.
 - xNVSE team, JIP LN NVSE, and every mod author in the [mod list](docs/MODLIST.md).
 - OpenVR © Valve Corporation.
+
+## License
+
+FNVVRMC is free software, licensed under the **[GNU General Public License v3.0](LICENSE)** (GPL-3.0).
+You may use, study, change and share it. If you release a modified version, its source must be released under the same license.
+
+Included third-party files keep their own licenses: `src/openvr_capi.h` and `openvr_api.dll` are © Valve Corporation under the BSD 3-Clause license (`openvr_LICENSE.txt` in the release zip).
+No Fallout: New Vegas game code or assets are included.

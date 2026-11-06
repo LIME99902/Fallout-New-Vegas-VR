@@ -1,5 +1,7 @@
 /*
  * FNVR - Fallout: New Vegas native VR plugin
+ * Copyright (C) LIME99902 and contributors. SPDX-License-Identifier: GPL-3.0-or-later
+ * This program is free software under the GNU GPL v3 or later - see LICENSE.
  *
  * Milestone 3a: show the game in the headset (mono, correct scale) via the SteamVR compositor.
  *
