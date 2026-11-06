@@ -11494,12 +11494,14 @@ typedef struct {
     float magOff[3];                         /* where it sits, in the gun hand's controller frame (m) */
     bool magOffOk;
     double ejectAt; float ejT[3]; M3 ejR;    /* the dropped magazine falling */
-    char *cylNode; char *slideNode;
+    char *cylNode, *slideNode, *pumpNode, *leverNode, *barrelNode, *itemNode[5];   /* (moving parts; shells / speedloader / round parts by item kind) */
+    double since; bool insOk; float insOff[3];     /* where things go in, measured on the gun's own shape (gun hand's controller frame, m) */
+    bool itemRestOk[5]; M3 itemRel[5]; float itemMid[5][3];
 } MRGun;
 static struct {
     MRGun g[2];                 /* 0 = the gun hand's gun, 1 = the other hand's gun */
     int itemHand, itemGun, item;/* a magazine / speedloader / shell in a hand */
-    bool rack; int rackGun, rackHand; float rackStart;
+    bool rack; int rackGun, rackHand; float rackStart, rackPull;
     bool gripRaw[2], gripPrev[2], eatGrip[2];
     bool btn[2], btnPrev[2];    /* B (gun hand's gun), Y (other hand's gun) */
     bool inPocket[2], nearGun[2];
@@ -11570,6 +11572,7 @@ static void MR_InsertPoint(int g, float *out)
     MRGun *G = &g_mr.g[g]; int h = MR_GunHand(g);
     float off[3];
     if (G->magOffOk && (G->cls == MRC_MAG || G->cls == MRC_CELL)) memcpy(off, G->magOff, 12);
+    else if (G->insOk) memcpy(off, G->insOff, 12);
     else {
         bool pistol = G->t == 3 || G->t == 4;
         float fw = 0.10f, up = 0.0f;
@@ -11778,7 +11781,7 @@ static void MR_Tick(void)
         if (base != G->base) {
             if (G->base && g == 0 && G->st != MRS_READY) Log("Reload: weapon changed in the middle of a reload");
             char *keepMag = G->magNode, *keepFor = G->magFor; (void)keepMag; (void)keepFor;
-            memset(G, 0, sizeof *G); G->base = base;
+            memset(G, 0, sizeof *G); G->base = base; G->since = now;
             if (base) { G->t = *(BYTE *)((char *)base + 0xF4); G->cls = MR_Classify(base, false);
                 double v = 0; static void *clipS = NULL; if (!clipS && g_scriptIntf && g_scriptIntf->CompileScript) clipS = g_scriptIntf->CompileScript("ref rWeap\nint iVal\nBegin Function { rWeap }\nset iVal to GetWeaponClipRounds rWeap\nSetFunctionValue iVal\nEnd\n");
                 G->clip = (clipS && Scr_Num(clipS, base, &v) && v >= 1 && v < 1000) ? (int)v : *(BYTE *)((char *)base + 0xB0); if (G->clip < 1) G->clip = 1;
@@ -11851,6 +11854,7 @@ static void MR_Tick(void)
             if (near_ && !g_mr.rack) g_mr.eatGrip[fh] = true;
             if (near_ && edge[fh] && !g_mr.rack) { g_mr.rack = true; g_mr.rackGun = g; g_mr.rackHand = fh; g_mr.rackStart = along; MR_Buzz(fh, 1000); }
             if (g_mr.rack && g_mr.rackGun == g) {
+                g_mr.rackPull = g_mr.rackStart - along;
                 if (!g_mr.gripRaw[fh]) g_mr.rack = false;
                 else if (g_mr.rackStart - along > 0.06f) {   /* pulled back 6 cm */
                     g_mr.rack = false; MR_SetRounds(g, G->stored); G->stored = 0; G->st = MRS_READY;
@@ -11880,8 +11884,14 @@ static void MR_PartsWalk(char *n, int depth, MRGun *G)
     if (depth > 0 && nm && !IsBadStringPtrA(nm, 64) && nm[0] && AsNode(n)) {
         char lo[64]; snprintf(lo, sizeof lo, "%s", nm); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
         if (!G->magNode && ((strstr(lo, "mag") && !strstr(lo, "magnum") && !strstr(lo, "image")) || (strstr(lo, "clip") && !strstr(lo, "clipping")))) G->magNode = n;
-        if (!G->cylNode && strstr(lo, "cylinder")) G->cylNode = n;
-        if (!G->slideNode && (strstr(lo, "slide") || strstr(lo, "bolt"))) G->slideNode = n;
+        else if (!G->cylNode && strstr(lo, "cylinder")) G->cylNode = n;
+        else if (!G->slideNode && (strstr(lo, "slide") || strstr(lo, "bolt") || strstr(lo, "charg"))) G->slideNode = n;
+        else if (!G->pumpNode && (strstr(lo, "pump") || strstr(lo, "forend") || strstr(lo, "fore end") || strstr(lo, "foregrip"))) G->pumpNode = n;
+        else if (!G->leverNode && strstr(lo, "lever")) G->leverNode = n;
+        else if (!G->barrelNode && strstr(lo, "barrel")) G->barrelNode = n;
+        else if (!G->itemNode[MRI_SPEED] && (strstr(lo, "speed") || strstr(lo, "loader"))) G->itemNode[MRI_SPEED] = n;
+        else if (!G->itemNode[MRI_SHELL] && strstr(lo, "shell") && !strstr(lo, "casing")) G->itemNode[MRI_SHELL] = n;
+        else if (!G->itemNode[MRI_ROUND] && (strstr(lo, "grenade") || strstr(lo, "rocket") || strstr(lo, "missile") || strstr(lo, "bullet") || strstr(lo, "cartridge") || strstr(lo, "nuke") || strstr(lo, "projectile"))) G->itemNode[MRI_ROUND] = n;
     }
     if (!AsNode(n)) return;
     char **kids = *(char ***)(n + 0xA0); unsigned kc = *(uint16_t *)(n + 0xA6);
@@ -11898,65 +11908,199 @@ static void MR_PlaceNode(char *n, const float *org, M3 W)
     for (int i = 0; i < 3; i++) Lt[i] = (PT[i][0] * d[0] + PT[i][1] * d[1] + PT[i][2] * d[2]) / sc;
     NodeUpdate(n);
 }
-static struct { char *n; float L[12]; bool hid, moved; } g_mrVis[2];
+/* every part moved or shown for one frame, put back right after drawing */
+#define MRV_MAX 12
+static struct { char *n; float L[12]; bool moved, hid, shown; } g_mrVis[MRV_MAX]; static int g_mrVisN = 0;
+static bool MR_Ok(char *n) { return n && !IsBadReadPtr(n, 0xB0) && *(void **)n; }
+static int MR_Save(char *n)
+{
+    for (int i = 0; i < g_mrVisN; i++) if (g_mrVis[i].n == n) return i;
+    if (g_mrVisN >= MRV_MAX) return -1;
+    int i = g_mrVisN++; g_mrVis[i].n = n; g_mrVis[i].moved = g_mrVis[i].hid = g_mrVis[i].shown = false;
+    memcpy(g_mrVis[i].L, n + NIAV_LOCAL_ROTATE, 36); memcpy(g_mrVis[i].L + 9, n + NIAV_LOCAL_TRANSLATE, 12);
+    return i;
+}
+static void MR_Move(char *n, const float *org, M3 W) { int i = MR_Save(n); if (i < 0) return; MR_PlaceNode(n, org, W); g_mrVis[i].moved = true; }
+static void MR_Hide(char *n) { int i = MR_Save(n); if (i < 0) return; if (!(*(uint32_t *)(n + 0x30) & 1)) { *(uint32_t *)(n + 0x30) |= 1; g_mrVis[i].hid = true; } }
+static void MR_Show(char *n) { int i = MR_Save(n); if (i < 0) return; if (*(uint32_t *)(n + 0x30) & 1) { *(uint32_t *)(n + 0x30) &= ~1u; g_mrVis[i].shown = true; } }
+/* a part's centre (its own frame) */
+static void MR_Mid(char *n, float *mid)
+{
+    uint32_t f = *(uint32_t *)(n + 0x30); *(uint32_t *)(n + 0x30) = f & ~1u;   /* (count it even while it's hidden) */
+    g_lgPtN = 0; LG_PtsWalk(n, NULL, NULL, 0);
+    *(uint32_t *)(n + 0x30) = f;
+    float c[3] = { 0, 0, 0 }; for (int k = 0; k < g_lgPtN; k++) for (int i = 0; i < 3; i++) c[i] += g_lgPts[k][i] / (float)g_lgPtN;
+    memcpy(mid, c, 12);
+}
+static void MR_WorldOf(char *n, const float *loc, float *w)
+{
+    const float *Wt = (const float *)(n + NIAV_WORLD_TRANSLATE), *Wr = (const float *)(n + NIAV_WORLD_ROTATE);
+    float sc = *(const float *)(n + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
+    for (int i = 0; i < 3; i++) w[i] = Wt[i] + sc * (Wr[i * 3] * loc[0] + Wr[i * 3 + 1] * loc[1] + Wr[i * 3 + 2] * loc[2]);
+}
+/* world point -> the gun hand's controller frame (m) */
+static void MR_ToHand(int h, const float *w, float *o)
+{
+    float d[3]; V3Sub(d, w, g_handW[h]);
+    for (int j = 0; j < 3; j++) o[j] = (g_handWR[h][0][j] * d[0] + g_handWR[h][1][j] * d[1] + g_handWR[h][2][j] * d[2]) / g_unitsPerMeter;
+}
+/* where things go into this gun, from its own shape (once it has been in the hand a moment) */
+static void MR_MeasureGun(int g, char *top)
+{
+    MRGun *G = &g_mr.g[g]; int h = MR_GunHand(g);
+    float f[3], u[3]; MR_GunAxes(f, u);   /* (gun forward / up, controller frame) */
+    float best[3] = { 0, 0, 0 }; bool ok = false;
+    if (G->cls == MRC_REVOLVER && MR_Ok(G->cylNode)) { float m[3], w[3]; MR_Mid(G->cylNode, m); MR_WorldOf(G->cylNode, m, w); MR_ToHand(h, w, best); ok = true; }
+    else if (G->cls == MRC_BREAK && MR_Ok(G->barrelNode)) {   /* the breech: the back end of the barrels */
+        g_lgPtN = 0; LG_PtsWalk(G->barrelNode, NULL, NULL, 0); float mn = 1e9f;
+        for (int k = 0; k < g_lgPtN; k++) { float w[3], o[3]; MR_WorldOf(G->barrelNode, g_lgPts[k], w); MR_ToHand(h, w, o); float a = V3Dot(o, f); if (a < mn) { mn = a; memcpy(best, o, 12); } }
+        ok = g_lgPtN > 0;
+    } else {
+        g_lgPtN = 0; LG_PtsWalk(top, NULL, NULL, 0);
+        float lo = 1e9f, sum[3] = { 0, 0, 0 }; int cnt = 0;
+        bool pistol = G->t == 3 || G->t == 4;
+        for (int k = 0; k < g_lgPtN; k++) {
+            float w[3], o[3]; MR_WorldOf(top, g_lgPts[k], w); MR_ToHand(h, w, o);
+            float a = V3Dot(o, f), up = V3Dot(o, u);
+            if (V3Len(o) > 0.8f) continue;
+            switch (G->cls) {
+            case MRC_MAG: case MRC_CELL:   /* the bottom of the grip (pistols) / just in front of the trigger guard (long guns) */
+                if ((pistol ? (a > -0.05f && a < 0.05f) : (a > 0.05f && a < 0.20f)) && up < lo) { lo = up; memcpy(best, o, 12); ok = true; } break;
+            case MRC_TUBE:                 /* the loading port: under the receiver, a hand's width in front of the grip */
+                if (a > 0.04f && a < 0.16f && up < lo) { lo = up; memcpy(best, o, 12); ok = true; } break;
+            case MRC_SINGLE: case MRC_BREAK: /* the breech: on top, just in front of the grip */
+                if (a > 0.02f && a < 0.14f && -up < lo) { lo = -up; memcpy(best, o, 12); ok = true; } break;
+            default:                       /* boxes / packs: the middle of the gun */
+                for (int i = 0; i < 3; i++) sum[i] += o[i]; cnt++; break;
+            }
+        }
+        if (cnt) { for (int i = 0; i < 3; i++) best[i] = sum[i] / cnt; ok = true; }
+        if (ok && (G->cls == MRC_TUBE || G->cls == MRC_MAG || G->cls == MRC_CELL)) for (int i = 0; i < 3; i++) best[i] -= u[i] * 0.02f;   /* (just under it) */
+    }
+    G->insOk = ok && V3Len(best) < 0.6f;
+    if (G->insOk) memcpy(G->insOff, best, 12);
+    Log("Reload: %s gun - where things go in %s (%.2f m in front, %.2f m up of the hand)", g ? "other hand's" : "gun hand's", G->insOk ? "measured on its shape" : "not found - guessed",
+        G->insOk ? V3Dot(best, f) : 0.0f, G->insOk ? V3Dot(best, u) : 0.0f);
+}
+/* the gun's forward / side in the world, from the gun hand */
+static void MR_GunWorldAxes(int h, float *fw, float *up, float *sd)
+{
+    float f[3], u[3]; MR_GunAxes(f, u);
+    for (int i = 0; i < 3; i++) { fw[i] = g_handWR[h][i][0] * f[0] + g_handWR[h][i][1] * f[1] + g_handWR[h][i][2] * f[2];
+                                  up[i] = g_handWR[h][i][0] * u[0] + g_handWR[h][i][1] * u[1] + g_handWR[h][i][2] * u[2]; }
+    V3Cross(sd, fw, up);   /* (to the gun's right) */
+}
+/* slide / bolt / pump slid back along the barrel */
+static void MR_Slide(char *n, const float *fw, float units)
+{
+    if (!MR_Ok(n) || units <= 0) return;
+    const float *Wt = (const float *)(n + NIAV_WORLD_TRANSLATE); M3 W; memcpy(W, n + NIAV_WORLD_ROTATE, sizeof W);
+    float org[3]; for (int i = 0; i < 3; i++) org[i] = Wt[i] - fw[i] * units;
+    MR_Move(n, org, W);
+}
+/* a part turned about an axis through a point (world) */
+static void MR_Turn(char *n, const float *axis, const float *pivot, float deg)
+{
+    if (!MR_Ok(n) || deg == 0) return;
+    float v[3]; for (int i = 0; i < 3; i++) v[i] = axis[i] * (deg / RAD2DEG);
+    M3 R, W, Wn; VecRot(v, R); memcpy(W, n + NIAV_WORLD_ROTATE, sizeof W); M3Mul(Wn, R, W);
+    const float *Wt = (const float *)(n + NIAV_WORLD_TRANSLATE); float d[3], org[3]; V3Sub(d, Wt, pivot);
+    for (int i = 0; i < 3; i++) org[i] = pivot[i] + R[i][0] * d[0] + R[i][1] * d[1] + R[i][2] * d[2];
+    MR_Move(n, org, Wn);
+}
+/* a part carried in the free hand's palm, turned the way it sat in the gun */
+static void MR_InHand(char *n, int fh, M3 rel, const float *mid)
+{
+    if (!MR_Ok(n) || !g_handWOk[fh]) return;
+    M3 W; M3Mul(W, g_handWR[fh], rel);
+    float palm[3]; Gun_Palm(fh, palm);
+    char *hb = g_bones[fh][B_HAND]; if (hb) { const float *Hb = (const float *)(hb + NIAV_WORLD_TRANSLATE); for (int i = 0; i < 3; i++) palm[i] += Hb[i] - g_handW[fh][i]; }
+    float sc = *(const float *)(n + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
+    float org[3]; for (int i = 0; i < 3; i++) org[i] = palm[i] - sc * (W[i][0] * mid[0] + W[i][1] * mid[1] + W[i][2] * mid[2]);
+    MR_Show(n); MR_Move(n, org, W);
+}
 /* g: 0 gun hand's gun (its first-person model), 1 the other hand's gun (its world model) */
 static void MR_VisualGun(int g, char *top)
 {
-    MRGun *G = &g_mr.g[g]; g_mrVis[g].n = NULL; g_mrVis[g].hid = g_mrVis[g].moved = false;
-    if (!g_mrOn || !G->base || !top) return;
-    if (G->magFor != top) { G->magFor = top; G->magNode = G->cylNode = G->slideNode = NULL; G->magMidOk = false; G->magOffOk = false; MR_PartsWalk(top, 0, G);
-        Log("Reload: %s gun model - magazine part %s, cylinder %s, slide/bolt %s", g ? "other hand's" : "gun hand's", G->magNode ? *(const char **)(G->magNode + 0x08) : "none",
-            G->cylNode ? "yes" : "no", G->slideNode ? "yes" : "no"); }
-    char *n = G->magNode; if (!n || IsBadReadPtr(n, 0xB0) || !*(void **)n) return;
-    int h = MR_GunHand(g); if (!g_handWOk[h]) return;
-    if (!G->magMidOk) {
-        g_lgPtN = 0; LG_PtsWalk(n, NULL, NULL, 0);
-        float c[3] = { 0, 0, 0 }; for (int k = 0; k < g_lgPtN; k++) for (int i = 0; i < 3; i++) c[i] += g_lgPts[k][i] / (float)(g_lgPtN ? g_lgPtN : 1);
-        memcpy(G->magMid, c, 12); G->magMidOk = true;
+    MRGun *G = &g_mr.g[g];
+    if (!g_mrOn || !G->base || !top || G->cls == MRC_NONE) return;
+    if (G->magFor != top) {
+        G->magFor = top; G->magNode = G->cylNode = G->slideNode = G->pumpNode = G->leverNode = G->barrelNode = NULL; memset(G->itemNode, 0, sizeof G->itemNode);
+        memset(G->itemRestOk, 0, sizeof G->itemRestOk); G->magMidOk = false; G->magOffOk = false; G->insOk = false; G->since = QpcMs();
+        MR_PartsWalk(top, 0, G);
+        Log("Reload: %s gun model parts - magazine %s, cylinder %s, slide/bolt %s, pump %s, lever %s, barrel %s, speedloader %s, shell %s, round %s", g ? "other hand's" : "gun hand's",
+            G->magNode ? *(const char **)(G->magNode + 0x08) : "-", G->cylNode ? *(const char **)(G->cylNode + 0x08) : "-", G->slideNode ? *(const char **)(G->slideNode + 0x08) : "-",
+            G->pumpNode ? *(const char **)(G->pumpNode + 0x08) : "-", G->leverNode ? *(const char **)(G->leverNode + 0x08) : "-", G->barrelNode ? *(const char **)(G->barrelNode + 0x08) : "-",
+            G->itemNode[MRI_SPEED] ? *(const char **)(G->itemNode[MRI_SPEED] + 0x08) : "-", G->itemNode[MRI_SHELL] ? *(const char **)(G->itemNode[MRI_SHELL] + 0x08) : "-",
+            G->itemNode[MRI_ROUND] ? *(const char **)(G->itemNode[MRI_ROUND] + 0x08) : "-");
     }
-    const float *Wt = (const float *)(n + NIAV_WORLD_TRANSLATE); const float *Wr = (const float *)(n + NIAV_WORLD_ROTATE);
-    float sc = *(const float *)(n + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
-    if (G->st == MRS_READY || G->st == MRS_RACK) {   /* in the gun: where it goes in, kept in the gun hand's frame */
-        float cw[3]; for (int i = 0; i < 3; i++) cw[i] = Wt[i] + sc * (Wr[i * 3] * G->magMid[0] + Wr[i * 3 + 1] * G->magMid[1] + Wr[i * 3 + 2] * G->magMid[2]);
-        float d[3]; V3Sub(d, cw, g_handW[h]);
-        for (int j = 0; j < 3; j++) G->magOff[j] = (g_handWR[h][0][j] * d[0] + g_handWR[h][1][j] * d[1] + g_handWR[h][2][j] * d[2]) / g_unitsPerMeter;
-        G->magOffOk = V3Len(G->magOff) < 0.5f;
-        M3 HT, Wm; M3T(HT, g_handWR[h]); memcpy(Wm, Wr, sizeof Wm); M3Mul(G->magRel, HT, Wm);
-        memcpy(G->ejT, Wt, 12); memcpy(G->ejR, Wr, sizeof G->ejR); G->magWOk = true;
-        return;
+    int h = MR_GunHand(g), fh = 1 - h; if (!g_handWOk[h]) return;
+    double now = QpcMs();
+    if (!G->insOk && G->st == MRS_READY && now - G->since > 700.0) { MR_MeasureGun(g, top); if (!G->insOk) G->insOk = false; G->since = now + 1e9; }
+    float fw[3], up[3], sd[3]; MR_GunWorldAxes(h, fw, up, sd);
+    float U = g_unitsPerMeter;
+    /* the magazine */
+    char *n = G->magNode;
+    if (MR_Ok(n)) {
+        if (!G->magMidOk) { MR_Mid(n, G->magMid); G->magMidOk = true; }
+        if (G->st == MRS_READY || G->st == MRS_RACK) {   /* in the gun: remember how it sits */
+            float cw[3]; MR_WorldOf(n, G->magMid, cw); MR_ToHand(h, cw, G->magOff); G->magOffOk = V3Len(G->magOff) < 0.5f;
+            M3 HT, Wm; M3T(HT, g_handWR[h]); memcpy(Wm, n + NIAV_WORLD_ROTATE, sizeof Wm); M3Mul(G->magRel, HT, Wm);
+            memcpy(G->ejT, n + NIAV_WORLD_TRANSLATE, 12); memcpy(G->ejR, n + NIAV_WORLD_ROTATE, sizeof G->ejR); G->magWOk = true;
+        } else if (G->st == MRS_MAGOUT) {
+            double ft = (now - G->ejectAt) / 1000.0;
+            if (g_mr.item == MRI_MAG && g_mr.itemGun == g && g_mr.itemHand == fh && G->magWOk) MR_InHand(n, fh, G->magRel, G->magMid);   /* the new one in your free hand */
+            else if (G->magWOk && ft >= 0 && ft < 0.6) { float org[3]; memcpy(org, G->ejT, 12); org[2] -= (float)(0.5 * 9.8 * ft * ft) * U; MR_Move(n, org, G->ejR); }   /* dropping out */
+            else MR_Hide(n);
+        }
     }
-    if (G->st != MRS_MAGOUT) return;
-    g_mrVis[g].n = n; memcpy(g_mrVis[g].L, n + NIAV_LOCAL_ROTATE, 36); memcpy(g_mrVis[g].L + 9, n + NIAV_LOCAL_TRANSLATE, 12);
-    int fh = 1 - h;
-    if (g_mr.item == MRI_MAG && g_mr.itemGun == g && g_mr.itemHand == fh && g_handWOk[fh] && G->magWOk) {   /* in the free hand */
-        M3 W; M3Mul(W, g_handWR[fh], G->magRel);
-        float palm[3]; Gun_Palm(fh, palm);
-        char *hb = g_bones[fh][B_HAND]; if (hb) { const float *Hb = (const float *)(hb + NIAV_WORLD_TRANSLATE); for (int i = 0; i < 3; i++) palm[i] += Hb[i] - g_handW[fh][i]; }
-        float org[3]; for (int i = 0; i < 3; i++) org[i] = palm[i] - sc * (W[i][0] * G->magMid[0] + W[i][1] * G->magMid[1] + W[i][2] * G->magMid[2]);
-        MR_PlaceNode(n, org, W); g_mrVis[g].moved = true;
-        return;
+    /* shells / speedloader / round in your free hand (when the model has such a part) */
+    for (int k = MRI_SPEED; k <= MRI_ROUND; k++) {
+        char *p = G->itemNode[k]; if (!MR_Ok(p)) continue;
+        if (!G->itemRestOk[k]) { MR_Mid(p, G->itemMid[k]); M3 HT, Wp; M3T(HT, g_handWR[h]); memcpy(Wp, p + NIAV_WORLD_ROTATE, sizeof Wp); M3Mul(G->itemRel[k], HT, Wp); G->itemRestOk[k] = true; }
+        if (g_mr.item == k && g_mr.itemGun == g && g_mr.itemHand == fh) MR_InHand(p, fh, G->itemRel[k], G->itemMid[k]);
     }
-    double ft = (QpcMs() - G->ejectAt) / 1000.0;
-    if (G->magWOk && ft >= 0 && ft < 0.6) {   /* falling out */
-        float org[3]; memcpy(org, G->ejT, 12); org[2] -= (float)(0.5 * 9.8 * ft * ft) * g_unitsPerMeter;
-        MR_PlaceNode(n, org, G->ejR); g_mrVis[g].moved = true;
-        return;
+    /* the slide / bolt: locked back while empty with the magazine out or waiting to be worked; follows your pull */
+    bool racking = g_mr.rack && g_mr.rackGun == g;
+    float pull = racking ? fminf(fmaxf(g_mr.rackPull, 0.0f), 0.06f) / 0.06f : 0.0f;
+    char *sl = G->cls == MRC_TUBE ? (G->pumpNode ? G->pumpNode : G->leverNode ? NULL : G->slideNode) : G->slideNode;
+    if (MR_Ok(sl) && !(g == 1 && g_lgMotion && !racking)) {   /* (the other hand's gun already locks its slide back when empty) */
+        float travel = sl == G->pumpNode ? 4.0f : sl == G->slideNode && G->t <= 4 ? 1.8f : 2.6f;
+        float e = racking ? pull : ((G->st == MRS_RACK || (G->st == MRS_MAGOUT && MR_Rounds(g) <= 0)) && G->cls != MRC_TUBE) ? 1.0f : 0.0f;
+        MR_Slide(sl, fw, travel * e);
     }
-    if (!(*(uint32_t *)(n + 0x30) & 1)) { *(uint32_t *)(n + 0x30) |= 1; g_mrVis[g].hid = true; }
+    if (G->cls == MRC_TUBE && MR_Ok(G->leverNode) && racking) {   /* the lever swings down as you work it */
+        float piv[3]; memcpy(piv, G->leverNode + NIAV_WORLD_TRANSLATE, 12);
+        MR_Turn(G->leverNode, sd, piv, -50.0f * pull);
+    }
+    /* the cylinder swings out to the side while open */
+    if (G->cls == MRC_REVOLVER && G->st == MRS_OPEN && MR_Ok(G->cylNode)) {
+        float m[3], c[3]; MR_Mid(G->cylNode, m); MR_WorldOf(G->cylNode, m, c);
+        float side = g_leftHanded ? -1.0f : 1.0f; if (g == 1) side = -side;   /* (out to the left of a right-hand gun) */
+        float piv[3]; for (int i = 0; i < 3; i++) piv[i] = c[i] - up[i] * 0.9f - sd[i] * 0.5f * side;
+        MR_Turn(G->cylNode, fw, piv, 80.0f * side);
+    }
+    /* a break-action's barrels tip down while open */
+    if (G->cls == MRC_BREAK && G->st == MRS_OPEN && MR_Ok(G->barrelNode)) {
+        float piv[3]; memcpy(piv, G->barrelNode + NIAV_WORLD_TRANSLATE, 12);
+        MR_Turn(G->barrelNode, sd, piv, -35.0f);
+    }
 }
 static void MR_Visual(void)
 {
+    g_mrVisN = 0;
     MR_VisualGun(0, g_weaponNode);
     MR_VisualGun(1, g_lg.on && !g_lg.melee && g_lg.ref ? LG_Root(g_lg.ref) : NULL);
 }
 static void MR_VisualRestore(void)
 {
-    for (int g = 0; g < 2; g++) {
-        char *n = g_mrVis[g].n; if (!n || IsBadReadPtr(n, 0xB0) || !*(void **)n) continue;
-        if (g_mrVis[g].moved) { memcpy(n + NIAV_LOCAL_ROTATE, g_mrVis[g].L, 36); memcpy(n + NIAV_LOCAL_TRANSLATE, g_mrVis[g].L + 9, 12); }
-        if (g_mrVis[g].hid) *(uint32_t *)(n + 0x30) &= ~1u;
-        g_mrVis[g].n = NULL; g_mrVis[g].hid = g_mrVis[g].moved = false;
+    for (int i = g_mrVisN - 1; i >= 0; i--) {
+        char *n = g_mrVis[i].n; if (!MR_Ok(n)) continue;
+        if (g_mrVis[i].moved) { memcpy(n + NIAV_LOCAL_ROTATE, g_mrVis[i].L, 36); memcpy(n + NIAV_LOCAL_TRANSLATE, g_mrVis[i].L + 9, 12); }
+        if (g_mrVis[i].hid) *(uint32_t *)(n + 0x30) &= ~1u;
+        if (g_mrVis[i].shown) *(uint32_t *)(n + 0x30) |= 1u;
     }
+    g_mrVisN = 0;
 }
 
 /* ---- Fingers behind the other hand's weapon are hidden by it -----------------------------------------------------------

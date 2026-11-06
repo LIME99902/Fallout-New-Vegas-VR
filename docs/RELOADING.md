@@ -49,7 +49,16 @@ For each: does the step happen, does it feel right, and what does `FNVR.log` say
 9. **Dual wield** (two revolvers): open/drop, gun to the pocket.
 10. **Left-hand gun alone** (right hand empty): Y, right hand to the left pocket, into the left gun.
 
-## Known limits (first version)
-- Speedloaders and shells don't show in your hand yet (magazines do, when the gun's model has a separate magazine part).
-- The slide / pump / cylinder don't move yet while you work them - you feel and hear it instead.
-- Spot where things go in is guessed per kind of gun unless the model has a magazine part - adjust with *Reload: how close to the gun*.
+## What you see
+- **Magazines** drop out of the gun, and the new one sits in your free hand on its way in (when the gun's model has a magazine part).
+- **Shells, speedloaders, rounds** show in your hand when the gun's model has such a part (many first-person models carry them for the
+  game's reload animation). The log lists what each gun's model has: `Reload: gun hand's gun model parts - ...`.
+- **Slides and bolts** lock back when the gun is empty with the magazine out, and follow your hand as you pull them. **Pumps** slide
+  back and **levers** swing down as you work them. **Cylinders** swing out to the side while open; **break-action barrels** tip down.
+- **Where things go in** is measured on each gun's own shape the first time you hold it: the magazine's own spot, the cylinder, the
+  bottom of a pistol grip, the well in front of a rifle's trigger, a shotgun's loading port, the breech. The log says what it found:
+  `Reload: ... where things go in measured on its shape (x m in front, y m up of the hand)`.
+
+## Still limited
+- A gun whose model has no shell / speedloader part shows nothing in your hand for those (you still feel and hear them).
+- Moving parts only move when the model names them in a way FNVR recognises (slide, bolt, charging handle, pump, forend, lever, cylinder, barrel).
