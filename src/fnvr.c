@@ -278,6 +278,7 @@ static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket 
 static float g_mrPocketSide = 0.14f, g_mrPocketDown = 0.70f, g_mrPocketFwd = 0.10f, g_mrPocketR = 0.13f, g_mrLoadR = 0.10f;
 static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
 static bool g_olOn = true;   /* [Reload] bOutlines */ static void Ol_Draw(IDirect3DDevice9 *dev); static void Ol_Collect(char *cam);
+static void Pf_Blow(int h); static void Pf_Visual(void);
 static void MR_LeftHud(char *out, size_t n); static bool MR_LeftBlocksAutoReload(void); static void InstallReloadHook(void);
 static bool LG_PoseNow(float *org, M3 W, float *aim);   /* (the other hand's weapon as last drawn - for shots and blows) */
 static struct { bool pending; int rounds; double at; } g_lgToRight;
@@ -1423,8 +1424,7 @@ static void Melee_Update(bool menu)
     float sp = g_vrHandOk[aim] ? g_handSpeed[aim] : 0.0f;
     if (wt == -1 && g_vrHandOk[off]) sp = fmaxf(sp, g_handSpeed[off]);   /* fists: either hand punches */
     DWORD now = GetTickCount();
-    if (g_contactDmg && g_hitReact && !PlayerWeaponAutomatic() && QpcMs() - g_hrNoBodyAt > 2000.0 && wt != 0) return;   /* (power fists and other hand-to-hand weapons: the game's own punch
-                                                                                                                 still runs - its piston / blast animation, its damage and its critical effects) */   /* (your blows do the damage themselves - unless someone
+    if (g_contactDmg && g_hitReact && !PlayerWeaponAutomatic() && QpcMs() - g_hrNoBodyAt > 2000.0) return;   /* (your blows do the damage themselves - unless someone
                                                                                                                  close by has a body FNVR can't find parts on: then the game's swing hits them) */
     if (sp > g_swingSpeed && now - g_lastSwing > 450) {
         g_lastSwing = now;
@@ -9630,7 +9630,7 @@ static bool Hit_Scripts(void)
     for (int i = 0; i < 4; i++) { char b[128]; snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho %d\nEnd\n", force[i]); g_hrPushScr[i] = g_scriptIntf->CompileScript(b); }
     g_hrKoPushScr = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho 4\nEnd\n");
     /* the weapon's own effect on whoever it hits (super-heated fire, shock, poison, bleeding...) - its enchantment, cast on them */
-    g_hrCritScr = g_scriptIntf->CompileScript("ref rWho\nref rS\nint iM\nint iR\nfloat fC\nBegin Function { rWho, rS, iM }\nset fC to player.GetAV CritChance\nset fC to fC * iM\nset fC to fC / 100\nset iR to GetRandomPercent\nif iR < fC\nrWho.CastImmediateOnSelf rS\nendif\nEnd\n");
+    g_hrCritScr = g_scriptIntf->CompileScript("ref rW\nfloat fC\nBegin Function { rW }\nset fC to player.GetAV CritChance\nSetFunctionValue fC\nEnd\n");   /* (your crit chance; the roll is done here) */
     Log("Hit reactions: critical effects %s", g_hrCritScr ? "ok" : "FAILED");
     g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rE\nBegin Function { rWho, rE }\nrWho.CastImmediateOnSelf rE\nEnd\n");
     g_hrSndScr = g_scriptIntf->CompileScript("ref rWho\nref rSnd\nBegin Function { rWho, rSnd }\nrWho.PlaySound3D rSnd\nEnd\n");
@@ -9691,7 +9691,7 @@ static void Hit_Flush(void)
             if (!IsBadReadPtr(w, 0x80)) { en = *(char **)(w + 0x78); if (en && (IsBadReadPtr(en, 0x10) || *(BYTE *)(en + 4) != 0x13)) en = NULL; }
             if (en) g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, en);
         }
-        if (e->dmg10 > 0 && e->weap && g_hrCritScr && g_scriptIntf->CallFunctionAlt) {
+        if (e->dmg10 > 0 && e->weap && g_hrEnchScr && g_scriptIntf->CallFunctionAlt) {
             /* its critical effect (the Super-Heated Saturnite Fist's fire, ...): on a critical hit - the game's chance (your crit
                chance x the weapon's crit multiplier), and always on a knockout blow */
             char *w = (char *)e->weap, *ce = NULL; float cm = 1.0f;
@@ -9701,8 +9701,12 @@ static void Hit_Flush(void)
             for (int q = 0; q < ns; q++) if (seenW[q] == w) seen = true;
             if (!seen && ns < 8) { seenW[ns++] = w; Log("Hit reactions: weapon %08X critical effect %s (crit multiplier %.2f)", *(uint32_t *)(w + 0x0C), ce ? "found - cast on critical hits" : "none", cm); }
             if (ce) {
-                int mult = (e->action == HA_KO) ? 100000 : (int)(fminf(fmaxf(cm, 0.0f), 50.0f) * 100.0f);
-                g_scriptIntf->CallFunctionAlt(g_hrCritScr, GetPlayer(), 3, e->ref, ce, mult);
+                static double crit = 5.0, critAt = 0; double v = 0;   /* (your crit chance, checked now and then) */
+                if (QpcMs() > critAt) { critAt = QpcMs() + 3000.0; if (g_hrCritScr && Scr_Num(g_hrCritScr, e->weap, &v) && v >= 0 && v <= 100) crit = v; }
+                double chance = e->action == HA_KO ? 100.0 : crit * fminf(fmaxf(cm, 0.0f), 50.0f);
+                bool isCrit = (double)(rand() % 1000) < chance * 10.0;
+                static int cl = 0; if (cl++ < 20) Log("Hit reactions: critical roll %.0f%% - %s", chance, isCrit ? "CRITICAL, effect cast" : "no");
+                if (isCrit) g_scriptIntf->CallFunctionAlt(g_hrEnchScr, GetPlayer(), 2, e->ref, ce);   /* (the same cast-on-them as object effects) */
             }
         }
         if (e->action == HA_PUSH || e->action == HA_KO) {
@@ -9998,8 +10002,7 @@ static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float 
     else if (canKnock && kind == HK_LEG && I >= kd * 0.6f) { action = HA_PUSH; lvl = 0; }   /* legs taken out: down they go */
     bool stagger = !action && I >= kd * 0.45f;
     int dmg10 = 0;
-    bool gamePunch = !g_hrStrikeW && h == (g_leftHanded ? 0 : 1) && PlayerWeaponType() == 0;   /* (a power fist in the gun hand: the game's own punch does the damage) */
-    if (g_contactDmg && armed && A->alive && !gamePunch) {
+    if (g_contactDmg && armed && A->alive) {
         int wt = PlayerWeaponType();
         float base = g_hrStrikeW ? Hit_BaseDamageOf(g_hrStrikeW, *(BYTE *)((char *)g_hrStrikeW + 0xF4), 1) : Hit_BaseDamage(wt), spdF = fminf(fmaxf(I / 3.0f, 0.35f), 1.6f);
         float pm = part == 1 ? 1.6f : part == 0 ? 1.0f : 0.7f;
@@ -10012,6 +10015,7 @@ static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float 
                        action == HA_KO ? ", knocked out" : action == HA_PUSH ? (lvl == 0 ? ", legs taken out" : ", knocked flying") : stagger ? ", staggered" : "");
     A->lastHit = now;
     Hit_Buzz(h, stab ? I + 3.0f : I);
+    if (armed) Pf_Blow(h);   /* (a power fist's piston fires with the blow) */
     void *snd = NULL;   /* the weapon's own impact sound on flesh */
     if (g_hitSounds && dmg10 > 0) snd = Hit_ImpactSound(g_hrStrikeW ? g_hrStrikeW : PlayerWeaponType() == -1 ? NULL : PlayerWeaponForm());
     if (dmg10 || action || snd) Hit_Queue(A, dmg10, part, action, lvl, snd);
@@ -12106,6 +12110,58 @@ static void MR_VisualRestore(void)
         if (g_mrVis[i].shown) *(uint32_t *)(n + 0x30) |= 1u;
     }
     g_mrVisN = 0;
+}
+/* ---- Power fists (in either hand): the piston fires when a blow lands -------------------------------------------------
+   Your blows do their damage where they land, so the game's own punch (which played the fist's animation) doesn't run.
+   Instead, when a power fist / hand-to-hand weapon lands a blow, its moving part (found by name: piston, plunger, ram,
+   spike, pump, slide, bolt, barrel) shoots out along the punch and springs back; a model without one jolts in the hand.
+   The weapon's object effect and critical effect (the Super-Heated fist's fire) are cast by the blow itself (Hit_Flush). */
+static double g_pfAt[2];
+static struct { char *top, *part; } g_pf[2];
+static void Pf_Blow(int h)
+{
+    if (h < 0 || h > 1) return;
+    int amH = g_leftHanded ? 0 : 1;
+    bool fist = h == amH ? (PlayerWeaponType() == 0) : (g_lg.on && g_lg.melee && g_lg.base && *(BYTE *)((char *)g_lg.base + 0xF4) == 0);
+    if (fist) g_pfAt[h] = QpcMs();
+}
+static char *Pf_Find(char *n, int depth, char *names, size_t *L)
+{
+    if (!n || depth > 10 || IsBadReadPtr(n, 0xB0)) return NULL;
+    const char *nm = *(const char **)(n + 0x08); char *hit = NULL;
+    if (depth > 0 && nm && !IsBadStringPtrA(nm, 64) && nm[0]) {
+        if (*L < 900) *L += (size_t)snprintf(names + *L, 1024 - *L, "%s%s", *L ? ", " : "", nm);
+        char lo[64]; snprintf(lo, sizeof lo, "%s", nm); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
+        static const char *const w[] = { "piston", "plunger", "ram", "spike", "pump", "slide", "bolt", "barrel", "punch", NULL };
+        for (int i = 0; w[i] && AsNode(n); i++) if (strstr(lo, w[i]) && !strstr(lo, "frame")) { hit = n; break; }
+    }
+    if (!AsNode(n)) return NULL;
+    char **kids = *(char ***)(n + 0xA0); unsigned kc = *(uint16_t *)(n + 0xA6);
+    for (unsigned i = 0; kids && i < kc && i < 64; i++) { char *r = Pf_Find(kids[i], depth + 1, names, L); if (r && !hit) hit = r; }
+    return hit;
+}
+static void Pf_Visual(void)
+{
+    int amH = g_leftHanded ? 0 : 1;
+    double now = QpcMs();
+    for (int h = 0; h < 2; h++) {
+        float ts = (float)(now - g_pfAt[h]); if (g_pfAt[h] <= 0 || ts > 260.0f || !g_handWOk[h]) continue;
+        char *top = h == amH ? (PlayerWeaponType() == 0 ? g_weaponNode : NULL) : (g_lg.on && g_lg.melee && g_lg.ref ? LG_Root(g_lg.ref) : NULL);
+        if (!MR_Ok(top)) continue;
+        if (g_pf[h].top != top) {
+            g_pf[h].top = top; static char names[1024]; size_t L = 0; names[0] = 0;
+            g_pf[h].part = Pf_Find(top, 0, names, &L);
+            Log("Power fist (%s hand): moving part %s (model parts: %s)", h ? "right" : "left", g_pf[h].part ? *(const char **)(g_pf[h].part + 0x08) : "none - the whole fist jolts", names);
+        }
+        /* out fast (35 ms), back with a spring (225 ms) */
+        float e = ts < 35.0f ? ts / 35.0f : expf(-(ts - 35.0f) / 70.0f) * cosf((ts - 35.0f) / 225.0f * 1.5708f);
+        float fw[3]; for (int i = 0; i < 3; i++) fw[i] = -g_handWR[h][i][2];   /* (the punch: the way the fist points) */
+        char *n = MR_Ok(g_pf[h].part) ? g_pf[h].part : top;
+        float dist = n == top ? -1.3f * e : 3.0f * e;   /* (the piston shoots out; a fist without one kicks back) */
+        const float *Wt = (const float *)(n + NIAV_WORLD_TRANSLATE); M3 W; memcpy(W, n + NIAV_WORLD_ROTATE, sizeof W);
+        float org[3]; for (int i = 0; i < 3; i++) org[i] = Wt[i] + fw[i] * dist;
+        MR_Move(n, org, W);
+    }
 }
 
 /* ---- Fingers behind the other hand's weapon are hidden by it -----------------------------------------------------------
@@ -14463,6 +14519,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             Grab_Visual();
             LG_Visual();
             MR_Visual();   /* (manual reloading: the magazine out, in your hand) */
+            Pf_Visual();   /* (power fists: the piston fires when a blow lands) */
             if (armsDone) MeleeAngle_Apply();
             if (armsDone) Lighter_Apply((char *)player);   /* (the dynamite's lighter in your other hand) */
             if (armsDone) { RG_Capture(); Barrel_Capture(); }
