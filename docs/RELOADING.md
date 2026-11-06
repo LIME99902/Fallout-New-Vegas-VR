@@ -1,0 +1,55 @@
+# Manual reloading (2.3.0)
+
+Every gun is reloaded by hand. Your **ammo pocket is on your left hip**, at the front of the hip where a trouser pocket is
+(on the right hip if you play left-handed). Your controller buzzes lightly when your hand is in it and there's something to take.
+
+Turn it off in the VR settings: **Weapons → Manual reloading** (`[Reload] bManualReload=0`). The game then reloads for you as before.
+The pocket can be moved under **Holsters & gestures → Ammo pocket** (below eyes / to the side / in front / size).
+
+| Gun | How to reload |
+|---|---|
+| **Magazine guns** (pistols, SMGs, rifles) | **B** drops the magazine (**Y** for the left-hand gun). Reach into the pocket with your free hand, **squeeze the grip** to take a magazine, keep holding it and **push it into the gun** where the magazine goes. If you shot the gun empty, **pull the slide / charging handle back** with your free hand (grip near the gun, pull back 6 cm), or just press **B**. |
+| **Energy weapons** (cells) | Same as magazines, no slide to pull. |
+| **Heavy weapons** (minigun, flamer, launchers with a magazine) | Same, with an ammo box or pack - touch it anywhere to the gun. |
+| **Revolvers** | **B** swings the cylinder out. Take a **speedloader** from the pocket, push it into the cylinder. **B** swings it shut. |
+| **Tube shotguns, lever-action rifles** | Take a **shell** from the pocket and push it into the loading port under the gun - one at a time. If it was empty, **pump / work the lever** afterwards (pull back with your free hand, or press **B**). |
+| **Break-action shotguns** (Caravan, sawed-off) | **B** breaks it open. Take shells from the pocket, push them into the breech. **B** snaps it shut. |
+| **Single-shot weapons** | Take a round from the pocket and push it into the breech. |
+
+**Dual wielding** (a gun in each hand, so neither hand is free): drop the magazine / open the gun as usual, then **touch the gun itself to your left pocket** - it's reloaded (and closed, and racked).
+
+A round stays in the chamber when you drop a magazine from a gun that still had rounds in it, so you can still fire that one shot.
+A half-full magazine you drop isn't lost: its rounds stay in your inventory.
+
+## How it decides what kind a gun is
+From the weapon's type, its name and its model: a part called *cylinder* or a name like *revolver / magnum / Sequoia* is a revolver;
+*shotgun / lever / repeater / brush gun / trail carbine...* loads shell by shell (except the Riot Shotgun's drum); *sawed-off / Caravan /
+double-barrel* is a break-action; one round per load is single-shot; energy weapons use cells; miniguns, flamers and launchers use boxes.
+The log says what it picked: `Reload: gun hand's gun <name> - <kind> reload, <n> rounds`.
+
+If a gun gets the wrong kind, set it in `FNVR.ini`:
+
+```ini
+[ReloadTypes]
+; the weapon's form ID (8 hex digits) = mag | cell | box | revolver | tube | break | single
+000E3778=revolver
+```
+
+## Test checklist (one type at a time)
+For each: does the step happen, does it feel right, and what does `FNVR.log` say (lines starting `Reload:`)?
+
+1. **Magazine pistol** (9mm Pistol): B drops the mag (it falls out), pocket grab, push into the grip, fire. Then empty it fully: B, new mag, rack the slide.
+2. **Magazine rifle / SMG** (Varmint Rifle, Service Rifle, 9mm SMG): same - is the spot where the mag goes in right?
+3. **Energy pistol / rifle** (Laser Pistol, Laser Rifle): no rack needed.
+4. **Revolver** (Ranger Sequoia, .357): B open, speedloader, B close.
+5. **Tube shotgun** (Hunting Shotgun) and **lever-action** (Cowboy Repeater): shell by shell, pump when empty.
+6. **Break-action** (Caravan Shotgun, Sawed-off): B open, shells, B close.
+7. **Single-shot** (Grenade Rifle): one round in.
+8. **Heavy** (Minigun, Flamer): box to the gun.
+9. **Dual wield** (two revolvers): open/drop, gun to the pocket.
+10. **Left-hand gun alone** (right hand empty): Y, right hand to the left pocket, into the left gun.
+
+## Known limits (first version)
+- Speedloaders and shells don't show in your hand yet (magazines do, when the gun's model has a separate magazine part).
+- The slide / pump / cylinder don't move yet while you work them - you feel and hear it instead.
+- Spot where things go in is guessed per kind of gun unless the model has a magazine part - adjust with *Reload: how close to the gun*.
