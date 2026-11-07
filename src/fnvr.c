@@ -16302,7 +16302,32 @@ static const char *const g_setPageName[SP_COUNT] = { "FNVR SETTINGS", "BODY & PR
                                                      "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC", "ADVANCED: HEADSET & CONTROLS" };
 enum { ST_BOOL, ST_FLOAT, ST_INT, ST_PAGE, ST_ACTION, ST_SIGN, ST_PROFILE, ST_INFO, ST_CHOICE, ST_RES };
 enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16, SF_MELEE = 32, SF_HOLM = 64 };
-enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP };
+enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP, SA_REQ };
+/* ---- Setup check: is everything FNVVRMC needs actually loaded? (shown first on the startup screen, and in the log) ---- */
+static char g_reqLabel[96] = "Setup check", g_reqDesc[700] = "Checking what's installed...";
+static int  g_reqMissing = 0;
+static void Req_Check(void)
+{
+    static const struct { const char *dll, *name, *why; bool must; } R[] = {
+        { "jip_nvse.dll", "JIP LN NVSE", "scopes, climbing, holsters, quick-loot, reloading", true },
+        { "johnnyguitar.dll", "JohnnyGuitar NVSE", "script functions", true },
+        { "ShowOffNVSE.dll", "ShowOff xNVSE", "script functions", true },
+        { "kNVSE.dll", "kNVSE", "animations", false },
+        { "NVTF.dll", "NVTF (New Vegas Tick Fix)", "smooth frame pacing", false },
+    };
+    char miss[600] = ""; size_t L = 0; int must = 0, opt = 0;
+    for (size_t i = 0; i < sizeof R / sizeof R[0]; i++) if (!GetModuleHandleA(R[i].dll)) {
+        L += (size_t)snprintf(miss + L, sizeof miss - L, "%s%s (%s)", L ? ", " : "", R[i].name, R[i].why); if (R[i].must) must++; else opt++; }
+    MEMORYSTATUSEX ms; ms.dwLength = sizeof ms; bool big = GlobalMemoryStatusEx(&ms) && ms.ullTotalVirtual > 3000ull * 1024 * 1024;   /* (the 4GB patch: the game may use more than 2 GB) */
+    if (!big) { L += (size_t)snprintf(miss + L, sizeof miss - L, "%sthe 4GB Patch (without it the game runs out of memory and crashes)", L ? ", " : ""); must++; }
+    g_reqMissing = must + opt;
+    if (!g_reqMissing) { snprintf(g_reqLabel, sizeof g_reqLabel, "Setup check: everything is installed"); snprintf(g_reqDesc, sizeof g_reqDesc, "xNVSE, JIP LN, JohnnyGuitar, ShowOff, kNVSE, NVTF and the 4GB patch are all working."); }
+    else {
+        snprintf(g_reqLabel, sizeof g_reqLabel, "Setup check: %d MISSING - select for details", g_reqMissing);
+        snprintf(g_reqDesc, sizeof g_reqDesc, "Missing: %s. Run FNVVRMC-Setup.exe (on the mod's download page) to install them in one go, or get them from Nexus.", miss);
+    }
+    Log("Setup check: %s%s", g_reqMissing ? "MISSING " : "all installed", g_reqMissing ? miss : "");
+}
 #define GFX_HEADSETS "From SteamVR (auto)|Meta Quest 3|Meta Quest 3S / Quest 2|Meta Quest Pro|Meta Quest 1|Pico 4 / 4 Ultra|Valve Index|HTC Vive|HTC Vive Pro / Pro 2|HP Reverb G2|Windows Mixed Reality|Oculus Rift / Rift S|Pimax / Bigscreen Beyond"
 static int g_gfxResPct = 0;   /* [Startup] iResolutionPercent: 0 = from your PC tier, else this much of the headset's own sharpness */
 typedef struct {
@@ -16310,6 +16335,7 @@ typedef struct {
     float mn, mx, step; const char *fmt; int flags, arg; const char *help;
 } SetOpt;
 static const SetOpt g_setOpts[] = {
+    { SP_START, ST_ACTION, g_reqLabel, 0, 0, 0, 0, 0, 0, 0, 0, SA_REQ, g_reqDesc },
     { SP_START, ST_PROFILE, "Who's playing", 0, 0, 0, 0, 0, 0, 0, 0, 0, "Pick your profile with left/right. A profile that isn't calibrated yet is a new player - up to four, each with their own body, play style and hand." },
     { SP_START, ST_BOOL, "Play style", 0, 0, &g_seated, 0, 0, 0, 0, SF_PROFILE | SF_BODY, 0, "STANDING: play on your feet - really crouch to reach low things. SEATED: play sitting down at your character's full height; hold the right stick DOWN to crouch and reach low things." },
     { SP_START, ST_BOOL, "Left-handed", 0, 0, &g_leftHanded, 0, 0, 0, 0, SF_PROFILE, 0, "Swap hands: the left hand aims and shoots, the right stick moves." },
@@ -16791,6 +16817,7 @@ static void Set_Activate(int optIdx, int part)
         case SA_GFX_APPLY: { int w, h; Gfx_Target(&w, &h); char m[128];
             if (Gfx_Apply()) snprintf(m, sizeof m, "Saved %dx%d - restart the game to use it", w, h); else snprintf(m, sizeof m, "Already running at %dx%d", w, h);
             Set_Toast(m); break; }
+        case SA_REQ: Req_Check(); Set_Toast(g_reqMissing ? "Missing parts - run FNVVRMC-Setup.exe" : "Everything FNVVRMC needs is installed"); break;
         case SA_CAL_SKIP:
             g_calSkip = true; g_startAfterCal = false; Body_Apply();
             Log("Startup: calibration skipped - average body for %s", g_profName[g_profActive]);
@@ -17632,6 +17659,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
 
     switch (msg->type) {
     case kMessage_DeferredInit:
+        Req_Check();   /* (is everything FNVVRMC needs loaded?) */
         InstallShaderCache();
         InstallD3D9Hooks();
         InstallRenderHook();
