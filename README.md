@@ -14,7 +14,9 @@ You aim with your hand. You swing melee weapons and punches for real. You pick t
 
 ## Easy install (one click)
 
-Use the **FNVVRMC - VR Essentials** Nexus Collection: click *Add to Vortex* and it installs FNVVRMC with everything it needs, in the right order. See [docs/EASY-INSTALL.md](docs/EASY-INSTALL.md).
+**Download [FNVVRMC-Setup.exe](https://github.com/LIME99902/Fallout-New-Vegas-VR/raw/main/release/FNVVRMC-Setup.exe) and double-click it.** It finds your game, installs xNVSE and FNVVRMC, walks you through the few parts that are only on Nexus (one click each - a free Nexus account is enough), applies the 4GB patch and switches the optional features on. Run it again any time to update. (Windows may say "Windows protected your PC" because the program isn't signed: click *More info*, then *Run anyway*.)
+
+Prefer a mod manager? Use the **FNVVRMC - VR Essentials** Nexus Collection: click *Add to Vortex* and it installs FNVVRMC with everything it needs, in the right order. See [docs/EASY-INSTALL.md](docs/EASY-INSTALL.md).
 
 ## Requirements
 
