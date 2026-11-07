@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.3.8 (bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.3.9 (pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -11765,6 +11765,7 @@ static struct {
     MRGun g[2];                 /* 0 = the gun hand's gun, 1 = the other hand's gun */
     int itemHand, itemGun, item;/* a magazine / speedloader / shell in a hand */
     bool rack; int rackGun, rackHand; float rackStart, rackPull; bool rackBack;
+    bool oldMag; int oldMagHand, oldMagGun;   /* (the magazine pulled out by hand, still in that hand) */
     bool gripRaw[2], gripPrev[2], eatGrip[2];
     bool btn[2], btnPrev[2];    /* B (gun hand's gun), Y (other hand's gun) */
     bool inPocket[2], nearGun[2];
@@ -12114,9 +12115,23 @@ static void MR_Tick(void)
             continue;
         }
         int want = MR_ItemFor(G);
+        /* pulling the magazine out by hand: grip it where it sits in the gun */
+        {   bool freeM = !g_holding[fh] && !g_climb[fh] && !(fh == mvH && g_lg.on) && !(fh == amH && PlayerWeaponOut() && PlayerWeaponType() != -1);
+            if ((G->cls == MRC_MAG || G->cls == MRC_CELL || G->cls == MRC_BOX) && G->st == MRS_READY && freeM && !g_mr.item && !g_mr.rack && !g_mr.oldMag && g_vrHandOk[fh]) {
+                float ip[3], d[3]; MR_InsertPoint(g, ip); V3Sub(d, g_vrHandPos[fh], ip);
+                if (V3Len(d) < fminf(g_mrLoadR, 0.07f) && !g_twoHand) {   /* (close to the magazine itself - not a supporting hand) */
+                    g_mr.eatGrip[fh] = true;
+                    if (edge[fh]) { MR_Eject(g); g_mr.oldMag = true; g_mr.oldMagHand = fh; g_mr.oldMagGun = g; MR_Buzz(fh, 1500); Log("Reload: magazine pulled out by hand"); }
+                }
+            }
+            if (g_mr.oldMag && g_mr.oldMagGun == g) {
+                if (g_mr.oldMagHand == fh) g_mr.eatGrip[fh] = true;
+                if (!g_mr.gripRaw[g_mr.oldMagHand] || G->st != MRS_MAGOUT) { g_mr.oldMag = false; G->ejectAt = now; }   /* (let go: it drops) */
+            }
+        }
         /* taking something out of the pocket */
         bool free_ = !g_holding[fh] && !g_climb[fh] && !(fh == mvH && g_lg.on) && !(fh == amH && PlayerWeaponOut() && PlayerWeaponType() != -1);
-        bool inP = free_ && want != MRI_NONE && !g_mr.item && MR_HandInPocket(fh);
+        bool inP = free_ && want != MRI_NONE && !g_mr.item && !(g_mr.oldMag && g_mr.oldMagHand == fh) && MR_HandInPocket(fh);
         static bool inPrevP[2] = { false, false };
         if (inP && !inPrevP[fh]) MR_Buzz(fh, 700);
         inPrevP[fh] = inP;
@@ -12410,7 +12425,16 @@ static void MR_VisualGun(int g, char *top)
             memcpy(G->ejT, n + NIAV_WORLD_TRANSLATE, 12); memcpy(G->ejR, n + NIAV_WORLD_ROTATE, sizeof G->ejR); G->magWOk = true;
         } else if (G->st == MRS_MAGOUT) {
             double ft = (now - G->ejectAt) / 1000.0;
-            if (g_mr.item == MRI_MAG && g_mr.itemGun == g && g_mr.itemHand == fh && G->magWOk) MR_InHand(n, fh, G->magRel, G->magMid);   /* the new one in your free hand */
+            if (g_mr.oldMag && g_mr.oldMagGun == g && G->magWOk && g_handWOk[g_mr.oldMagHand]) {   /* the old one, pulled out, in your hand - it drops from there when you let go */
+                int oh = g_mr.oldMagHand; M3 W; M3Mul(W, g_handWR[oh], G->magRel);
+                float palm[3]; Gun_Palm(oh, palm);
+                char *hb = g_bones[oh][B_HAND]; if (hb) { const float *Hb = (const float *)(hb + NIAV_WORLD_TRANSLATE); for (int i = 0; i < 3; i++) palm[i] += Hb[i] - g_handW[oh][i]; }
+                float sc = *(const float *)(n + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
+                for (int i = 0; i < 3; i++) G->ejT[i] = palm[i] - sc * (W[i][0] * G->magMid[0] + W[i][1] * G->magMid[1] + W[i][2] * G->magMid[2]);
+                memcpy(G->ejR, W, sizeof W); G->ejectAt = now + 1e9;
+                MR_Show(n); MR_Move(n, G->ejT, W);
+            }
+            else if (g_mr.item == MRI_MAG && g_mr.itemGun == g && g_mr.itemHand == fh && G->magWOk) MR_InHand(n, fh, G->magRel, G->magMid);   /* the new one in your free hand */
             else if (G->magWOk && ft >= 0 && ft < 0.6) { float org[3]; memcpy(org, G->ejT, 12); org[2] -= (float)(0.5 * 9.8 * ft * ft) * U; MR_Move(n, org, G->ejR); }   /* dropping out */
             else MR_Hide(n);
         }
