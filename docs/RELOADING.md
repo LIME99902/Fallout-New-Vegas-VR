@@ -8,10 +8,10 @@ The pocket can be moved under **Holsters & gestures → Ammo pocket** (below eye
 
 | Gun | How to reload |
 |---|---|
-| **Magazine guns** (pistols, SMGs, rifles) | **B** drops the magazine (**Y** for the left-hand gun). Reach into the pocket with your free hand, **squeeze the grip** to take a magazine, keep holding it and **push it into the gun** where the magazine goes. If you shot the gun empty, **pull the slide / charging handle back** with your free hand (grip near the gun, pull back 6 cm), or just press **B**. |
+| **Magazine guns** (pistols, SMGs, rifles) | **B** drops the magazine (**Y** for the left-hand gun). Reach into a pouch with your free hand, **squeeze the grip** to take a magazine, keep holding it and **push it into the gun** where the magazine goes. If you shot the gun empty, **grab the bolt / slide** with your free hand (grip near the gun), **pull it back** about 6 cm and **let go** - it runs forward and chambers a round. |
 | **Energy weapons** (cells) | Same as magazines, no slide to pull. |
 | **Heavy weapons** (minigun, flamer, launchers with a magazine) | Same, with an ammo box or pack - touch it anywhere to the gun. |
-| **Revolvers** | **B** swings the cylinder out. Take a **speedloader** from the pocket, push it into the cylinder. **B** swings it shut. |
+| **Revolvers** | **B** opens the cylinder (it slides out to the right). Take a **speedloader** from a pouch, push it into the cylinder, then **flick the gun to the right** to snap it shut. |
 | **Tube shotguns, lever-action rifles** | Take a **shell** from the pocket and push it into the loading port under the gun - one at a time. If it was empty, **pump / work the lever** afterwards (pull back with your free hand, or press **B**). |
 | **Break-action shotguns** (Caravan, sawed-off) | **B** breaks it open. Take shells from the pocket, push them into the breech. **B** snaps it shut. |
 | **Single-shot weapons** | Take a round from the pocket and push it into the breech. |
