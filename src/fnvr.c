@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.3.5 (ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.3.6 (power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -279,6 +279,7 @@ static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket 
 static bool  g_mrPocket2 = true;   /* [Reload] bSecondPocket: an ammo pocket on both hips */
 static float g_mrPocketSide = 0.15f, g_mrPocketDown = 0.62f, g_mrPocketFwd = 0.20f, g_mrPocketR = 0.13f, g_mrLoadR = 0.10f;
 static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static bool MR_HandBusy(int h); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
+static bool g_pfGameSwing = true;   /* [Weapons] bPowerFistGameSwing */
 static bool g_mfOn = true; static float g_mfScale = 1.0f;   /* [Weapons] bMuzzleLight / fMuzzleLight */
 static void *g_pf1Right = NULL;   /* (the power fist last seen on the gun hand) */
 static float g_pchScale = 1.0f, g_pchTurn = 0.0f;   /* [Reload] fPouchModelScale / fPouchModelTurn (degrees) */
@@ -675,6 +676,7 @@ static void LoadSettings(void)
       GetPrivateProfileStringA("Reload", "fPouchModelTurn", "0", b, sizeof b, g_iniPath); g_pchTurn = (float)atof(b); }
     g_mrShowPouch = GetPrivateProfileIntA("Reload", "bShowPouches", 1, g_iniPath) != 0;
     g_mfOn = GetPrivateProfileIntA("Weapons", "bMuzzleLight", 1, g_iniPath) != 0;
+    g_pfGameSwing = GetPrivateProfileIntA("Weapons", "bPowerFistGameSwing", 1, g_iniPath) != 0;
     { char b[32]; GetPrivateProfileStringA("Weapons", "fMuzzleLight", "1.0", b, sizeof b, g_iniPath); g_mfScale = fminf(fmaxf((float)atof(b), 0.1f), 3.0f); }
     g_mrPocket2 = GetPrivateProfileIntA("Reload", "bSecondPocket", 1, g_iniPath) != 0;
     { char rb[32]; struct { const char *k; float *v; const char *d; } rk[5] = { { "fPocketSide", &g_mrPocketSide, "0.15" }, { "fPocketDown", &g_mrPocketDown, "0.62" },
@@ -1439,8 +1441,17 @@ static bool PlayerWeaponScoped(void)
 static int   g_swingFrames = 0;
 static DWORD g_lastSwing = 0;
 
+/* the power fist on the gun hand: the game's own punch plays (its arm and piston animation, its whoosh and impact sounds)
+   when you swing - with the weapon's reach taken away for that moment, so the damage stays where your fist really lands */
+static struct { char *w; float reach; double until; } g_pfReach;
+static void PfReach_Restore(bool force)
+{
+    if (!g_pfReach.w || (!force && QpcMs() < g_pfReach.until)) return;
+    *(float *)(g_pfReach.w + 0xFC) = g_pfReach.reach; g_pfReach.w = NULL;
+}
 static void Melee_Update(bool menu)
 {
+    PfReach_Restore(menu || !g_inGameplay);
     if (!g_meleeSwings || menu || !g_inGameplay) { g_swingFrames = 0; return; }
     if (g_swingFrames > 0) { g_swingFrames--; return; }
     if (g_holding[0] || g_holding[1]) return;   /* moving a held object around isn't a punch */
@@ -1452,6 +1463,16 @@ static void Melee_Update(bool menu)
     float sp = g_vrHandOk[aim] ? g_handSpeed[aim] : 0.0f;
     if (wt == -1 && g_vrHandOk[off]) sp = fmaxf(sp, g_handSpeed[off]);   /* fists: either hand punches */
     DWORD now = GetTickCount();
+    if (wt == 0 && g_pfGameSwing && g_contactDmg && g_hitReact && g_vrHandOk[aim] && g_handSpeed[aim] > g_swingSpeed && now - g_lastSwing > 450) {
+        char *w = (char *)PlayerWeaponForm();
+        if (w && !IsBadReadPtr(w + 0xFC, 4)) {
+            if (!g_pfReach.w) { g_pfReach.w = w; g_pfReach.reach = *(float *)(w + 0xFC); }
+            *(float *)(w + 0xFC) = 0.001f; g_pfReach.until = QpcMs() + 900.0;
+            g_lastSwing = now; g_swingFrames = 6;
+            static int pl = 0; if (pl++ < 3) Log("Power fist: swing (%.1f m/s) - the game's punch plays, its reach off (your fist does the damage where it lands)", g_handSpeed[aim]);
+        }
+        return;
+    }
     if (g_contactDmg && g_hitReact && !PlayerWeaponAutomatic() && QpcMs() - g_hrNoBodyAt > 2000.0) return;   /* (your blows do the damage themselves - unless someone
                                                                                                                  close by has a body FNVR can't find parts on: then the game's swing hits them) */
     if (sp > g_swingSpeed && now - g_lastSwing > 450) {
@@ -12652,7 +12673,7 @@ static void Pf_Visual(void)
     double now = QpcMs();
     for (int h = 0; h < 2; h++) {
         float ts = (float)(now - g_pfAt[h]); if (g_pfAt[h] <= 0 || ts > 260.0f || !g_handWOk[h]) continue;
-        char *top = h == amH ? (PlayerWeaponType() == 0 ? g_weaponNode : NULL) : (g_lg.on && g_lg.melee && g_lg.ref ? LG_Root(g_lg.ref) : NULL);
+        char *top = h == amH ? (PlayerWeaponType() == 0 && !g_pfGameSwing ? g_weaponNode : NULL) : (g_lg.on && g_lg.melee && g_lg.ref ? LG_Root(g_lg.ref) : NULL);
         if (!MR_Ok(top)) continue;
         if (g_pf[h].top != top) {
             g_pf[h].top = top; static char names[1024]; size_t L = 0; names[0] = 0;
@@ -17116,6 +17137,7 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: left/right", "LeftHanded", "fGunSide", &g_lhGunSide, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Moves the gun in your left hand to the right (+) or left (-) - the second gun when dual wielding, or your gun in left-handed play." },
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: tilt (dual wield)", "Grab", "fOtherHandTilt", &g_lgTilt, -90.0f, 90.0f, 1.0f, "%.0f deg", 0, 0, "Dual wielding: tips the second gun in your left hand up (+) or down (-)." },
     { SP_WEAPONS, ST_BOOL, "Left hand gun: fingers go behind it", "Grab", "bOtherHandWithArms", &g_lgWithArms, 0, 0, 0, 0, 0, 0, "ON: fingers wrapped behind the second gun or melee weapon in your left hand are hidden by it, like with the gun in your gun hand (the game draws your hands over the world, so without this they show through it). OFF: as the game draws it." },
+    { SP_WEAPONS, ST_BOOL, "Power fist: the game's own punch", "Weapons", "bPowerFistGameSwing", &g_pfGameSwing, 0, 0, 0, 0, 0, 0, "ON: swinging the power fist on your gun hand plays the game's own punch - its piston animation and sounds - while the damage still lands where your fist hits. OFF: FNVR's own piston kick." },
     { SP_WEAPONS, ST_BOOL, "Muzzle flash light", "Weapons", "bMuzzleLight", &g_mfOn, 0, 0, 0, 0, 0, 0, "ON: each shot lights up the world around the end of the barrel for an instant, like a real gun - bigger guns brighter and further." },
     { SP_WEAPONS, ST_FLOAT, "Muzzle flash brightness", "Weapons", "fMuzzleLight", &g_mfScale, 0.1f, 3.0f, 0.1f, "%.1fx", 0, 0, "How bright and far the muzzle flash light reaches." },
     { SP_WEAPONS, ST_BOOL, "Reload: ammo pouches you can see", "Reload", "bShowPouches", &g_mrShowPouch, 0, 0, 0, 0, 0, 0, "ON: the ammo pouches on the front of your belt are drawn while a gun is out, so you can look down and reach for them. OFF: they still work, you just don't see them." },
