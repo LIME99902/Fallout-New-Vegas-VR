@@ -352,7 +352,9 @@ static int NexusStep(const NexusMod *m)
     Out(C_HEAD, L"\n%s\n", m->name); Out(C_DIM, L"   %s\n", m->why);
     if (m->check && InGame(m->check)) { Out(C_OK, L"   already installed - skipping\n"); if (m->esp && m->esp[0]) EnablePlugin(m->esp); return 0; }
     wchar_t file[MAX_PATH];
-    if (FindDownload(m->id, (FILETIME){ 0, 0 }, true, file)) {
+    FILETIME recent; { ULARGE_INTEGER t; FILETIME n; GetSystemTimeAsFileTime(&n); t.LowPart = n.dwLowDateTime; t.HighPart = n.dwHighDateTime;
+        t.QuadPart -= 6ull * 3600ull * 10000000ull; recent.dwLowDateTime = t.LowPart; recent.dwHighDateTime = t.HighPart; }
+    if (FindDownload(m->id, recent, false, file)) {   /* (only a download from the last few hours - an old copy may be an outdated version) */
         Out(C_NORM, L"   found it in your Downloads: %s\n", wcsrchr(file, L'\\') + 1);
     } else {
         wchar_t url[256]; _snwprintf(url, 255, L"https://www.nexusmods.com/newvegas/mods/%d?tab=files", m->id);
@@ -501,7 +503,8 @@ int wmain(int argc, wchar_t **argv)
         if (m->id == 62552 && InGame(L"FalloutNV_backup.exe")) { Out(C_HEAD, L"\n%s\n", m->name); Out(C_OK, L"   the game is already patched - skipping\n"); continue; }
         int r = NexusStep(m); if (r < 0) failed++; if (r > 0) skipped++;
         if (m->id == 62552 && r == 0) {   /* run the patcher once */
-            const wchar_t *pn[] = { L"FalloutNVpatch.exe", L"FNVpatch.exe" }; bool ran = false;
+            const wchar_t *pn[] = { L"FNVpatch.exe", L"FalloutNVpatch.exe" }; bool ran = false;   /* (FNVpatch.exe is the current 1.5 patcher) */
+            if (g_testMode) { Out(C_DIM, L"   (test mode: the patcher isn't run on the test folder)\n"); continue; }
             for (int j = 0; j < 2 && !ran; j++) if (InGame(pn[j])) { wchar_t exe[MAX_PATH], cmd[MAX_PATH + 4]; Join(exe, g_game, pn[j]); _snwprintf(cmd, MAX_PATH + 3, L"\"%s\"", exe);
                 Out(C_NORM, L"   patching the game (a black window may flash)...\n"); DWORD ec = 0; Run(cmd, g_game, &ec, false); ran = true; }
             if (InGame(L"FalloutNV_backup.exe")) Out(C_OK, L"   game patched\n");
