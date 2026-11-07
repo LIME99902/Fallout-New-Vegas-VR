@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.3.0 (manual reloading for every kind of gun, ammo pocket on the left hip; gun-hand shots straight out of the drawn barrel)"
+#define FNVR_VERSION_STR    "2.3.1 (ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -277,9 +277,10 @@ static void LHud_Draw(IDirect3DDevice9 *dev);
 static void Gun_Palm(int h, float *palm); static char *LG_Root(char *ref); static bool LG_Pose(float *org, M3 W, float *aim);
 static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket */
 static bool  g_mrPocket2 = true;   /* [Reload] bSecondPocket: an ammo pocket on both hips */
-static float g_mrPocketSide = 0.14f, g_mrPocketDown = 0.70f, g_mrPocketFwd = 0.10f, g_mrPocketR = 0.13f, g_mrLoadR = 0.10f;
+static float g_mrPocketSide = 0.15f, g_mrPocketDown = 0.62f, g_mrPocketFwd = 0.20f, g_mrPocketR = 0.13f, g_mrLoadR = 0.10f;
 static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static bool MR_HandBusy(int h); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
-static bool g_olOn = true;   /* [Reload] bOutlines */ static void Ol_Draw(IDirect3DDevice9 *dev); static void Ol_Collect(char *cam);
+static void *g_pf1Right = NULL;   /* (the power fist last seen on the gun hand) */
+static bool g_olOn = true;   /* [Reload] bOutlines */ static bool g_mrShowPouch = true;   /* [Reload] bShowPouches */ static void Ol_Draw(IDirect3DDevice9 *dev); static void Ol_Collect(char *cam);
 static void Pf_Blow(int h); static void Pf_Visual(void);
 static void MR_LeftHud(char *out, size_t n); static bool MR_LeftBlocksAutoReload(void); static void InstallReloadHook(void);
 static bool LG_PoseNow(float *org, M3 W, float *aim);   /* (the other hand's weapon as last drawn - for shots and blows) */
@@ -304,6 +305,8 @@ static bool  g_inGameplay = false;      /* a save is loaded (not at the main men
 /* Per-frame VR body data (for the arms). VR space = SteamVR standing space, metres. */
 static bool  g_bodyValid = false;
 static float g_vrHeadPos[3];
+static float g_vrHeadM[3][3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };   /* the headset's turn (columns: its right, up, back) */
+static float g_bodyYaw = 0.0f; static bool g_bodyYawOk = false;   /* which way your body faces (follows the head only when it turns well away) */
 static float g_vrYawOffset = 0.0f;        /* game heading = offset - VR yaw */
 static bool  g_vrHandOk[2] = { false, false };
 static float g_vrHandPos[2][3];
@@ -661,9 +664,10 @@ static void LoadSettings(void)
     g_lgMotion = GetPrivateProfileIntA("Grab", "bOtherHandGunMotion", 1, g_iniPath) != 0;
     g_mrOn = GetPrivateProfileIntA("Reload", "bManualReload", 1, g_iniPath) != 0;
     g_olOn = GetPrivateProfileIntA("Reload", "bOutlines", 1, g_iniPath) != 0;
+    g_mrShowPouch = GetPrivateProfileIntA("Reload", "bShowPouches", 1, g_iniPath) != 0;
     g_mrPocket2 = GetPrivateProfileIntA("Reload", "bSecondPocket", 1, g_iniPath) != 0;
-    { char rb[32]; struct { const char *k; float *v; const char *d; } rk[5] = { { "fPocketSide", &g_mrPocketSide, "0.14" }, { "fPocketDown", &g_mrPocketDown, "0.70" },
-          { "fPocketForward", &g_mrPocketFwd, "0.10" }, { "fPocketRadius", &g_mrPocketR, "0.13" }, { "fLoadRadius", &g_mrLoadR, "0.10" } };
+    { char rb[32]; struct { const char *k; float *v; const char *d; } rk[5] = { { "fPocketSide", &g_mrPocketSide, "0.15" }, { "fPocketDown", &g_mrPocketDown, "0.62" },
+          { "fPocketForward", &g_mrPocketFwd, "0.20" }, { "fPocketRadius", &g_mrPocketR, "0.13" }, { "fLoadRadius", &g_mrLoadR, "0.10" } };
       for (int i = 0; i < 5; i++) { GetPrivateProfileStringA("Reload", rk[i].k, rk[i].d, rb, sizeof rb, g_iniPath); *rk[i].v = (float)atof(rb); } }
     g_hitSounds = GetPrivateProfileIntA("Combat", "bImpactSounds", 1, g_iniPath) != 0;
     g_pf1Flip = (int)GetPrivateProfileIntA("Grab", "iOtherFistFlip", 1, g_iniPath);
@@ -1298,10 +1302,16 @@ static void SetRunKey(bool down)
    you're looking. The harder you swing, the faster you go; swinging hard sprints. The stick still works
    and always wins when you push it. */
 static bool g_swingSprint = false;
-static float ArmSwing_Stick(bool menu)
+static bool MR_HandBusy(int h);
+static float ArmSwing_Stick(bool menu, float trigL, float trigR)
 {
     static float prevRel[2][3], intensity = 0; static double prevT = 0; static bool have = false;
     g_swingSprint = false;
+    /* not while you aim or shoot: a trigger pulled in the last moment, a hand up at your eyes, or a hand busy reloading */
+    {   static double trigAt = -1e9, upAt = -1e9; double t = QpcMs();
+        if (trigL > 0.2f || trigR > 0.2f) trigAt = t;
+        for (int h = 0; h < 2; h++) if (g_vrHandOk[h] && g_vrHandPos[h][1] - g_vrHeadPos[1] > -0.26f) upAt = t;
+        if (t - trigAt < 1200.0 || t - upAt < 500.0 || MR_HandBusy(0) || MR_HandBusy(1)) { have = false; intensity = 0; return 0; } }
     if (!g_armSwing || menu || !g_inGameplay || g_pipOpen || g_setOpen || g_climb[0] || g_climb[1]) { have = false; intensity = 0; return 0; }
     float rel[2][3];
     for (int h = 0; h < 2; h++) for (int k = 0; k < 3; k++) rel[h][k] = g_vrHandPos[h][k] - g_vrHeadPos[k];
@@ -1827,7 +1837,7 @@ static void Controllers_Poll(bool menu)
     XPad *p = &st.Gamepad;
     p->sThumbLX = AxisToShort(sL->rAxis[0].x);
     p->sThumbLY = AxisToShort(sL->rAxis[0].y);
-    {   float sw = ArmSwing_Stick(menu);   /* arm-swing running: only while the stick is left alone */
+    {   float sw = ArmSwing_Stick(menu, sL->rAxis[1].x, sR->rAxis[1].x);   /* arm-swing running: only while the stick is left alone */
         float sx = sL->rAxis[0].x, sy = sL->rAxis[0].y;
         if (sw > 0 && sx * sx + sy * sy < 0.04f) { p->sThumbLX = 0; p->sThumbLY = AxisToShort(sw); } else g_swingSprint = false; }
     p->sThumbRX = AxisToShort(sR->rAxis[0].x);                   /* turning */
@@ -2471,6 +2481,20 @@ static void VR_Tick(void)
         /* ---- Both hands, for the arms and melee ---- */
         g_bodyValid = true;
         for (int k = 0; k < 3; k++) g_vrHeadPos[k] = pose.mDeviceToAbsoluteTracking.m[k][3];
+        for (int k = 0; k < 3; k++) for (int j = 0; j < 3; j++) g_vrHeadM[k][j] = pose.mDeviceToAbsoluteTracking.m[k][j];
+        {   /* the body's facing: the way the face points, or - looking down - the way the top of the head points */
+            float fx = -g_vrHeadM[0][2], fz = -g_vrHeadM[2][2], down = fmaxf(g_vrHeadM[1][2], 0.0f);
+            fx += g_vrHeadM[0][1] * down; fz += g_vrHeadM[2][1] * down;
+            if (fx * fx + fz * fz > 0.01f) {
+                float y = atan2f(-fx, -fz);
+                static double at = 0; double t = QpcMs(); float dt = at > 0 ? (float)fmin((t - at) / 1000.0, 0.1) : 0.0f; at = t;
+                if (!g_bodyYawOk) { g_bodyYaw = y; g_bodyYawOk = true; }
+                float d = y - g_bodyYaw; while (d > PI_F) d -= 2.0f * PI_F; while (d < -PI_F) d += 2.0f * PI_F;
+                const float dz = 0.7f;   /* (about 40 degrees: look around freely; turn further and the body follows) */
+                if (d > dz) g_bodyYaw += d - dz; else if (d < -dz) g_bodyYaw += d + dz;
+                else g_bodyYaw += d * fminf(dt * 0.25f, 1.0f);   /* (and settles behind your head slowly) */
+            }
+        }
         { float hp_ = 0; ExtractYawPitch(&pose.mDeviceToAbsoluteTracking, &g_vrHeadYaw, &hp_); }
         g_vrYawOffset = *rotZ + yaw;
         for (int hnd = 0; hnd < 2; hnd++) {
@@ -11057,7 +11081,7 @@ static void RG_Capture(void)
     if (V3Len(g) > 30.0f) return;   /* (the gun isn't in the hand right now) */
     int c = RG_Class(t);
     RGrip *r = &g_rg[c];
-    if (c == 2) { Mdl_Dump("gun hand's power fist (first person)", g_weaponNode); char *pr = *(char **)(g_weaponNode + NIAV_PARENT); if (pr) Mdl_Dump("gun hand's power fist: its parent", pr); }
+    if (c == 2) { g_pf1Right = PlayerWeaponForm(); Mdl_Dump("gun hand's power fist (first person)", g_weaponNode); char *pr = *(char **)(g_weaponNode + NIAV_PARENT); if (pr) Mdl_Dump("gun hand's power fist: its parent", pr); }
     if (c >= 2) {   /* (melee: the weapon's whole turn in the hand's axes, Hr^T W) */
         float Rn[9]; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) Rn[i * 3 + j] = Hr[0 * 3 + i] * W[0 * 3 + j] + Hr[1 * 3 + i] * W[1 * 3 + j] + Hr[2 * 3 + i] * W[2 * 3 + j];
         float kr = r->n < 30 || !r->rok ? 1.0f : 0.05f;
@@ -11125,7 +11149,7 @@ static bool Barrel_Aim(float *h, float *p)
    borrows it while the fist is worn and takes it off again when it's let go. */
 static RGrip *RG_ForLeft(void);
 static bool Pf1_Ok(char *n) { return n && !IsBadReadPtr(n, 0xB0) && *(void **)n; }
-static struct { char *model, *parent, *forRef; void *forBase; char *hid[8]; int nhid; bool tried; } g_pf1;
+static struct { char *model, *parent, *forRef; void *forBase; char *hid[8]; int nhid; bool tried; double retryAt; } g_pf1;
 typedef void (__attribute__((thiscall)) *NiAttach_t)(char *node, char *child, bool firstAvail);
 static void Pf1_Unhide(void)
 {
@@ -11158,17 +11182,28 @@ static bool Pf1_Ensure(void)
     }
     char *st = NULL;
     if (!g_pf1.model) {
-        if (g_pf1.tried) return false; g_pf1.tried = true;
-        st = *(char **)((char *)g_lg.base + 0x250);
-        const char *path = st && !IsBadReadPtr(st, 0x40) ? *(const char **)(st + 0x34) : NULL;
-        if (!path || IsBadStringPtrA(path, 260) || !*path) { Log("Power fist (other hand): the weapon has no first-person model (%p) - the world model stays", st); return false; }
+        if (g_pf1.tried || QpcMs() < g_pf1.retryAt) return false; g_pf1.tried = true;
+        /* which model the game draws on the gun hand for a power fist: its "1st person object", any of the modded ones, or -
+           with none - the weapon's own model (then that model is the gauntlet) */
+        const char *path = NULL; char why[96] = "";
+        void *cand[2] = { g_lg.base, g_pf1Right }; if (cand[1] == cand[0]) cand[1] = NULL;
+        for (int c = 0; c < 2 && !path; c++) { char *w = (char *)cand[c]; if (!w || IsBadReadPtr(w, 0x270)) continue;
+            for (int k = 0; k < 8 && !path; k++) { char *t = *(char **)(w + 0x250 + 4 * k);
+                if (t && !IsBadReadPtr(t, 0x40)) { const char *q = *(const char **)(t + 0x34);
+                    if (q && !IsBadStringPtrA(q, 260) && *q) { path = q; st = t; snprintf(why, sizeof why, "%s weapon's 1st person object %d", c ? "the gun hand's" : "its own", k); } } } }
+        if (!path && g_pf1Right && g_pf1Right != g_lg.base && !IsBadReadPtr(g_pf1Right, 0x48)) {
+            const char *q = *(const char **)((char *)g_pf1Right + 0x40), *ql = *(const char **)((char *)g_lg.base + 0x40);
+            if (q && !IsBadStringPtrA(q, 260) && *q && (!ql || IsBadStringPtrA(ql, 260) || _stricmp(q, ql))) { path = q; snprintf(why, sizeof why, "the gun hand's power fist model"); }
+        }
+        static int nLog = 0; if (path || nLog++ < 3) Log("Power fist (other hand): its weapon %08X, the gun hand's %08X - %s%s", *(uint32_t *)((char *)g_lg.base + 0x0C), g_pf1Right ? *(uint32_t *)((char *)g_pf1Right + 0x0C) : 0, path ? "using " : "no gauntlet-only model found", why);
+        if (!path) { if (nLog <= 3) Log("Power fist (other hand): wear the same kind of power fist on the gun hand for a few seconds, then pass it over"); g_pf1.tried = false; g_pf1.retryAt = QpcMs() + 5000.0; return false; }
         void *loader = *(void **)0x011C3B3C; if (!loader) return false;
         char *m = (char *)((LoadModel_t)0x00447080)(loader, path, 0, true, 0, false, true);
         if (!Pf1_Ok(m) || !AsNode(m)) { Log("Power fist (other hand): couldn't load %s", path); return false; }
         InterlockedIncrement((volatile LONG *)(m + 4));
         g_pf1.model = m;
         const float *Lr = (const float *)(m + NIAV_LOCAL_ROTATE), *Lt = (const float *)(m + NIAV_LOCAL_TRANSLATE);
-        Log("Power fist (other hand): first-person model %s (form type %02X) loaded (its own offset %.1f %.1f %.1f, turn %.2f %.2f %.2f, scale %.2f)", path, *(BYTE *)(st + 4), Lt[0], Lt[1], Lt[2], Lr[0], Lr[4], Lr[8], *(const float *)(m + NIAV_LOCAL_SCALE));
+        Log("Power fist (other hand): model %s (form type %02X) loaded (its own offset %.1f %.1f %.1f, turn %.2f %.2f %.2f, scale %.2f)", path, st ? *(BYTE *)(st + 4) : 0, Lt[0], Lt[1], Lt[2], Lr[0], Lr[4], Lr[8], *(const float *)(m + NIAV_LOCAL_SCALE));
         Mdl_Dump("other hand's power fist (first-person model)", m);
     }
     RG_ForLeft();   /* (loads the saved grips the first time) */
@@ -11646,12 +11681,16 @@ static bool MR_Ballistic(const MRGun *G) { return G->t == 3 || G->t == 5 || G->t
 
 /* ---- the body: the pocket, and where things go into a gun (VR tracking space, metres) ---- */
 /* side +1: your free hand's hip (left for right-handers), -1: the gun hand's hip (the second pocket) */
+/* the base of your neck (VR space): stays put when you only tilt your head - looking down doesn't move it */
+static void Body_Neck(float *p) { for (int i = 0; i < 3; i++) p[i] = g_vrHeadPos[i] - g_vrHeadM[i][1] * 0.11f + g_vrHeadM[i][2] * 0.09f; }
+/* the ammo pouches: on the front of your belt, either side - fixed to your body, not your head */
 static void MR_PocketPos(float side, float *p)
 {
-    float fw[3] = { -sinf(g_vrHeadYaw), 0, -cosf(g_vrHeadYaw) }, rt[3] = { cosf(g_vrHeadYaw), 0, -sinf(g_vrHeadYaw) };
-    float s = (g_leftHanded ? 1.0f : -1.0f) * side;
-    for (int i = 0; i < 3; i++) p[i] = g_vrHeadPos[i] + rt[i] * g_mrPocketSide * s + fw[i] * g_mrPocketFwd;
-    p[1] = g_vrHeadPos[1] - g_mrPocketDown;
+    float y = g_bodyYawOk ? g_bodyYaw : g_vrHeadYaw;
+    float fw[3] = { -sinf(y), 0, -cosf(y) }, rt[3] = { cosf(y), 0, -sinf(y) };
+    float s = (g_leftHanded ? 1.0f : -1.0f) * side, nk[3]; Body_Neck(nk);
+    for (int i = 0; i < 3; i++) p[i] = nk[i] + rt[i] * g_mrPocketSide * s + fw[i] * g_mrPocketFwd;
+    p[1] = nk[1] + 0.11f - g_mrPocketDown;
 }
 static bool MR_InOnePocket(int h, float side)
 {
@@ -12210,7 +12249,7 @@ static void MR_VisualGun(int g, char *top)
     /* the cylinder swings out to the side while open */
     if (G->cls == MRC_REVOLVER && G->st == MRS_OPEN && MR_Ok(G->cylNode)) {
         float m[3], c[3]; MR_Mid(G->cylNode, m); MR_WorldOf(G->cylNode, m, c);
-        float side = -1.0f;   /* (out to the right in either hand, like the game's own reload animation) */
+        float side = 1.0f;   /* (out to the right in either hand, like the game's own reload animation: +turn about the barrel takes the top to the right) */
         float piv[3]; for (int i = 0; i < 3; i++) piv[i] = c[i] - up[i] * 0.9f - sd[i] * 0.5f * side;
         MR_Turn(G->cylNode, fw, piv, 80.0f * side);
     }
@@ -13807,6 +13846,10 @@ static void Rope_Draw(IDirect3DDevice9 *dev)
    [Reload] bOutlines */
 #define OL_MAXSEG 4000
 static struct { int n; float s[OL_MAXSEG][4]; bool ring; float rx, ry, rr; bool on; double at; } g_ol;
+/* the ammo pouches you see on your belt: quads already on the screen (4 corners, a colour each) */
+#define PCH_MAXQ 48
+static struct { int n; float q[PCH_MAXQ][8]; DWORD c[PCH_MAXQ]; } g_pch;
+
 #define OLM_PIECES 16
 typedef struct { char *node, *gd; const float *V; int nv, i0, ni, e0, ne; } OlPiece;
 static struct { char *top; int n, idxN, edgeN; OlPiece p[OLM_PIECES]; } g_olm[4];
@@ -13902,10 +13945,79 @@ static void Ol_Part(char *cam, char *top)
     }
 }
 /* (render hook, right after the frame is drawn, with its parts still where they were drawn) */
+static bool MR_InOnePocket(int h, float side);
+static DWORD Pch_Shade(DWORD rgb, float k, DWORD a)
+{
+    k = fminf(fmaxf(k, 0.0f), 1.6f);
+    DWORD r = (DWORD)fminf(((rgb >> 16) & 255) * k, 255.0f), g = (DWORD)fminf(((rgb >> 8) & 255) * k, 255.0f), b = (DWORD)fminf((rgb & 255) * k, 255.0f);
+    return (a << 24) | (r << 16) | (g << 8) | b;
+}
+/* one box (VR space: centre, half sizes along the body's right / up / forward) - its faces that turn toward you */
+static void Pch_Box(char *cam, int h, const float *c, const float *rt, const float *fw, float hw, float hh, float hd, DWORD rgb, DWORD a, int flapFace)
+{
+    float O = g_vrYawOffset;
+    M3 Mvr = { { cosf(O), 0.0f, -sinf(O) }, { -sinf(O), 0.0f, -cosf(O) }, { 0.0f, 1.0f, 0.0f } };
+    const float *C = (const float *)(cam + NIAV_WORLD_TRANSLATE);
+    float upv[3] = { 0, 1, 0 };
+    const float *ax[3] = { rt, upv, fw }; float hs[3] = { hw, hh, hd };
+    static const float light[3] = { 0.35f, 0.85f, 0.4f };   /* (from above, in front: simple shading so it reads as a solid) */
+    for (int f = 0; f < 6; f++) {
+        int a0 = f >> 1; float sg = (f & 1) ? 1.0f : -1.0f;
+        int a1 = (a0 + 1) % 3, a2 = (a0 + 2) % 3;
+        float nv[3], fc[3]; for (int i = 0; i < 3; i++) { nv[i] = ax[a0][i] * sg; fc[i] = c[i] + nv[i] * hs[a0]; }
+        float fcG[3], nG[3], d[3];
+        for (int i = 0; i < 3; i++) { float r = 0, nn = 0; for (int k = 0; k < 3; k++) { r += Mvr[i][k] * (fc[k] - g_vrHandPos[h][k]); nn += Mvr[i][k] * nv[k]; } fcG[i] = g_handW[h][i] + r * g_unitsPerMeter; nG[i] = nn; }
+        V3Sub(d, C, fcG); if (V3Dot(d, nG) <= 0) continue;
+        if (g_pch.n >= PCH_MAXQ) return;
+        float *Q = g_pch.q[g_pch.n]; bool ok = true;
+        static const float cs[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
+        for (int k = 0; k < 4 && ok; k++) {
+            float pv[3], pg[3]; for (int i = 0; i < 3; i++) pv[i] = fc[i] + ax[a1][i] * hs[a1] * cs[k][0] + ax[a2][i] * hs[a2] * cs[k][1];
+            for (int i = 0; i < 3; i++) { float r = 0; for (int q = 0; q < 3; q++) r += Mvr[i][q] * (pv[q] - g_vrHandPos[h][q]); pg[i] = g_handW[h][i] + r * g_unitsPerMeter; }
+            ok = Ol_Project(cam, pg, &Q[k * 2], &Q[k * 2 + 1], NULL);
+        }
+        if (!ok) continue;
+        float lit = 0.45f + 0.75f * fmaxf(nv[0] * light[0] * 0 + V3Dot(nv, (float[3]){ fw[0] * 0.5f, 0.85f, fw[2] * 0.5f }), 0.0f);
+        g_pch.c[g_pch.n++] = Pch_Shade(rgb, lit * (f == flapFace ? 0.8f : 1.0f), a);
+    }
+}
+static void Pch_Collect(char *cam)
+{
+    g_pch.n = 0;
+    if (!g_mrOn || !g_mrShowPouch || !cam || !g_bbW || !g_bodyValid || g_pipOpen || IsMenuMode()) return;
+    int t = PlayerWeaponType(); bool gun = (PlayerWeaponOut() && t >= 3 && t <= 9) || (g_lg.on && !g_lg.melee);
+    if (!gun) return;
+    int h = g_handWOk[1] ? 1 : g_handWOk[0] ? 0 : -1; if (h < 0) return;
+    float y = g_bodyYawOk ? g_bodyYaw : g_vrHeadYaw;
+    float fw[3] = { -sinf(y), 0, -cosf(y) }, rt[3] = { cosf(y), 0, -sinf(y) };
+    for (int sd = 0; sd < (g_mrPocket2 ? 2 : 1); sd++) {
+        float side = sd ? -1.0f : 1.0f, c[3]; MR_PocketPos(side, c);
+        bool in = MR_InOnePocket(0, side) || MR_InOnePocket(1, side);
+        DWORD a = in ? 0x70 : 0xE6;   /* (see-through while your hand is in it, so you can see the hand) */
+        /* the pouch: canvas brown, a darker flap over its top, brass rounds peeking out at the back */
+        Pch_Box(cam, h, c, rt, fw, 0.055f, 0.065f, 0.032f, 0x6B5434, a, 3);
+        float fl[3]; for (int i = 0; i < 3; i++) fl[i] = c[i] + fw[i] * 0.004f; fl[1] += 0.05f;
+        Pch_Box(cam, h, fl, rt, fw, 0.058f, 0.02f, 0.036f, 0x4A3A22, a, -1);
+        for (int k = -1; k <= 1; k++) {
+            float r[3]; for (int i = 0; i < 3; i++) r[i] = c[i] + rt[i] * (0.022f * k) - fw[i] * 0.012f; r[1] += 0.075f;
+            Pch_Box(cam, h, r, rt, fw, 0.007f, 0.012f, 0.007f, 0xC8A040, a, -1);
+        }
+        if (in) {   /* the orange outline: your hand is in it */
+            float O = g_vrYawOffset; M3 Mvr = { { cosf(O), 0.0f, -sinf(O) }, { -sinf(O), 0.0f, -cosf(O) }, { 0.0f, 1.0f, 0.0f } };
+            float P[8][3];
+            for (int k = 0; k < 8; k++) { float pv[3]; for (int i = 0; i < 3; i++) pv[i] = c[i] + rt[i] * 0.058f * ((k & 1) ? 1 : -1) + (i == 1 ? 0.068f * ((k & 2) ? 1 : -1) : 0) + fw[i] * 0.035f * ((k & 4) ? 1 : -1);
+                for (int i = 0; i < 3; i++) { float r = 0; for (int q = 0; q < 3; q++) r += Mvr[i][q] * (pv[q] - g_vrHandPos[h][q]); P[k][i] = g_handW[h][i] + r * g_unitsPerMeter; } }
+            static const int E[12][2] = { {0,1},{2,3},{4,5},{6,7},{0,2},{1,3},{4,6},{5,7},{0,4},{1,5},{2,6},{3,7} };
+            for (int e = 0; e < 12 && g_ol.n < OL_MAXSEG; e++) { float x0, y0, x1, y1;
+                if (Ol_Project(cam, P[E[e][0]], &x0, &y0, NULL) && Ol_Project(cam, P[E[e][1]], &x1, &y1, NULL)) { float *S = g_ol.s[g_ol.n++]; S[0] = x0; S[1] = y0; S[2] = x1; S[3] = y1; } }
+        }
+    }
+}
 static void Ol_Collect(char *cam)
 {
     g_ol.n = 0; g_ol.ring = false; g_ol.on = false;
-    if (!g_olOn || !g_mrOn || !cam || !g_bbW) return;
+    Pch_Collect(cam);
+    if (!g_olOn || !g_mrOn || !cam || !g_bbW) { g_ol.on = g_ol.n > 0 || g_pch.n > 0; g_ol.at = QpcMs(); return; }
     for (int g = 0; g < 2; g++) {
         MRGun *G = &g_mr.g[g]; if (!G->base || G->cls == MRC_NONE || !G->magFor) continue;
         int h = MR_GunHand(g);
@@ -13930,7 +14042,7 @@ static void Ol_Collect(char *cam)
             }
         }
     }
-    g_ol.on = g_ol.n > 0 || g_ol.ring; g_ol.at = QpcMs();
+    g_ol.on = g_ol.n > 0 || g_ol.ring || g_pch.n > 0; g_ol.at = QpcMs();
 }
 static void Ol_Draw(IDirect3DDevice9 *dev)
 {
@@ -13972,6 +14084,13 @@ static void Ol_Draw(IDirect3DDevice9 *dev)
     IDirect3DDevice9_SetTextureStageState(dev, 1, D3DTSS_COLOROP, D3DTOP_DISABLE);
     IDirect3DDevice9_SetFVF(dev, D3DFVF_XYZRHW | D3DFVF_DIFFUSE);
     if (SUCCEEDED(IDirect3DDevice9_BeginScene(dev))) {
+        if (g_pch.n) {   /* the pouches */
+            static VtxC pb[6 * PCH_MAXQ]; int np = 0;
+            for (int i = 0; i < g_pch.n; i++) { const float *Q = g_pch.q[i]; DWORD c = g_pch.c[i];
+                VtxC q[6] = { { Q[0], Q[1], 0, 1, c }, { Q[2], Q[3], 0, 1, c }, { Q[4], Q[5], 0, 1, c }, { Q[0], Q[1], 0, 1, c }, { Q[4], Q[5], 0, 1, c }, { Q[6], Q[7], 0, 1, c } };
+                memcpy(pb + np, q, sizeof q); np += 6; }
+            IDirect3DDevice9_DrawPrimitiveUP(dev, D3DPT_TRIANGLELIST, (UINT)(np / 3), pb, sizeof(VtxC));
+        }
         /* a soft orange glow, then the bright line (pulsing gently) */
         float pulse = 0.75f + 0.25f * sinf((float)(QpcMs() / 1000.0) * 6.0f);
         float scale = g_bbH / 1080.0f; if (scale < 1.0f) scale = 1.0f;
@@ -16647,12 +16766,13 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: left/right", "LeftHanded", "fGunSide", &g_lhGunSide, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Moves the gun in your left hand to the right (+) or left (-) - the second gun when dual wielding, or your gun in left-handed play." },
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: tilt (dual wield)", "Grab", "fOtherHandTilt", &g_lgTilt, -90.0f, 90.0f, 1.0f, "%.0f deg", 0, 0, "Dual wielding: tips the second gun in your left hand up (+) or down (-)." },
     { SP_WEAPONS, ST_BOOL, "Left hand gun: fingers go behind it", "Grab", "bOtherHandWithArms", &g_lgWithArms, 0, 0, 0, 0, 0, 0, "ON: fingers wrapped behind the second gun or melee weapon in your left hand are hidden by it, like with the gun in your gun hand (the game draws your hands over the world, so without this they show through it). OFF: as the game draws it." },
+    { SP_WEAPONS, ST_BOOL, "Reload: ammo pouches you can see", "Reload", "bShowPouches", &g_mrShowPouch, 0, 0, 0, 0, 0, 0, "ON: the ammo pouches on the front of your belt are drawn while a gun is out, so you can look down and reach for them. OFF: they still work, you just don't see them." },
     { SP_WEAPONS, ST_BOOL, "Reload: orange outlines", "Reload", "bOutlines", &g_olOn, 0, 0, 0, 0, 0, 0, "ON: the part to work by hand (slide, pump, lever) is outlined in orange, and an orange ring marks where a magazine, speedloader or shell goes in while you carry it. OFF: no outlines." },
     { SP_WEAPONS, ST_BOOL, "Manual reloading", "Reload", "bManualReload", &g_mrOn, 0, 0, 0, 0, 0, 0, "ON: reload every gun by hand - B (Y for the left-hand gun) drops the magazine or opens the gun, take a magazine / speedloader / shells from the pocket on your left hip with your free hand's grip, push it in, work the slide or pump if it was empty. Dual wielding: touch the gun itself to the pocket. OFF: the game reloads for you." },
     { SP_SPOTS, ST_BOOL, "Ammo pockets on both hips", "Reload", "bSecondPocket", &g_mrPocket2, 0, 0, 0, 0, 0, 0, "ON: an ammo pocket on each hip - either hand can take from either one. OFF: only the one on your free hand's hip (left for right-handers)." },
-    { SP_SPOTS, ST_FLOAT, "Ammo pocket: below eyes", "Reload", "fPocketDown", &g_mrPocketDown, 0.3f, 1.2f, 0.02f, "%.2f m", 0, 0, "How far below your eyes the ammo pocket on your left hip is." },
-    { SP_SPOTS, ST_FLOAT, "Ammo pocket: to the side", "Reload", "fPocketSide", &g_mrPocketSide, 0.0f, 0.4f, 0.01f, "%.2f m", 0, 0, "How far to the side of your head the ammo pockets are (both hips, mirrored)." },
-    { SP_SPOTS, ST_FLOAT, "Ammo pocket: in front", "Reload", "fPocketForward", &g_mrPocketFwd, -0.2f, 0.3f, 0.01f, "%.2f m", 0, 0, "How far in front of your head the ammo pocket is." },
+    { SP_SPOTS, ST_FLOAT, "Ammo pocket: below eyes", "Reload", "fPocketDown", &g_mrPocketDown, 0.3f, 1.2f, 0.02f, "%.2f m", 0, 0, "How far below your eyes (standing straight) the ammo pouches on your belt are." },
+    { SP_SPOTS, ST_FLOAT, "Ammo pocket: to the side", "Reload", "fPocketSide", &g_mrPocketSide, 0.0f, 0.4f, 0.01f, "%.2f m", 0, 0, "How far to each side of your middle the ammo pouches are (mirrored)." },
+    { SP_SPOTS, ST_FLOAT, "Ammo pocket: in front", "Reload", "fPocketForward", &g_mrPocketFwd, -0.2f, 0.3f, 0.01f, "%.2f m", 0, 0, "How far in front of your neck the ammo pouches are (they stay with your body when you look down)." },
     { SP_SPOTS, ST_FLOAT, "Ammo pocket size", "Reload", "fPocketRadius", &g_mrPocketR, 0.05f, 0.3f, 0.01f, "%.2f m", 0, 0, "How close your hand must be to the ammo pocket." },
     { SP_SPOTS, ST_FLOAT, "Reload: how close to the gun", "Reload", "fLoadRadius", &g_mrLoadR, 0.03f, 0.25f, 0.01f, "%.2f m", 0, 0, "How close a magazine, speedloader or shell must come to the spot where it goes into the gun." },
     { SP_WEAPONS, ST_BOOL, "Left hand gun: kick and reload motion", "Grab", "bOtherHandGunMotion", &g_lgMotion, 0, 0, 0, 0, 0, 0, "ON: the second gun kicks up when it fires, its slide, bolt or cylinder moves (when the model has one), and it tips over in your hand while it reloads, magazine out and back in. OFF: it stays still." },
@@ -17714,7 +17834,8 @@ static void Crouch_Tick(void)
     if (!g_realCrouch || g_seated || !g_bodyValid || IsMenuMode() || g_pipOpen || g_climb[0] || g_climb[1] || g_grapPulling) return;
     float stand = g_standY > 0.5f ? g_standY : g_bodyEye;   /* (your standing head height, as tracked - or as calibrated) */
     if (!(stand > 0.5f)) return;
-    float drop = stand - g_vrHeadPos[1];
+    float nk[3]; Body_Neck(nk);
+    float drop = stand - (nk[1] + 0.11f);   /* (from the base of your neck: looking down isn't crouching) */
     static double lowSince = 0, highSince = 0, pressedAt = 0;
     bool low = drop > g_realCrouchDrop, high = drop < g_realCrouchDrop * 0.6f;
     if (low) { if (!lowSince) lowSince = now; } else lowSince = 0;
