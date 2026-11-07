@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.4.0 (FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.4.1 (pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -526,6 +526,8 @@ static volatile bool g_liveMenuNow = false;
 static const int g_liveMenuIds[] = { /* (1001 message boxes: not live - their OK buttons need the game's normal menu mode) */ 1008 /* container */, 1009 /* dialogue */, 1016 /* how many */, 1035 /* repair */,
                                      1053 /* barter */, 1058 /* repair services */, 1061 /* weapon mods */, 1075 /* companion wheel */, 1077 /* crafting */ };
 static bool g_liveBlocked = false;   /* (another, non-live menu is up) */
+static bool MsgBox_PressFirst(void); static int MsgBox_Buttons(void);   /* (a pop-up message's buttons: one OK button = it can stay live) */
+static bool g_liveMsgBoxes = true;  /* [Display] bLiveMessages: pop-ups with just an OK (reputation, notes) stay live too */
 static bool LiveMenu_Check(void)
 {
     g_liveBlocked = false;
@@ -536,6 +538,7 @@ static bool LiveMenu_Check(void)
         if (!v[id] || id == 1004 /* HUD */) continue;
         bool live = false;
         for (unsigned k = 0; k < sizeof g_liveMenuIds / sizeof g_liveMenuIds[0]; k++) if (g_liveMenuIds[k] == id) live = true;
+        if (id == 1001 && g_liveMsgBoxes && MsgBox_Buttons() == 1) live = true;   /* (a message with only OK: A presses it) */
         if (!live) { g_liveBlocked = true; return false; }   /* another menu is up too (pause menu, loading, lockpicking...): the game's normal way */
         any = true;
     }
@@ -677,6 +680,7 @@ static void LoadSettings(void)
       GetPrivateProfileStringA("Reload", "fPouchModelTurn", "0", b, sizeof b, g_iniPath); g_pchTurn = (float)atof(b); }
     g_mrShowPouch = GetPrivateProfileIntA("Reload", "bShowPouches", 1, g_iniPath) != 0;
     g_mfOn = GetPrivateProfileIntA("Weapons", "bMuzzleLight", 1, g_iniPath) != 0;
+    g_liveMsgBoxes = GetPrivateProfileIntA("Display", "bLiveMessages", 1, g_iniPath) != 0;
     g_pfGameSwing = GetPrivateProfileIntA("Weapons", "bPowerFistGameSwing", 1, g_iniPath) != 0;
     { char b[32]; GetPrivateProfileStringA("Weapons", "fMuzzleLight", "1.0", b, sizeof b, g_iniPath); g_mfScale = fminf(fmaxf((float)atof(b), 0.1f), 3.0f); }
     g_mrPocket2 = GetPrivateProfileIntA("Reload", "bSecondPocket", 1, g_iniPath) != 0;
@@ -2116,6 +2120,11 @@ static void Controllers_Poll(bool menu)
         ltPrev = ltDown;
         BulletKey_Tick();
         Key_TapTick(); Key_RealTick();
+    }
+    {   /* a live pop-up message: A (or the trigger) presses its OK */
+        static bool aP = false; bool down = rA || am->rAxis[1].x > 0.7f;
+        if (g_liveMenuNow && ((const volatile bool *)0x011F308F)[1001] && down && !aP && MsgBox_PressFirst()) { rA = false; p->bRightTrigger = 0; }
+        aP = down;
     }
     if (lX && !g_pipOpen && !menu && !IsMenuMode() && !g_liveMenuNow) b |= XB_START;   /* (in menus left X is the pad's X: accept a trade, take all) */
     if (g_pipOpen) {   /* Pip-Boy: the full pad - A select, B back, X action, grips = bumpers, triggers, sticks */
@@ -16210,6 +16219,35 @@ static int Vc_Collect(char *t, int depth, char *clickT, VcAns *out, int n, int *
     char *node = *(char **)(t + 0x04);
     for (int k = 0; node && k < 300 && Rd(node, 12); k++, node = *(char **)node) n = Vc_Collect(*(char **)(node + 8), depth + 1, clickT, out, n, budget);
     return n;
+}
+/* a pop-up message (reputation change, notes...): its buttons, and pressing one - so one with just an OK can stay live,
+   the world running, and A presses OK */
+static int MsgBox_Find(VcAns *out)
+{
+    char **arr = Rd((void *)0x011F350C, 4) ? *(char ***)0x011F350C : NULL;
+    if (!arr || !Rd(arr, 4)) return 0;
+    char *tm = arr[0]; if (!Rd(tm, 0x40)) return 0;
+    int budget = 2000; return Vc_Collect(tm, 0, NULL, out, 0, &budget);
+}
+static int g_msgBtnN = -1; static double g_mbAt = 0;
+static int MsgBox_Buttons(void)
+{
+    double now = QpcMs(); if (now - g_mbAt < 100.0 && g_msgBtnN >= 0) return g_msgBtnN;
+    VcAns a[VC_MAXOPT]; int n = MsgBox_Find(a); g_mbAt = now;
+    if (n != g_msgBtnN) { static int nl = 0; if (nl++ < 20) Log("Pop-up message: %d button(s)%s%s%s", n, n ? " - first \"" : "", n ? a[0].text : "", n ? "\"" : ""); }
+    g_msgBtnN = n; return n;
+}
+static bool MsgBox_PressFirst(void)
+{
+    VcAns a[VC_MAXOPT]; int n = MsgBox_Find(a); if (n < 1) return false;
+    char *tile = a[0].tile, *menu = Tile_Menu(tile); if (!menu) return false;
+    int id = (int)Tile_Value(tile, 0xFAA, -1.0f);
+    ((TileSound_t)0x00A0B110)(tile, 0xFCB /* clicksound */);
+    ((TileSetFloat_t)0x00A012D0)(tile, 0xFC7, 1.0f, false);
+    ((TileSetFloat_t)0x00A012D0)(tile, 0xFC7, 0.0f, false);
+    void **vt = *(void ***)menu; ((MenuClick_t)vt[3])(menu, id, tile);
+    Log("Pop-up message: \"%s\" pressed (A)", a[0].text); g_msgBtnN = -1;
+    return true;
 }
 static char *Vc_DialogTileMenu(void)
 {
