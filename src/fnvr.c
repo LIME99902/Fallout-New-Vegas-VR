@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.3.2 (Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.3.3 (muzzle flash light; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -279,9 +279,10 @@ static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket 
 static bool  g_mrPocket2 = true;   /* [Reload] bSecondPocket: an ammo pocket on both hips */
 static float g_mrPocketSide = 0.15f, g_mrPocketDown = 0.62f, g_mrPocketFwd = 0.20f, g_mrPocketR = 0.13f, g_mrLoadR = 0.10f;
 static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static bool MR_HandBusy(int h); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
+static bool g_mfOn = true; static float g_mfScale = 1.0f;   /* [Weapons] bMuzzleLight / fMuzzleLight */
 static void *g_pf1Right = NULL;   /* (the power fist last seen on the gun hand) */
 static bool g_olOn = true;   /* [Reload] bOutlines */ static bool g_mrShowPouch = true;   /* [Reload] bShowPouches */ static void Ol_Draw(IDirect3DDevice9 *dev); static void Ol_Collect(char *cam);
-static void Pf_Blow(int h); static void Pf_Visual(void);
+static void Pf_Blow(int h); static void Pf_Visual(void); static void Mf_Shot(int h, void *weap, float len); static float Mf_LenNode(char *n);
 static void MR_LeftHud(char *out, size_t n); static bool MR_LeftBlocksAutoReload(void); static void InstallReloadHook(void);
 static bool LG_PoseNow(float *org, M3 W, float *aim);   /* (the other hand's weapon as last drawn - for shots and blows) */
 static struct { bool pending; int rounds; double at; } g_lgToRight;
@@ -289,7 +290,7 @@ static struct { bool req; char *ref; uint32_t id; void *base; int zone, rounds; 
 static void LG_Input(bool menu, bool gripNow, bool gripEdge, float trig, bool *lGrip);
 static double g_lgGripEdgeAt = -1e9;   /* (the other hand's grip last squeezed) */
 static int LG_RoundsOf(uint32_t id); static void LG_SetRounds(uint32_t id, int r);
-static volatile bool g_worldReset = false;
+static volatile bool g_worldReset = false; static volatile bool g_worldResetMf = false;
 static bool  g_thrOn = true;          /* [Throwing] bVRThrowing */
 static float g_thrPower = 1.3f;       /* [Throwing] fThrowPower: thrown speed = your hand speed x this */
 static float g_fuseShort = 2.5f, g_fuseLong = 5.0f;   /* [Throwing] fFuseSeconds / fLongFuseSeconds */
@@ -670,6 +671,8 @@ static void LoadSettings(void)
     g_mrOn = GetPrivateProfileIntA("Reload", "bManualReload", 1, g_iniPath) != 0;
     g_olOn = GetPrivateProfileIntA("Reload", "bOutlines", 1, g_iniPath) != 0;
     g_mrShowPouch = GetPrivateProfileIntA("Reload", "bShowPouches", 1, g_iniPath) != 0;
+    g_mfOn = GetPrivateProfileIntA("Weapons", "bMuzzleLight", 1, g_iniPath) != 0;
+    { char b[32]; GetPrivateProfileStringA("Weapons", "fMuzzleLight", "1.0", b, sizeof b, g_iniPath); g_mfScale = fminf(fmaxf((float)atof(b), 0.1f), 3.0f); }
     g_mrPocket2 = GetPrivateProfileIntA("Reload", "bSecondPocket", 1, g_iniPath) != 0;
     { char rb[32]; struct { const char *k; float *v; const char *d; } rk[5] = { { "fPocketSide", &g_mrPocketSide, "0.15" }, { "fPocketDown", &g_mrPocketDown, "0.62" },
           { "fPocketForward", &g_mrPocketFwd, "0.20" }, { "fPocketRadius", &g_mrPocketR, "0.13" }, { "fLoadRadius", &g_mrLoadR, "0.10" } };
@@ -5934,6 +5937,7 @@ static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unused
             if (al++ < 3) Log("Aim point: head-look points moved onto the aim line for the shot:%s", nap ? found : " none found");
         }
         o_FireWeapon(weapon, actor);
+        {   int wt = *(BYTE *)((char *)weapon + 0xF4); if (wt >= 3 && wt <= 9) Mf_Shot(1, weapon, -1.0f); }
         for (int i = 0; i < nap; i++) memcpy(ap[i].p, ap[i].old, 12);
         if (camTurned) memcpy(cam + NIAV_WORLD_ROTATE, camSave, sizeof camSave);
         spr[0] = sp0; spr[1] = sp1;
@@ -11259,8 +11263,10 @@ static bool Pf1_Ensure(void)
         static int nLog = 0; if (path || nLog++ < 3) Log("Power fist (other hand): its weapon %08X, the gun hand's %08X - %s%s", *(uint32_t *)((char *)g_lg.base + 0x0C), g_pf1Right ? *(uint32_t *)((char *)g_pf1Right + 0x0C) : 0, path ? "using " : "no gauntlet-only model found", why);
         if (!path) { if (nLog <= 3) Log("Power fist (other hand): wear the same kind of power fist on the gun hand for a few seconds, then pass it over"); g_pf1.tried = false; g_pf1.retryAt = QpcMs() + 5000.0; return false; }
         void *loader = *(void **)0x011C3B3C; if (!loader) return false;
-        char *m = (char *)((LoadModel_t)0x00447080)(loader, path, 0, true, 0, false, true);
-        if (!Pf1_Ok(m) || !AsNode(m)) { Log("Power fist (other hand): couldn't load %s", path); return false; }
+        char *src = (char *)((LoadModel_t)0x00447080)(loader, path, 0, true, 0, false, true);
+        if (!Pf1_Ok(src) || !AsNode(src)) { Log("Power fist (other hand): couldn't load %s", path); return false; }
+        char *m = ((char *(__attribute__((thiscall)) *)(char *))0x00A5D680)(src);   /* (its own copy, as the game makes for the gun hand) */
+        if (!Pf1_Ok(m) || !AsNode(m)) { Log("Power fist (other hand): couldn't copy %s", path); return false; }
         InterlockedIncrement((volatile LONG *)(m + 4));
         g_pf1.model = m;
         const float *Lr = (const float *)(m + NIAV_LOCAL_ROTATE), *Lt = (const float *)(m + NIAV_LOCAL_TRANSLATE);
@@ -12365,6 +12371,110 @@ static char *Pf_Find(char *n, int depth, char *names, size_t *L)
     for (unsigned i = 0; kids && i < kc && i < 64; i++) { char *r = Pf_Find(kids[i], depth + 1, names, L); if (r && !hit) hit = r; }
     return hit;
 }
+
+/* ---- Muzzle flash light ----------------------------------------------------------------------------------------------
+   Each shot lights up the world around the muzzle for an instant, like a real gun: a warm point light at the end of the
+   barrel that flares and dies away in about a tenth of a second. Bigger guns light up more, and further. Made the way the
+   game makes its own lights (a point light handed to the scene's light list), one per hand, kept switched off and out
+   of the way between shots. [Weapons] bMuzzleLight, fMuzzleLight */
+typedef void *(__cdecl *GameAlloc_t)(unsigned int);
+typedef void (__attribute__((fastcall)) *NiLightCtor_t)(void *obj);
+typedef void *(__cdecl *GetSSN_t)(int);
+typedef void *(__attribute__((thiscall)) *SSNAddLight_t)(void *ssn, void *light, bool dynamic);
+static struct { char *light; double at; float radius, dimmer; void *forW; float len; char *pnFor, *pn; bool failed; } g_mf[2];
+static int g_mfGen = 0, g_mfMadeGen = -1;
+static float Mf_LenNode(char *n)   /* (a gun model's length, game units - measured once per model) */
+{
+    static char *forN[4]; static float len[4]; static int nx = 0;
+    if (!n || IsBadReadPtr(n, 0xB0)) return 20.0f;
+    for (int i = 0; i < 4; i++) if (forN[i] == n) return len[i];
+    float bl[3], ul[3], L = 20.0f; if (!LG_ModelAxes(n, bl, ul, &L) || !(L > 1.0f && L < 400.0f)) L = 20.0f;
+    int k = nx++ & 3; forN[k] = n; len[k] = L;
+    Log("Muzzle light: gun model %.0f units long", L);
+    return L;
+}
+static void Mf_Place(char *L, const float *p, float dim, float rad)
+{
+    float *Wt = (float *)(L + NIAV_WORLD_TRANSLATE), *Lt = (float *)(L + NIAV_LOCAL_TRANSLATE);
+    for (int i = 0; i < 3; i++) Wt[i] = Lt[i] = p[i];
+    *(float *)(L + 0xC4) = dim; *(float *)(L + 0xF0) = rad;
+    (*(int *)(L + 0xA8))++;   /* (tells the renderer the light changed) */
+}
+static bool Mf_Make(int h)
+{
+    if (g_mf[h].failed) return false;
+    if (g_mf[h].light && g_mfMadeGen == g_mfGen) return true;
+    {   /* once: the game functions used are where expected */
+        static int chk = 0;
+        if (!chk) {
+            static const uintptr_t fn[4] = { 0x00450B80, 0x00AA13E0, 0x00A71F60, 0x00B5C940 }; char bytes[64] = ""; bool good = true;
+            for (int i = 0; i < 4; i++) { BYTE b0 = *(BYTE *)fn[i]; char t[8]; snprintf(t, sizeof t, " %02X", b0); strcat(bytes, t);
+                if (!(b0 == 0x55 || b0 == 0x56 || b0 == 0x53 || b0 == 0x57 || b0 == 0x51 || b0 == 0x83 || b0 == 0x8B || b0 == 0x6A || b0 == 0x64 || b0 == 0xA1 || b0 == 0xE9 || b0 == 0x81 || b0 == 0x8D)) good = false; }
+            uintptr_t v0 = *(uintptr_t *)0x0109DD0C; if (v0 < 0x00401000 || v0 > 0x00FFFFFF) good = false;
+            chk = good ? 1 : -1;
+            Log("Muzzle light: game functions start%s, point light table %08X - %s", bytes, (unsigned)v0, good ? "ok" : "unexpected, muzzle light off");
+        }
+        if (chk < 0) { g_mf[0].failed = g_mf[1].failed = true; return false; }
+    }
+    void *ssn = ((GetSSN_t)0x00450B80)(0);
+    if (!ssn) return false;
+    char *L = (char *)((GameAlloc_t)0x00AA13E0)(0xFC);
+    if (!L) { g_mf[h].failed = true; return false; }
+    memset(L, 0, 0xFC);
+    ((NiLightCtor_t)0x00A71F60)(L);
+    *(uint32_t *)L = 0x0109DD0C;   /* NiPointLight */
+    *(BYTE *)(L + 0x9C) = 1; *(BYTE *)(L + 0x9D) = 2;
+    *(float *)(L + 0xF0) = 1.0f; *(float *)(L + 0xF4) = 1.0f; *(float *)(L + 0xF8) = 0.0f;
+    float *amb = (float *)(L + 0xC8), *dif = (float *)(L + 0xD4), *spc = (float *)(L + 0xE0);
+    for (int i = 0; i < 3; i++) amb[i] = 0.0f;
+    dif[0] = 1.0f; dif[1] = 0.70f; dif[2] = 0.38f; memcpy(spc, dif, 12);
+    InterlockedIncrement((volatile LONG *)(L + 4));
+    float off[3] = { 0, 0, -100000.0f }; Mf_Place(L, off, 0.0f, 1.0f);
+    void *ssl = ((SSNAddLight_t)0x00B5C940)(ssn, L, true);
+    if (!ssl) { Log("Muzzle light: the scene didn't take the light - off"); g_mf[h].failed = true; return false; }
+    g_mf[h].light = L; if (h == 1) g_mfMadeGen = g_mfGen;
+    Log("Muzzle light: %s hand's light ready", h ? "gun" : "other");
+    return true;
+}
+/* (a shot) */
+static void Mf_Shot(int h, void *weap, float len)
+{
+    if (!g_mfOn || h < 0 || h > 1) return;
+    if (len < 0) len = Mf_LenNode(g_weaponNode);
+    float s = fminf(fmaxf((len - 12.0f) / 55.0f, 0.0f), 1.0f);   /* (pistol ~0, rifle ~0.6, heavy weapons 1) */
+    int t = weap ? *(BYTE *)((char *)weap + 0xF4) : 3; if (t >= 8) s = fmaxf(s, 0.85f);
+    g_mf[h].radius = (240.0f + 520.0f * s) * fmaxf(g_mfScale, 0.1f);
+    g_mf[h].dimmer = (1.1f + 1.9f * s) * g_mfScale;
+    g_mf[h].at = QpcMs(); g_mf[h].forW = weap; (void)len;
+}
+/* (render hook, each frame, after the weapons are placed) */
+static void Mf_Tick(void)
+{
+    if (g_worldResetMf) { g_worldResetMf = false; g_mfGen++; g_mf[0].light = g_mf[1].light = NULL; }
+    for (int h = 0; h < 2; h++) {
+        double ts = QpcMs() - g_mf[h].at;
+        bool lit = g_mfOn && g_mf[h].at > 0 && ts < 140.0 && g_inGameplay;
+        if (!lit) { if (g_mf[h].light && *(float *)(g_mf[h].light + 0xC4) != 0.0f) { float off[3] = { 0, 0, -100000.0f }; Mf_Place(g_mf[h].light, off, 0.0f, 1.0f); } continue; }
+        if (h == 1 ? g_mfMadeGen != g_mfGen || !g_mf[1].light : !g_mf[0].light || g_mfMadeGen != g_mfGen) { if (h == 0) g_mf[0].light = NULL; if (!Mf_Make(h)) continue; }
+        float p[3]; bool ok = false;
+        if (h == 1) {
+            if (g_weaponNode) {
+                if (g_mf[1].pnFor != g_weaponNode) { g_mf[1].pnFor = g_weaponNode; g_mf[1].pn = FindBone(g_weaponNode, "ProjectileNode", 0); }
+                char *pn = g_mf[1].pn;
+                if (pn && !IsBadReadPtr(pn, 0xA0)) { memcpy(p, pn + NIAV_WORLD_TRANSLATE, 12); ok = true; }
+            }
+            if (!ok && g_handWOk[1]) { for (int i = 0; i < 3; i++) p[i] = g_handW[1][i] - g_handWR[1][i][2] * 30.0f; ok = true; }
+        } else if (g_lgPoseAt > 0) {
+            for (int i = 0; i < 3; i++) p[i] = g_lgPoseOrg[i] + g_lgPoseW[i][0] * g_lg.pnL[0] + g_lgPoseW[i][1] * g_lg.pnL[1] + g_lgPoseW[i][2] * g_lg.pnL[2] + g_lgPoseAim[i] * 4.0f;
+            ok = true;
+        }
+        if (!ok) continue;
+        float e = ts < 25.0 ? 1.0f : expf(-(float)(ts - 25.0) / 35.0f);
+        float fl = 0.85f + 0.3f * (float)rand() / RAND_MAX;
+        Mf_Place(g_mf[h].light, p, g_mf[h].dimmer * e * fl, g_mf[h].radius * (0.7f + 0.3f * e));
+        static int nl = 0; if (nl++ < 3) Log("Muzzle light: flash at the %s hand's muzzle (brightness %.1f, reach %.0f)", h ? "gun" : "other", g_mf[h].dimmer, g_mf[h].radius);
+    }
+}
 static void Pf_Visual(void)
 {
     int amH = g_leftHanded ? 0 : 1;
@@ -12912,6 +13022,7 @@ static void LG_Tick(void)
     g_lg.lastShot = now; g_lg.rounds--;
     if (g_lg.rounds <= 0 && !MR_LeftBlocksAutoReload()) g_lg.reloadReq = true;   /* (empty: reloads by itself from the ammo you carry, like the gun hand's gun - unless reloading by hand) */
     LGA_Shot();   /* (the kick and moving parts, drawn in the hand) */
+    Mf_Shot(0, g_lg.base, Mf_LenNode(LG_Root(g_lg.ref)));
     {   /* the gun's own shot sound */
         static void *p2 = NULL, *p3 = NULL; static bool t2 = false;
         if (!t2) { t2 = true; p2 = g_scriptIntf->CompileScript("ref rSnd\nBegin Function { rSnd }\nPlaySound rSnd\nEnd\n"); p3 = g_scriptIntf->CompileScript("ref rSnd\nBegin Function { rSnd }\nplayer.PlaySound3D rSnd\nEnd\n"); }
@@ -14828,6 +14939,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             LG_Visual();
             MR_Visual();   /* (manual reloading: the magazine out, in your hand) */
             Pf_Visual();   /* (power fists: the piston fires when a blow lands) */
+            Mf_Tick();     /* (muzzle flash light) */
             if (armsDone) MeleeAngle_Apply();
             if (armsDone) Lighter_Apply((char *)player);   /* (the dynamite's lighter in your other hand) */
             if (armsDone) { RG_Capture(); Barrel_Capture(); }
@@ -16830,6 +16942,8 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: left/right", "LeftHanded", "fGunSide", &g_lhGunSide, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Moves the gun in your left hand to the right (+) or left (-) - the second gun when dual wielding, or your gun in left-handed play." },
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: tilt (dual wield)", "Grab", "fOtherHandTilt", &g_lgTilt, -90.0f, 90.0f, 1.0f, "%.0f deg", 0, 0, "Dual wielding: tips the second gun in your left hand up (+) or down (-)." },
     { SP_WEAPONS, ST_BOOL, "Left hand gun: fingers go behind it", "Grab", "bOtherHandWithArms", &g_lgWithArms, 0, 0, 0, 0, 0, 0, "ON: fingers wrapped behind the second gun or melee weapon in your left hand are hidden by it, like with the gun in your gun hand (the game draws your hands over the world, so without this they show through it). OFF: as the game draws it." },
+    { SP_WEAPONS, ST_BOOL, "Muzzle flash light", "Weapons", "bMuzzleLight", &g_mfOn, 0, 0, 0, 0, 0, 0, "ON: each shot lights up the world around the end of the barrel for an instant, like a real gun - bigger guns brighter and further." },
+    { SP_WEAPONS, ST_FLOAT, "Muzzle flash brightness", "Weapons", "fMuzzleLight", &g_mfScale, 0.1f, 3.0f, 0.1f, "%.1fx", 0, 0, "How bright and far the muzzle flash light reaches." },
     { SP_WEAPONS, ST_BOOL, "Reload: ammo pouches you can see", "Reload", "bShowPouches", &g_mrShowPouch, 0, 0, 0, 0, 0, 0, "ON: the ammo pouches on the front of your belt are drawn while a gun is out, so you can look down and reach for them. OFF: they still work, you just don't see them." },
     { SP_WEAPONS, ST_BOOL, "Reload: orange outlines", "Reload", "bOutlines", &g_olOn, 0, 0, 0, 0, 0, 0, "ON: the part to work by hand (slide, pump, lever) is outlined in orange, and an orange ring marks where a magazine, speedloader or shell goes in while you carry it. OFF: no outlines." },
     { SP_WEAPONS, ST_BOOL, "Manual reloading", "Reload", "bManualReload", &g_mrOn, 0, 0, 0, 0, 0, 0, "ON: reload every gun by hand - B (Y for the left-hand gun) drops the magazine or opens the gun, take a magazine / speedloader / shells from the pocket on your left hip with your free hand's grip, push it in, work the slide or pump if it was empty. Dual wielding: touch the gun itself to the pocket. OFF: the game reloads for you." },
@@ -17928,7 +18042,8 @@ static void World_Reset(const char *why)
     g_bleedN = 0; g_pBleed.stacks = 0;
     g_crouchByBody = false; g_crouchPress = 0;
     g_climb[0] = g_climb[1] = false; memset(&g_thrown, 0, sizeof g_thrown); g_yank.on = false;
-    g_worldReset = true;
+    g_worldReset = true; g_worldResetMf = true;
+    if (g_pf1.parent) { g_pf1.parent = NULL; g_pf1.nhid = 0; } g_pf1.forBase = NULL; g_pf1.model = NULL; g_pf1.tried = false;
     Log("World objects forgotten (%s)", why);
 }
 static void OnNVSEMessage(NVSEMessage *msg)
