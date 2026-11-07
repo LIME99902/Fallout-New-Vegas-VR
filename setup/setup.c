@@ -62,21 +62,22 @@ static void RemoveTree(const wchar_t *dir)
 }
 
 /* ---------- web ---------- */
-static bool HttpGet(const wchar_t *url, const wchar_t *toFile, char **toMem, DWORD *memLen, bool quiet)
+static bool HttpGetWinHttp(const wchar_t *url, const wchar_t *toFile, char **toMem, DWORD *memLen, bool quiet)
 {
     URL_COMPONENTSW uc; memset(&uc, 0, sizeof uc); uc.dwStructSize = sizeof uc;
     wchar_t host[256], path[2048]; uc.lpszHostName = host; uc.dwHostNameLength = 256; uc.lpszUrlPath = path; uc.dwUrlPathLength = 2048;
     wchar_t extra[1024]; uc.lpszExtraInfo = extra; uc.dwExtraInfoLength = 1024;
-    if (!WinHttpCrackUrl(url, 0, 0, &uc)) return false;
+    if (!WinHttpCrackUrl(url, 0, 0, &uc)) { Out(C_DIM, L"   (web: bad address, error %lu)\n", GetLastError()); return false; }
     wcsncat(path, extra, 2047 - wcslen(path));
     HINTERNET s = WinHttpOpen(L"FNVVRMC-Setup/" SETUP_VERSION, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!s) s = WinHttpOpen(L"FNVVRMC-Setup/" SETUP_VERSION, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!s) return false;
+    if (!s) { Out(C_DIM, L"   (web: WinHttpOpen error %lu)\n", GetLastError()); return false; }
     bool ok = false; HINTERNET c = WinHttpConnect(s, host, uc.nPort, 0), r = NULL;
     if (c) r = WinHttpOpenRequest(c, L"GET", path, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, uc.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0);
     if (r) {
         const wchar_t *hdr = L"Accept: */*\r\n";
-        if (WinHttpSendRequest(r, hdr, (DWORD)-1, NULL, 0, 0, 0) && WinHttpReceiveResponse(r, NULL)) {
+        if (!WinHttpSendRequest(r, hdr, (DWORD)-1, NULL, 0, 0, 0) || !WinHttpReceiveResponse(r, NULL)) Out(C_DIM, L"   (web: connection to %s failed, error %lu)\n", host, GetLastError());
+        else {
             DWORD code = 0, sz = sizeof code; WinHttpQueryHeaders(r, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, NULL, &code, &sz, NULL);
             DWORD total = 0; sz = sizeof total; WinHttpQueryHeaders(r, WINHTTP_QUERY_CONTENT_LENGTH | WINHTTP_QUERY_FLAG_NUMBER, NULL, &total, &sz, NULL);
             if (code == 200) {
@@ -95,13 +96,36 @@ static bool HttpGet(const wchar_t *url, const wchar_t *toFile, char **toMem, DWO
                 if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
                 if (toMem) { if (mem) mem[len] = 0; *toMem = mem; if (memLen) *memLen = len; } else free(mem);
                 if (!quiet && total) Out(C_DIM, L"\n");
-            } else if (!quiet) Out(C_ERR, L"   (the server answered %u)\n", code);
+            } else Out(C_DIM, L"   (web: %s answered %lu)\n", host, code);
         }
         WinHttpCloseHandle(r);
     }
     if (c) WinHttpCloseHandle(c);
     WinHttpCloseHandle(s);
     return ok;
+}
+/* Windows' own curl.exe (Windows 10 1803 and later) when WinHTTP can't get through */
+static bool Run(const wchar_t *cmd, const wchar_t *dir, DWORD *exitCode, bool hide);
+static bool HttpGetCurl(const wchar_t *url, const wchar_t *toFile, char **toMem, DWORD *memLen)
+{
+    wchar_t sys[MAX_PATH], tmpf[MAX_PATH], cmd[4096]; GetSystemDirectoryW(sys, MAX_PATH);
+    if (toFile) wcsncpy(tmpf, toFile, MAX_PATH - 1); else Join(tmpf, g_tmp, L"web.tmp"); tmpf[MAX_PATH - 1] = 0;
+    _snwprintf(cmd, 4095, L"\"%s\\curl.exe\" -L -f -s -S --retry 2 -A FNVVRMC-Setup/" SETUP_VERSION L" -o \"%s\" \"%s\"", sys, tmpf, url); cmd[4095] = 0;
+    DWORD ec = 1; if (!Run(cmd, g_tmp, &ec, true) || ec != 0) { Out(C_DIM, L"   (web: curl couldn't get it either, code %lu)\n", ec); return false; }
+    if (toMem) {
+        FILE *f = _wfopen(tmpf, L"rb"); if (!f) return false;
+        fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
+        char *m = (char *)malloc((size_t)n + 1); size_t rd = m ? fread(m, 1, (size_t)n, f) : 0; fclose(f); DeleteFileW(tmpf);
+        if (!m) return false; m[rd] = 0; *toMem = m; if (memLen) *memLen = (DWORD)rd;
+    }
+    return true;
+}
+static bool HttpGet(const wchar_t *url, const wchar_t *toFile, char **toMem, DWORD *memLen, bool quiet)
+{
+    if (HttpGetWinHttp(url, toFile, toMem, memLen, quiet)) return true;
+    if (toMem && *toMem) { free(*toMem); *toMem = NULL; }
+    if (!quiet) Out(C_DIM, L"   trying again with Windows' curl...\n");
+    return HttpGetCurl(url, toFile, toMem, memLen);
 }
 /* the newest release of a GitHub project: the download link of the first file whose name ends with 'suffix' and contains 'need' */
 static bool GitHubAsset(const char *repo, const char *need, const char *suffix, wchar_t *url, wchar_t *name)
@@ -129,6 +153,31 @@ static bool GitHubAsset(const char *repo, const char *need, const char *suffix, 
     return ok;
 }
 
+/* the same from the release web page itself (when the API is blocked or rate-limited) */
+static bool GitHubAssetPage(const char *repo, const char *need, const char *suffix, wchar_t *url, wchar_t *name)
+{
+    wchar_t u[512]; _snwprintf(u, 511, L"https://github.com/%hs/releases/latest", repo); u[511] = 0;
+    char *html = NULL; if (!HttpGet(u, NULL, &html, NULL, true) || !html) return false;
+    char *ea = strstr(html, "releases/expanded_assets/"); char tag[128] = "";
+    if (ea) { ea += 25; size_t i = 0; while (ea[i] && ea[i] != '"' && ea[i] != '?' && i < sizeof tag - 1) { tag[i] = ea[i]; i++; } tag[i] = 0; }
+    free(html); if (!tag[0]) return false;
+    _snwprintf(u, 511, L"https://github.com/%hs/releases/expanded_assets/%hs", repo, tag); u[511] = 0;
+    if (!HttpGet(u, NULL, &html, NULL, true) || !html) return false;
+    bool ok = false; const char *p = html;
+    while ((p = strstr(p, "/releases/download/"))) {
+        const char *st = p; while (st > html && *st != '"') st--; st++;
+        const char *e = strchr(p, '"'); if (!e) break;
+        char rel[600]; size_t L = (size_t)(e - st); if (L >= sizeof rel) L = sizeof rel - 1; memcpy(rel, st, L); rel[L] = 0;
+        const char *fn = strrchr(rel, '/'); fn = fn ? fn + 1 : rel; size_t fl = strlen(fn), sl = strlen(suffix);
+        if (fl > sl && !_stricmp(fn + fl - sl, suffix) && (!need || strstr(fn, need))) {
+            wchar_t wr[600]; MultiByteToWideChar(CP_UTF8, 0, rel, -1, wr, 600);
+            _snwprintf(url, 1023, L"https://github.com%s", wr); url[1023] = 0; MultiByteToWideChar(CP_UTF8, 0, fn, -1, name, MAX_PATH); ok = true; break;
+        }
+        p = e;
+    }
+    free(html);
+    return ok;
+}
 /* ---------- archives ---------- */
 static bool Run(const wchar_t *cmd, const wchar_t *dir, DWORD *exitCode, bool hide)
 {
@@ -314,7 +363,17 @@ int wmain(int argc, wchar_t **argv)
     Out(C_HEAD, L"==============================================================\n");
     Out(C_DIM, L"Installs the VR mod and everything it needs. Each file comes from its author's own page.\n\n");
 
-    if (argc > 2 && !wcscmp(argv[1], L"--game")) { wcsncpy(g_game, argv[2], MAX_PATH - 1); g_game[MAX_PATH - 1] = 0; }
+    {   /* (a copy in a folder called FNVVRMC-Setup-Test installs into the test folder beside it, never the real game) */
+        wchar_t d[MAX_PATH]; wcsncpy(d, g_self, MAX_PATH - 1); d[MAX_PATH - 1] = 0; wchar_t *sl = wcsrchr(d, L'\\'); if (sl) *sl = 0;
+        const wchar_t *leaf = wcsrchr(d, L'\\'); leaf = leaf ? leaf + 1 : d;
+        if (!(argc > 2 && !wcscmp(argv[1], L"--game")) && !_wcsicmp(leaf, L"FNVVRMC-Setup-Test")) {
+            Join(g_game, d, L"Fallout New Vegas"); wchar_t dd[MAX_PATH]; Join(dd, g_game, L"Data"); MakeDirs(dd);
+            wchar_t ex[MAX_PATH]; Join(ex, g_game, L"FalloutNV.exe"); if (!Exists(ex)) { FILE *f = _wfopen(ex, L"w"); if (f) { fputs("test", f); fclose(f); } }
+            Out(C_WARN, L"TEST MODE - installing into the test folder, not your game.\n");
+        }
+    }
+    if (g_game[0]) { }
+    else if (argc > 2 && !wcscmp(argv[1], L"--game")) { wcsncpy(g_game, argv[2], MAX_PATH - 1); g_game[MAX_PATH - 1] = 0; }
     else if (!FindGame() && !PickGame()) { Out(C_ERR, L"Fallout: New Vegas wasn't found - nothing was changed.\n"); Pause(); return 1; }
     Out(C_NORM, L"Game folder: "); Out(C_OK, L"%s\n", g_game);
 
@@ -340,7 +399,7 @@ int wmain(int argc, wchar_t **argv)
     if (InGame(L"nvse_1_4.dll") && InGame(L"nvse_steam_loader.dll")) Out(C_OK, L"   already installed - skipping\n");
     else {
         wchar_t url[1024], name[MAX_PATH], file[MAX_PATH];
-        if (GitHubAsset("xNVSE/NVSE", NULL, ".7z", url, name) || GitHubAsset("xNVSE/NVSE", NULL, ".zip", url, name)) {
+        if (GitHubAsset("xNVSE/NVSE", NULL, ".7z", url, name) || GitHubAsset("xNVSE/NVSE", NULL, ".zip", url, name) || GitHubAssetPage("xNVSE/NVSE", NULL, ".7z", url, name)) {
             Join(file, g_tmp, name); Out(C_NORM, L"   downloading %s from GitHub", name);
             if (HttpGet(url, file, NULL, NULL, false) && InstallArchive(file, true)) Out(C_OK, L"   installed (%d files)\n", g_copied);
             else { Out(C_ERR, L"   download or install failed\n"); failed++; }
@@ -374,7 +433,9 @@ int wmain(int argc, wchar_t **argv)
     Out(C_HEAD, L"\nFNVVRMC (the VR mod)\n");
     {
         wchar_t url[1024], name[MAX_PATH], file[MAX_PATH];
-        if (GitHubAsset("LIME99902/Fallout-New-Vegas-VR", "-full", ".zip", url, name)) {
+        bool have = GitHubAsset("LIME99902/Fallout-New-Vegas-VR", "-full", ".zip", url, name);
+        if (!have) { Out(C_DIM, L"   (the release list didn't come through - reading the release page instead)\n"); have = GitHubAssetPage("LIME99902/Fallout-New-Vegas-VR", "-full", ".zip", url, name); }
+        if (have) {
             Join(file, g_tmp, name); Out(C_NORM, L"   downloading %s from GitHub", name);
             wchar_t old[MAX_PATH], bak[MAX_PATH]; Join(old, g_game, L"Data\\NVSE\\Plugins\\FNVR.dll"); Join(bak, g_game, L"Data\\NVSE\\Plugins\\FNVR.dll.old");
             if (HttpGet(url, file, NULL, NULL, false)) {
