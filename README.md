@@ -12,6 +12,10 @@ You aim with your hand. You swing melee weapons and punches for real. You pick t
 
 ---
 
+## Easy install (one click)
+
+Use the **FNVVRMC - VR Essentials** Nexus Collection: click *Add to Vortex* and it installs FNVVRMC with everything it needs, in the right order. See [docs/EASY-INSTALL.md](docs/EASY-INSTALL.md).
+
 ## Requirements
 
 - Fallout: New Vegas, PC (Steam version), with all DLC.
