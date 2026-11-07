@@ -254,6 +254,7 @@ static struct {
 } g_gun;
 static void Gun_Input(bool menu, bool gripNow, bool gripEdge, bool offGrip, bool *rGrip);
 static bool  g_dualOn = true;         /* [Grab] bDualWield */
+static int g_pf1Flip = 1;   /* [Grab] iOtherFistFlip: which way the other hand's first-person power fist is mirrored (1 across the hand's side, 2 across its top, 0 as the gun hand) */
 static float g_lgTilt = 0.0f, g_lgFwdCm = 0.0f, g_lgUpCm = 0.0f;   /* [Grab] fOtherHandTilt / fOtherHandForward / fOtherHandUp */
 static bool  g_lgWithArms = true;     /* [Grab] bOtherHandWithArms: fingers behind the other hand's weapon are hidden by it */
 static volatile bool g_lgdWant = false, g_lgdPending = false;   /* (its shape goes into the hands' depth buffer this frame / at the next draw) */
@@ -665,6 +666,7 @@ static void LoadSettings(void)
           { "fPocketForward", &g_mrPocketFwd, "0.10" }, { "fPocketRadius", &g_mrPocketR, "0.13" }, { "fLoadRadius", &g_mrLoadR, "0.10" } };
       for (int i = 0; i < 5; i++) { GetPrivateProfileStringA("Reload", rk[i].k, rk[i].d, rb, sizeof rb, g_iniPath); *rk[i].v = (float)atof(rb); } }
     g_hitSounds = GetPrivateProfileIntA("Combat", "bImpactSounds", 1, g_iniPath) != 0;
+    g_pf1Flip = (int)GetPrivateProfileIntA("Grab", "iOtherFistFlip", 1, g_iniPath);
     { char b[32]; GetPrivateProfileStringA("Grab", "fOtherHandTilt", "0", b, sizeof b, g_iniPath); g_lgTilt = fminf(fmaxf((float)atof(b), -90.0f), 90.0f);
       GetPrivateProfileStringA("Grab", "fOtherHandForward", "0", b, sizeof b, g_iniPath); g_lgFwdCm = fminf(fmaxf((float)atof(b), -20.0f), 20.0f);
       GetPrivateProfileStringA("Grab", "fOtherHandUp", "0", b, sizeof b, g_iniPath); g_lgUpCm = fminf(fmaxf((float)atof(b), -20.0f), 20.0f); }
@@ -11115,6 +11117,81 @@ static bool Barrel_Aim(float *h, float *p)
     *p = -asinf(fminf(fmaxf(d[2], -1.0f), 1.0f));
     return true;
 }
+/* ---- The other hand's power fist: its first-person model --------------------------------------------------------------
+   A power fist picked up into the other hand is a world object, and its world model is a whole fist with a hand inside it.
+   While it's worn, FNVR hangs the weapon's own first-person model (the gauntlet only, the one the game puts on the gun hand)
+   on it, hides the world model, and places it on the drawn hand as the mirror image of how the gun hand wears its own -
+   so your tracked hand shows through, the same as on the gun hand. The game's model cache keeps the model; FNVR only
+   borrows it while the fist is worn and takes it off again when it's let go. */
+static RGrip *RG_ForLeft(void);
+static bool Pf1_Ok(char *n) { return n && !IsBadReadPtr(n, 0xB0) && *(void **)n; }
+static struct { char *model, *parent, *forRef; void *forBase; char *hid[8]; int nhid; bool tried; } g_pf1;
+typedef void (__attribute__((thiscall)) *NiAttach_t)(char *node, char *child, bool firstAvail);
+static void Pf1_Unhide(void)
+{
+    for (int i = 0; i < g_pf1.nhid; i++) { char *n = g_pf1.hid[i]; if (Pf1_Ok(n)) *(uint32_t *)(n + 0x30) &= ~1u; }
+    g_pf1.nhid = 0;
+}
+static void Pf1_Detach(void)
+{
+    Pf1_Unhide();
+    char *m = g_pf1.model, *p = g_pf1.parent; g_pf1.parent = NULL;
+    if (!Pf1_Ok(m) || !Pf1_Ok(p) || *(char **)(m + NIAV_PARENT) != p) return;
+    char **kids = *(char ***)(p + 0xA0); uint16_t *cap = (uint16_t *)(p + 0xA4), *size = (uint16_t *)(p + 0xA6), *used = (uint16_t *)(p + 0xA8);
+    for (unsigned i = 0; kids && i < *size && i < *cap; i++) if (kids[i] == m) {
+        kids[i] = NULL; if (*used) (*used)--;
+        while (*size && !kids[*size - 1]) (*size)--;
+        *(char **)(m + NIAV_PARENT) = NULL;
+        InterlockedDecrement((volatile LONG *)(m + 4));   /* (the hold the parent had on it; ours stays) */
+        Log("Power fist (other hand): first-person model taken off");
+        return;
+    }
+}
+/* (each drawn frame while the other hand wears a power fist) */
+static bool Pf1_Ensure(void)
+{
+    if (g_leftHanded || !g_lg.on || !g_lg.base || *(BYTE *)((char *)g_lg.base + 0xF4) != 0) { if (g_pf1.parent) Pf1_Detach(); return false; }
+    char *body = LG_BodyNode(g_lg.ref); if (!Pf1_Ok(body) || !AsNode(body)) return false;
+    if (g_pf1.forBase != g_lg.base) {   /* (a different power fist: its own model) */
+        if (g_pf1.parent) Pf1_Detach();
+        g_pf1.forBase = g_lg.base; g_pf1.model = NULL; g_pf1.tried = false;
+    }
+    char *st = NULL;
+    if (!g_pf1.model) {
+        if (g_pf1.tried) return false; g_pf1.tried = true;
+        st = *(char **)((char *)g_lg.base + 0x250);
+        const char *path = st && !IsBadReadPtr(st, 0x40) ? *(const char **)(st + 0x34) : NULL;
+        if (!path || IsBadStringPtrA(path, 260) || !*path) { Log("Power fist (other hand): the weapon has no first-person model (%p) - the world model stays", st); return false; }
+        void *loader = *(void **)0x011C3B3C; if (!loader) return false;
+        char *m = (char *)((LoadModel_t)0x00447080)(loader, path, 0, true, 0, false, true);
+        if (!Pf1_Ok(m) || !AsNode(m)) { Log("Power fist (other hand): couldn't load %s", path); return false; }
+        InterlockedIncrement((volatile LONG *)(m + 4));
+        g_pf1.model = m;
+        const float *Lr = (const float *)(m + NIAV_LOCAL_ROTATE), *Lt = (const float *)(m + NIAV_LOCAL_TRANSLATE);
+        Log("Power fist (other hand): first-person model %s (form type %02X) loaded (its own offset %.1f %.1f %.1f, turn %.2f %.2f %.2f, scale %.2f)", path, *(BYTE *)(st + 4), Lt[0], Lt[1], Lt[2], Lr[0], Lr[4], Lr[8], *(const float *)(m + NIAV_LOCAL_SCALE));
+        Mdl_Dump("other hand's power fist (first-person model)", m);
+    }
+    RG_ForLeft();   /* (loads the saved grips the first time) */
+    if (!g_rg[2].rok) {
+        static double said = 0; if (QpcMs() > said) { said = QpcMs() + 30000.0; Log("Power fist (other hand): wear one on the gun hand for a few seconds first, so FNVR can see how it sits - until then the world model is used"); }
+        if (g_pf1.parent) Pf1_Detach();
+        return false;
+    }
+    if (g_pf1.parent != body || *(char **)(g_pf1.model + NIAV_PARENT) != body) {
+        if (g_pf1.parent) Pf1_Detach();
+        if (*(char **)(g_pf1.model + NIAV_PARENT)) { static int n = 0; if (n++ < 3) Log("Power fist (other hand): the model is in use elsewhere - the world model stays"); return false; }
+        ((NiAttach_t)(*(void ***)body)[55])(body, g_pf1.model, true);
+        if (*(char **)(g_pf1.model + NIAV_PARENT) != body) { Log("Power fist (other hand): couldn't put the first-person model on it"); return false; }
+        g_pf1.parent = body;
+        char **kids = *(char ***)(body + 0xA0); unsigned kc = *(uint16_t *)(body + 0xA6);
+        for (unsigned i = 0; kids && i < kc && i < 64; i++) {   /* hide the world model */
+            char *k = kids[i]; if (!Pf1_Ok(k) || k == g_pf1.model || g_pf1.nhid >= 8) continue;
+            if (!(*(uint32_t *)(k + 0x30) & 1)) { *(uint32_t *)(k + 0x30) |= 1; g_pf1.hid[g_pf1.nhid++] = k; }
+        }
+        Log("Power fist (other hand): first-person model on, world model hidden (%d parts)", g_pf1.nhid);
+    }
+    return true;
+}
 static RGrip *RG_ForLeft(void)
 {
     static bool loaded = false; if (!loaded) { loaded = true; RG_Load(); }
@@ -11147,6 +11224,21 @@ static bool LG_Pose(float *org, M3 W, float *aim)
     if (!g_handWOk[h]) return false;
     RGrip *rg = RG_ForLeft();
     int ltype = g_lg.base ? *(BYTE *)((char *)g_lg.base + 0xF4) : 3;
+    if (ltype == 0 && !g_leftHanded && g_bones[h][B_HAND] && g_pf1.parent && g_rg[2].rok && !g_lgPoseCtrl) {
+        /* the first-person gauntlet is on it: the mirror image of how the gun hand wears its own (the hand's Z flipped), with
+           one of the gauntlet's own axes flipped too so it stays a real turn - by default its side (thumb to little finger) */
+        const float *Hl = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_ROTATE), *Hb = (const float *)(g_bones[h][B_HAND] + NIAV_WORLD_TRANSLATE);
+        const float *R = g_rg[2].R; int row = g_pf1Flip == 2 ? 2 : 1;
+        int jf = 0; for (int j = 1; j < 3; j++) if (fabsf(R[row * 3 + j]) > fabsf(R[row * 3 + jf])) jf = j;
+        float Lm[9]; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) Lm[i * 3 + j] = R[i * 3 + j] * (g_pf1Flip && i == 2 ? -1.0f : 1.0f) * (g_pf1Flip && j == jf ? -1.0f : 1.0f);
+        for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) W[i][j] = Hl[i * 3] * Lm[0 * 3 + j] + Hl[i * 3 + 1] * Lm[1 * 3 + j] + Hl[i * 3 + 2] * Lm[2 * 3 + j];
+        float gm[3] = { g_rg[2].g[0], g_rg[2].g[1], g_pf1Flip ? -g_rg[2].g[2] : g_rg[2].g[2] };
+        float U = g_unitsPerMeter / 100.0f, fx[3];
+        for (int i = 0; i < 3; i++) { fx[i] = Hl[i * 3 + 0]; org[i] = Hb[i] + Hl[i * 3] * gm[0] + Hl[i * 3 + 1] * gm[1] + Hl[i * 3 + 2] * gm[2] + (Hl[i * 3] * g_lhGunFwd + Hl[i * 3 + 2] * g_lhGunUp + Hl[i * 3 + 1] * g_lhGunSide) * U; }
+        { static int n = 0; if (n++ == 0) Log("Power fist (other hand): placed as the gun hand wears it, mirrored (gauntlet axis %c flipped, %.1f %.1f %.1f from the hand)", "XYZ"[jf], gm[0], gm[1], gm[2]); }
+        if (aim) memcpy(aim, fx, 12);
+        return true;
+    }
     if (ltype == 0 && !g_leftHanded && g_bones[h][B_HAND] && !g_lgPoseCtrl) {
         /* a power fist is worn, not held: the glove goes over the hand - knuckles forward along the hand, its top on the back
            of the hand (the game's own power fist in the gun hand is part of that hand, so there's no hold to copy) */
@@ -12401,6 +12493,8 @@ static void LG_Visual(void)
     char *root = LG_BodyNode(g_lg.ref);   /* (the part that carries the gun's shape: placed exactly, whatever its physics is doing) */
     if (!root) return;
     if (root != top) { memcpy(g_lgVisSaved, root + NIAV_LOCAL_ROTATE, 36); memcpy(g_lgVisSaved + 9, root + NIAV_LOCAL_TRANSLATE, 12); g_lgVisNode = root; }
+    Pf1_Ensure();   /* (a power fist: its first-person gauntlet) */
+    { static char *was = NULL; if (was != g_pf1.parent) { was = g_pf1.parent; g_lgd.forRoot = NULL; } }   /* (the shape that hides fingers behind it: measured again) */
     float org[3], aim[3]; M3 W; if (!LG_Pose(org, W, aim)) return;
     /* (the hand's real pose is only there while a frame is drawn: shots and blows use this copy of it) */
     memcpy(g_lgPoseOrg, org, 12); memcpy(g_lgPoseW, W, sizeof W); memcpy(g_lgPoseAim, aim, 12); g_lgPoseAt = QpcMs(); g_lgPoseRef = g_lg.ref;
@@ -12454,6 +12548,7 @@ static void LG_Update(void)
     g_lgCand = NULL;
     if (g_lg.on && (!g_holding[mvH] || g_held[mvH].ref != g_lg.ref)) {   /* let go (dropped or thrown) */
         LG_SetRounds(g_lg.id, g_lg.rounds); g_lg.on = false;
+        if (g_pf1.parent) Pf1_Detach();
         int z = g_lgLeftZone ? Holster_OffZone() : 0;
         if (z) { int sl = Holster_SlotOf(*(BYTE *)((char *)g_lg.base + 0xF4)); if (sl) z = sl + 2; }   /* (small ones on the hip, big ones over the shoulder) */
         if (z) { g_lgHol.req = true; g_lgHol.ref = g_lg.ref; g_lgHol.id = g_lg.id; g_lgHol.base = g_lg.base; g_lgHol.zone = z; g_lgHol.rounds = g_lg.rounds; }   /* (let go at a holster: put away there) */
