@@ -1,7 +1,7 @@
 # Manual reloading (2.3.0)
 
-Every gun is reloaded by hand. Your **ammo pocket is on your left hip**, at the front of the hip where a trouser pocket is
-(on the right hip if you play left-handed). Your controller buzzes lightly when your hand is in it and there's something to take.
+Every gun is reloaded by hand. You have **an ammo pocket on each hip**, at the front of the hip where a trouser pocket is.
+Either hand can take from either pocket (turn the second one off: *Holsters & gestures → Ammo pockets on both hips*). Your controller buzzes lightly when your hand is in it and there's something to take.
 
 Turn it off in the VR settings: **Weapons → Manual reloading** (`[Reload] bManualReload=0`). The game then reloads for you as before.
 The pocket can be moved under **Holsters & gestures → Ammo pocket** (below eyes / to the side / in front / size).

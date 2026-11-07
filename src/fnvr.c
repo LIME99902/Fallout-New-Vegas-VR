@@ -275,8 +275,9 @@ static volatile bool g_lgAssignReq;
 static void LHud_Draw(IDirect3DDevice9 *dev);
 static void Gun_Palm(int h, float *palm); static char *LG_Root(char *ref); static bool LG_Pose(float *org, M3 W, float *aim);
 static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket */
+static bool  g_mrPocket2 = true;   /* [Reload] bSecondPocket: an ammo pocket on both hips */
 static float g_mrPocketSide = 0.14f, g_mrPocketDown = 0.70f, g_mrPocketFwd = 0.10f, g_mrPocketR = 0.13f, g_mrLoadR = 0.10f;
-static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
+static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static bool MR_HandBusy(int h); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
 static bool g_olOn = true;   /* [Reload] bOutlines */ static void Ol_Draw(IDirect3DDevice9 *dev); static void Ol_Collect(char *cam);
 static void Pf_Blow(int h); static void Pf_Visual(void);
 static void MR_LeftHud(char *out, size_t n); static bool MR_LeftBlocksAutoReload(void); static void InstallReloadHook(void);
@@ -659,6 +660,7 @@ static void LoadSettings(void)
     g_lgMotion = GetPrivateProfileIntA("Grab", "bOtherHandGunMotion", 1, g_iniPath) != 0;
     g_mrOn = GetPrivateProfileIntA("Reload", "bManualReload", 1, g_iniPath) != 0;
     g_olOn = GetPrivateProfileIntA("Reload", "bOutlines", 1, g_iniPath) != 0;
+    g_mrPocket2 = GetPrivateProfileIntA("Reload", "bSecondPocket", 1, g_iniPath) != 0;
     { char rb[32]; struct { const char *k; float *v; const char *d; } rk[5] = { { "fPocketSide", &g_mrPocketSide, "0.14" }, { "fPocketDown", &g_mrPocketDown, "0.70" },
           { "fPocketForward", &g_mrPocketFwd, "0.10" }, { "fPocketRadius", &g_mrPocketR, "0.13" }, { "fLoadRadius", &g_mrLoadR, "0.10" } };
       for (int i = 0; i < 5; i++) { GetPrivateProfileStringA("Reload", rk[i].k, rk[i].d, rb, sizeof rb, g_iniPath); *rk[i].v = (float)atof(rb); } }
@@ -1944,7 +1946,7 @@ static void Controllers_Poll(bool menu)
         if (!menu && (grabMode[amH] || g_holding[amH] || g_climb[amH])) rGrip = false;      /* grabbing/climbing, not activating */
         {   /* holsters: at the hip / over the shoulder the gun-hand grip holsters or draws instead of activating */
             static bool hPrev = false; static int zPrev = 0;
-            int zone = (!menu && g_inGameplay && !g_pipOpen && !grabMode[amH] && !g_holding[amH] && !g_climb[amH]) ? Holster_Zone() : 0;
+            int zone = (!menu && g_inGameplay && !g_pipOpen && !grabMode[amH] && !g_holding[amH] && !g_climb[amH] && !MR_HandBusy(amH)) ? Holster_Zone() : 0;   /* (not while reaching into an ammo pocket) */
             if (zone && zone != zPrev) Holster_Buzz(600);
             zPrev = zone;
             if (zone) { if (rGripRaw && !hPrev) Holster_Use(zone); rGrip = false; }
@@ -11551,23 +11553,28 @@ static int MR_Classify(void *base, bool hasCyl)
 static bool MR_Ballistic(const MRGun *G) { return G->t == 3 || G->t == 5 || G->t == 6; }
 
 /* ---- the body: the pocket, and where things go into a gun (VR tracking space, metres) ---- */
-static void MR_PocketPos(float *p)
+/* side +1: your free hand's hip (left for right-handers), -1: the gun hand's hip (the second pocket) */
+static void MR_PocketPos(float side, float *p)
 {
-    float side = g_leftHanded ? 1.0f : -1.0f;   /* (the free hand's side - left for right-handers) */
     float fw[3] = { -sinf(g_vrHeadYaw), 0, -cosf(g_vrHeadYaw) }, rt[3] = { cosf(g_vrHeadYaw), 0, -sinf(g_vrHeadYaw) };
-    for (int i = 0; i < 3; i++) p[i] = g_vrHeadPos[i] + rt[i] * g_mrPocketSide * side + fw[i] * g_mrPocketFwd;
+    float s = (g_leftHanded ? 1.0f : -1.0f) * side;
+    for (int i = 0; i < 3; i++) p[i] = g_vrHeadPos[i] + rt[i] * g_mrPocketSide * s + fw[i] * g_mrPocketFwd;
     p[1] = g_vrHeadPos[1] - g_mrPocketDown;
 }
-static bool MR_HandInPocket(int h)
+static bool MR_InOnePocket(int h, float side)
 {
-    if (h < 0 || !g_vrHandOk[h]) return false;
-    float p[3], d[3]; MR_PocketPos(p); V3Sub(d, g_vrHandPos[h], p);
+    float p[3], d[3]; MR_PocketPos(side, p); V3Sub(d, g_vrHandPos[h], p);
     float dp = V3Len(d); if (dp > g_mrPocketR) return false;
-    /* (the free hand's hip holster is close by: whichever is nearer wins) */
-    float side = g_leftHanded ? 1.0f : -1.0f, rt[3] = { cosf(g_vrHeadYaw), 0, -sinf(g_vrHeadYaw) }, hip[3];
-    for (int i = 0; i < 3; i++) hip[i] = g_vrHeadPos[i] + rt[i] * g_hipSide * side; hip[1] = g_vrHeadPos[1] - g_hipDown;
+    /* (that hip's holster is close by: whichever is nearer wins) */
+    float s = (g_leftHanded ? 1.0f : -1.0f) * side, rt[3] = { cosf(g_vrHeadYaw), 0, -sinf(g_vrHeadYaw) }, hip[3];
+    for (int i = 0; i < 3; i++) hip[i] = g_vrHeadPos[i] + rt[i] * g_hipSide * s; hip[1] = g_vrHeadPos[1] - g_hipDown;
     float dh[3]; V3Sub(dh, g_vrHandPos[h], hip);
     return !g_holstersOn || dp <= V3Len(dh);
+}
+static bool MR_HandInPocket(int h)   /* (either pocket) */
+{
+    if (h < 0 || !g_vrHandOk[h]) return false;
+    return MR_InOnePocket(h, 1.0f) || (g_mrPocket2 && MR_InOnePocket(h, -1.0f));
 }
 /* the gun's forward and up, in the gun hand's controller frame (the aim tilt) */
 static void MR_GunAxes(float *f, float *u)
@@ -11874,6 +11881,7 @@ static void MR_Tick(void)
     }
     if (g_mr.item && !g_mr.g[g_mr.itemGun].base) g_mr.item = MRI_NONE;
 }
+static bool MR_HandBusy(int h) { return g_mrOn && h >= 0 && h < 2 && (g_mr.eatGrip[h] || (g_mr.item && g_mr.itemHand == h) || (g_mr.rack && g_mr.rackHand == h)); }
 static void MR_LeftHud(char *out, size_t n)   /* (the other hand's HUD line while reloading) */
 {
     const MRGun *G = &g_mr.g[1];
@@ -16521,8 +16529,9 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_BOOL, "Left hand gun: fingers go behind it", "Grab", "bOtherHandWithArms", &g_lgWithArms, 0, 0, 0, 0, 0, 0, "ON: fingers wrapped behind the second gun or melee weapon in your left hand are hidden by it, like with the gun in your gun hand (the game draws your hands over the world, so without this they show through it). OFF: as the game draws it." },
     { SP_WEAPONS, ST_BOOL, "Reload: orange outlines", "Reload", "bOutlines", &g_olOn, 0, 0, 0, 0, 0, 0, "ON: the part to work by hand (slide, pump, lever) is outlined in orange, and an orange ring marks where a magazine, speedloader or shell goes in while you carry it. OFF: no outlines." },
     { SP_WEAPONS, ST_BOOL, "Manual reloading", "Reload", "bManualReload", &g_mrOn, 0, 0, 0, 0, 0, 0, "ON: reload every gun by hand - B (Y for the left-hand gun) drops the magazine or opens the gun, take a magazine / speedloader / shells from the pocket on your left hip with your free hand's grip, push it in, work the slide or pump if it was empty. Dual wielding: touch the gun itself to the pocket. OFF: the game reloads for you." },
+    { SP_SPOTS, ST_BOOL, "Ammo pockets on both hips", "Reload", "bSecondPocket", &g_mrPocket2, 0, 0, 0, 0, 0, 0, "ON: an ammo pocket on each hip - either hand can take from either one. OFF: only the one on your free hand's hip (left for right-handers)." },
     { SP_SPOTS, ST_FLOAT, "Ammo pocket: below eyes", "Reload", "fPocketDown", &g_mrPocketDown, 0.3f, 1.2f, 0.02f, "%.2f m", 0, 0, "How far below your eyes the ammo pocket on your left hip is." },
-    { SP_SPOTS, ST_FLOAT, "Ammo pocket: to the side", "Reload", "fPocketSide", &g_mrPocketSide, 0.0f, 0.4f, 0.01f, "%.2f m", 0, 0, "How far to the side of your head the ammo pocket is." },
+    { SP_SPOTS, ST_FLOAT, "Ammo pocket: to the side", "Reload", "fPocketSide", &g_mrPocketSide, 0.0f, 0.4f, 0.01f, "%.2f m", 0, 0, "How far to the side of your head the ammo pockets are (both hips, mirrored)." },
     { SP_SPOTS, ST_FLOAT, "Ammo pocket: in front", "Reload", "fPocketForward", &g_mrPocketFwd, -0.2f, 0.3f, 0.01f, "%.2f m", 0, 0, "How far in front of your head the ammo pocket is." },
     { SP_SPOTS, ST_FLOAT, "Ammo pocket size", "Reload", "fPocketRadius", &g_mrPocketR, 0.05f, 0.3f, 0.01f, "%.2f m", 0, 0, "How close your hand must be to the ammo pocket." },
     { SP_SPOTS, ST_FLOAT, "Reload: how close to the gun", "Reload", "fLoadRadius", &g_mrLoadR, 0.03f, 0.25f, 0.01f, "%.2f m", 0, 0, "How close a magazine, speedloader or shell must come to the spot where it goes into the gun." },
