@@ -31,6 +31,7 @@
 
 #define SETUP_VERSION L"1.0"
 static HANDLE g_con; static FILE *g_log;
+static bool g_testMode = false;
 static wchar_t g_game[MAX_PATH], g_tmp[MAX_PATH], g_dl[MAX_PATH], g_self[MAX_PATH];
 
 /* ---------- output ---------- */
@@ -235,6 +236,83 @@ static void CopyInto(const wchar_t *dir, const wchar_t *rel, bool rootFiles)
     } while (FindNextFileW(h, &fd));
     FindClose(h);
 }
+/* archives whose top level IS the Data folder (plugin .esp + meshes/textures/menus...): find that level (past any wrapper
+   folder or FOMOD folder) and copy all of it into Data */
+static bool LooksLikeData(const wchar_t *dir)
+{
+    static const wchar_t *const dn[] = { L"meshes", L"textures", L"menus", L"sound", L"nvse", L"config", L"uio", L"music", NULL };
+    wchar_t pat[MAX_PATH]; Join(pat, dir, L"*"); WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd); bool yes = false;
+    if (h == INVALID_HANDLE_VALUE) return false;
+    do {
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) { for (int i = 0; dn[i]; i++) if (!_wcsicmp(fd.cFileName, dn[i])) yes = true; }
+        else { const wchar_t *e = wcsrchr(fd.cFileName, L'.'); if (e && (!_wcsicmp(e, L".esp") || !_wcsicmp(e, L".esm") || !_wcsicmp(e, L".bsa"))) yes = true; }
+    } while (!yes && FindNextFileW(h, &fd));
+    FindClose(h);
+    return yes;
+}
+static bool FindDataRoot(const wchar_t *dir, wchar_t *out, int depth)
+{
+    if (LooksLikeData(dir)) { wcsncpy(out, dir, MAX_PATH - 1); out[MAX_PATH - 1] = 0; return true; }
+    if (depth > 3) return false;
+    wchar_t pat[MAX_PATH]; Join(pat, dir, L"*"); WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd); bool ok = false;
+    if (h == INVALID_HANDLE_VALUE) return false;
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) || !wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..") || !_wcsicmp(fd.cFileName, L"fomod")) continue;
+        wchar_t sub[MAX_PATH]; Join(sub, dir, fd.cFileName); ok = FindDataRoot(sub, out, depth + 1);
+    } while (!ok && FindNextFileW(h, &fd));
+    FindClose(h);
+    return ok;
+}
+static void CopyAll(const wchar_t *from, const wchar_t *to)
+{
+    wchar_t pat[MAX_PATH]; Join(pat, from, L"*"); WIN32_FIND_DATAW fd; HANDLE h = FindFirstFileW(pat, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+    MakeDirs(to);
+    do {
+        if (!wcscmp(fd.cFileName, L".") || !wcscmp(fd.cFileName, L"..") || !_wcsicmp(fd.cFileName, L"fomod")) continue;
+        wchar_t s2[MAX_PATH], d2[MAX_PATH]; Join(s2, from, fd.cFileName); Join(d2, to, fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) CopyAll(s2, d2);
+        else if (CopyFileW(s2, d2, FALSE)) g_copied++; else Out(C_ERR, L"   couldn't write %s (error %lu)\n", d2, GetLastError());
+    } while (FindNextFileW(h, &fd));
+    FindClose(h);
+}
+static bool InstallDataArchive(const wchar_t *archive)
+{
+    wchar_t to[MAX_PATH], root[MAX_PATH], data[MAX_PATH]; Join(to, g_tmp, L"unpack");
+    if (!Extract(archive, to)) { Out(C_ERR, L"   couldn't unpack %s\n", archive); return false; }
+    g_copied = 0;
+    wchar_t dsub[MAX_PATH]; Join(dsub, to, L"Data");
+    if (Exists(dsub)) CopyInto(to, L"", false);   /* (it already says Data\) */
+    else if (FindDataRoot(to, root, 0)) { Join(data, g_game, L"Data"); CopyAll(root, data); }
+    RemoveTree(to);
+    return g_copied > 0;
+}
+/* switch a plugin (.esp/.esm) on in the game's load order (%LOCALAPPDATA%\FalloutNV\plugins.txt) */
+static void EnablePlugin(const wchar_t *esp)
+{
+    if (g_testMode) { Out(C_DIM, L"   (test mode: would switch on %s in your load order)\n", esp); return; }
+    PWSTR la = NULL; if (SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, NULL, &la) != S_OK) return;
+    wchar_t dir[MAX_PATH], pt[MAX_PATH], lo[MAX_PATH]; Join(dir, la, L"FalloutNV"); CoTaskMemFree(la); MakeDirs(dir);
+    Join(pt, dir, L"plugins.txt"); Join(lo, dir, L"loadorder.txt");
+    char name[MAX_PATH]; WideCharToMultiByte(CP_UTF8, 0, esp, -1, name, sizeof name, NULL, NULL);
+    const wchar_t *files[2] = { pt, lo };
+    for (int i = 0; i < 2; i++) {
+        bool exists = Exists(files[i]); if (i == 1 && !exists) continue;   /* (loadorder.txt only when a manager keeps one) */
+        bool has = false;
+        if (exists) { FILE *f = _wfopen(files[i], L"rb"); if (f) { char line[512];
+            while (fgets(line, sizeof line, f)) { char *e = line + strlen(line); while (e > line && (e[-1] == '\n' || e[-1] == '\r' || e[-1] == ' ')) *--e = 0; char *b = line; if (*b == '*') b++; if (!_stricmp(b, name)) has = true; }
+            fclose(f); } }
+        if (has) continue;
+        FILE *f = _wfopen(files[i], L"ab"); if (!f) continue;
+        if (!exists) {   /* (a new list: the game and its DLC first) */
+            static const char *const base[] = { "FalloutNV.esm", "DeadMoney.esm", "HonestHearts.esm", "OldWorldBlues.esm", "LonesomeRoad.esm", "GunRunnersArsenal.esm",
+                "ClassicPack.esm", "MercenaryPack.esm", "TribalPack.esm", "CaravanPack.esm", NULL };
+            for (int b = 0; base[b]; b++) { wchar_t w[MAX_PATH], rel[MAX_PATH]; MultiByteToWideChar(CP_UTF8, 0, base[b], -1, w, MAX_PATH); Join(rel, L"Data", w); if (InGame(rel)) fprintf(f, "%s\r\n", base[b]); }
+        } else { fseek(f, 0, SEEK_END); long n = ftell(f); if (n > 0) { FILE *r = _wfopen(files[i], L"rb"); if (r) { fseek(r, -1, SEEK_END); int c = fgetc(r); fclose(r); if (c != '\n') fputs("\r\n", f); } } }
+        fprintf(f, "%s\r\n", name); fclose(f);
+    }
+    Out(C_OK, L"   switched on in your load order: %s\n", esp);
+}
 static bool InstallArchive(const wchar_t *archive, bool rootFiles)
 {
     wchar_t to[MAX_PATH]; Join(to, g_tmp, L"unpack");
@@ -267,12 +345,12 @@ static bool StableSize(const wchar_t *p)
     if (!GetFileAttributesExW(p, GetFileExInfoStandard, &b)) return false;
     return a.nFileSizeLow == b.nFileSizeLow && a.nFileSizeHigh == b.nFileSizeHigh && (a.nFileSizeLow || a.nFileSizeHigh);
 }
-typedef struct { const wchar_t *name; int id; const wchar_t *check; const wchar_t *why; bool root; } NexusMod;
+typedef struct { const wchar_t *name; int id; const wchar_t *check; const wchar_t *why; bool root; const wchar_t *esp; } NexusMod;   /* (esp: a Data-folder archive with this plugin to switch on) */
 /* 0 installed, 1 skipped, -1 failed */
 static int NexusStep(const NexusMod *m)
 {
     Out(C_HEAD, L"\n%s\n", m->name); Out(C_DIM, L"   %s\n", m->why);
-    if (m->check && InGame(m->check)) { Out(C_OK, L"   already installed - skipping\n"); return 0; }
+    if (m->check && InGame(m->check)) { Out(C_OK, L"   already installed - skipping\n"); if (m->esp && m->esp[0]) EnablePlugin(m->esp); return 0; }
     wchar_t file[MAX_PATH];
     if (FindDownload(m->id, (FILETIME){ 0, 0 }, true, file)) {
         Out(C_NORM, L"   found it in your Downloads: %s\n", wcsrchr(file, L'\\') + 1);
@@ -299,7 +377,8 @@ static int NexusStep(const NexusMod *m)
         if (!got) return -1;
         Out(C_NORM, L"\n   downloaded: %s\n", wcsrchr(file, L'\\') ? wcsrchr(file, L'\\') + 1 : file);
     }
-    if (!InstallArchive(file, m->root)) { Out(C_ERR, L"   couldn't install it\n"); return -1; }
+    if (!(m->esp ? InstallDataArchive(file) : InstallArchive(file, m->root))) { Out(C_ERR, L"   couldn't install it\n"); return -1; }
+    if (m->esp && m->esp[0]) EnablePlugin(m->esp);
     Out(C_OK, L"   installed (%d files)\n", g_copied);
     return 0;
 }
@@ -369,7 +448,7 @@ int wmain(int argc, wchar_t **argv)
         if (!(argc > 2 && !wcscmp(argv[1], L"--game")) && !_wcsicmp(leaf, L"FNVVRMC-Setup-Test")) {
             Join(g_game, d, L"Fallout New Vegas"); wchar_t dd[MAX_PATH]; Join(dd, g_game, L"Data"); MakeDirs(dd);
             wchar_t ex[MAX_PATH]; Join(ex, g_game, L"FalloutNV.exe"); if (!Exists(ex)) { FILE *f = _wfopen(ex, L"w"); if (f) { fputs("test", f); fclose(f); } }
-            Out(C_WARN, L"TEST MODE - installing into the test folder, not your game.\n");
+            Out(C_WARN, L"TEST MODE - installing into the test folder, not your game.\n"); g_testMode = true;
         }
     }
     if (g_game[0]) { }
@@ -405,7 +484,7 @@ int wmain(int argc, wchar_t **argv)
             else { Out(C_ERR, L"   download or install failed\n"); failed++; }
         } else {
             Out(C_WARN, L"   GitHub couldn't be reached - getting it from Nexus instead\n");
-            NexusMod x = { L"xNVSE", 67883, L"nvse_1_4.dll", L"", true }; int r = NexusStep(&x); if (r < 0) failed++; if (r > 0) skipped++;
+            NexusMod x = { L"xNVSE", 67883, L"nvse_1_4.dll", L"", true, NULL }; int r = NexusStep(&x); if (r < 0) failed++; if (r > 0) skipped++;
         }
     }
     /* 2. the Nexus-only parts */
@@ -427,6 +506,24 @@ int wmain(int argc, wchar_t **argv)
                 Out(C_NORM, L"   patching the game (a black window may flash)...\n"); DWORD ec = 0; Run(cmd, g_game, &ec, false); ran = true; }
             if (InGame(L"FalloutNV_backup.exe")) Out(C_OK, L"   game patched\n");
             else { Out(C_WARN, L"   the patcher didn't confirm - run FalloutNVpatch.exe in the game folder once yourself\n"); }
+        }
+    }
+    /* 2b. the optional extras FNVVRMC has features for */
+    {
+        static const NexusMod opt[] = {
+            { L"UIO - User Interface Organizer", 57174, L"Data\\NVSE\\Plugins\\ui_organizer.dll", L"Lets the quick-loot window and True Scopes add their menus.", false, L"" },
+            { L"Just Assorted Mods", 66666, L"Data\\JustAssortedMods.esp", L"The quick-loot window (look at a container to see and take what's inside).", false, L"JustAssortedMods.esp" },
+            { L"VATS Alternative - Bullet Time", 62278, L"Data\\VATS Alternative - Bullet Time.esp", L"Bullet time on the left trigger.", false, L"VATS Alternative - Bullet Time.esp" },
+            { L"New Vegas True Scopes", 74824, L"Data\\NewVegasTrueScopes.esp", L"Real magnified scopes on scoped guns.", false, L"NewVegasTrueScopes.esp" },
+        };
+        int need = 0; for (int i = 0; i < 4; i++) if (!InGame(opt[i].check)) need++;
+        Out(C_HEAD, L"\nOptional features\n");
+        if (!need) { Out(C_OK, L"   quick-loot window, bullet time and True Scopes are already installed\n"); for (int i = 0; i < 4; i++) if (opt[i].esp && opt[i].esp[0]) EnablePlugin(opt[i].esp); }
+        else {
+            Out(C_NORM, L"   FNVVRMC also works with: the quick-loot window, bullet time, and True Scopes (%d more download%s).\n", need, need > 1 ? L"s" : L"");
+            Out(C_WARN, L"   Install them too?  Y = yes (recommended),  N = no  "); int k = _getch(); Out(C_NORM, L"%c\n", k >= 32 && k < 127 ? k : L' ');
+            if (k != 'n' && k != 'N') for (int i = 0; i < 4; i++) { int r = NexusStep(&opt[i]); if (r < 0) failed++; if (r > 0) skipped++; }
+            else Out(C_DIM, L"   skipped - run setup again any time to add them\n");
         }
     }
     /* 3. FNVVRMC */
