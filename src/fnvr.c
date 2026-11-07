@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.3.3 (muzzle flash light; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.3.4 (muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -12381,7 +12381,7 @@ typedef void *(__cdecl *GameAlloc_t)(unsigned int);
 typedef void (__attribute__((fastcall)) *NiLightCtor_t)(void *obj);
 typedef void *(__cdecl *GetSSN_t)(int);
 typedef void *(__attribute__((thiscall)) *SSNAddLight_t)(void *ssn, void *light, bool dynamic);
-static struct { char *light; double at; float radius, dimmer; void *forW; float len; char *pnFor, *pn; bool failed; } g_mf[2];
+static struct { char *light; double at; float radius, dimmer; void *forW; float len; char *pnFor, *pn; bool failed; float col[3]; } g_mf[2];
 static int g_mfGen = 0, g_mfMadeGen = -1;
 static float Mf_LenNode(char *n)   /* (a gun model's length, game units - measured once per model) */
 {
@@ -12446,6 +12446,28 @@ static void Mf_Shot(int h, void *weap, float len)
     g_mf[h].radius = (240.0f + 520.0f * s) * fmaxf(g_mfScale, 0.1f);
     g_mf[h].dimmer = (1.1f + 1.9f * s) * g_mfScale;
     g_mf[h].at = QpcMs(); g_mf[h].forW = weap; (void)len;
+    {   /* its colour: the weapon's own muzzle flash light (lasers red, plasma green...), or the bullet's glow - else warm orange */
+        static void *colFor[2]; static float col[2][3];
+        if (colFor[h] != weap || !weap) {
+            colFor[h] = weap; col[h][0] = 1.0f; col[h][1] = 0.70f; col[h][2] = 0.38f;
+            char *pr = weap && !IsBadReadPtr((char *)weap + 0x118, 4) ? *(char **)((char *)weap + 0x118) : NULL; const char *from = "default";
+            if (pr && !IsBadReadPtr(pr, 0x80)) {
+                for (int k = 0; k < 2; k++) {
+                    char *L = *(char **)(pr + (k == 0 ? 0x74 : 0x70));   /* (muzzle flash light, then the projectile's own light) */
+                    if (!L || IsBadReadPtr(L, 0xB0)) continue;
+                    uint32_t rad = *(uint32_t *)(L + 0xA0); const BYTE *c = (const BYTE *)(L + 0xA4);
+                    int mx = c[0] > c[1] ? (c[0] > c[2] ? c[0] : c[2]) : (c[1] > c[2] ? c[1] : c[2]);
+                    if (rad < 8 || rad > 20000 || mx < 24) continue;
+                    for (int i = 0; i < 3; i++) col[h][i] = (float)c[i] / (float)mx;
+                    from = k == 0 ? "its muzzle flash light" : "its bullet's light";
+                    Log("Muzzle light: colour from %s %08X (form type %02X, radius %u, colour %u %u %u)", from, *(uint32_t *)(L + 0x0C), *(BYTE *)(L + 4), rad, c[0], c[1], c[2]);
+                    break;
+                }
+            }
+            if (!strcmp(from, "default")) { static int nl = 0; if (nl++ < 6) Log("Muzzle light: no light colour on this weapon's bullet - warm orange"); }
+        }
+        memcpy(g_mf[h].col, col[h], 12);
+    }
 }
 /* (render hook, each frame, after the weapons are placed) */
 static void Mf_Tick(void)
@@ -12471,6 +12493,8 @@ static void Mf_Tick(void)
         if (!ok) continue;
         float e = ts < 25.0 ? 1.0f : expf(-(float)(ts - 25.0) / 35.0f);
         float fl = 0.85f + 0.3f * (float)rand() / RAND_MAX;
+        {   float *dif = (float *)(g_mf[h].light + 0xD4), *spc = (float *)(g_mf[h].light + 0xE0);
+            for (int i = 0; i < 3; i++) { dif[i] = g_mf[h].col[i]; spc[i] = g_mf[h].col[i]; } }
         Mf_Place(g_mf[h].light, p, g_mf[h].dimmer * e * fl, g_mf[h].radius * (0.7f + 0.3f * e));
         static int nl = 0; if (nl++ < 3) Log("Muzzle light: flash at the %s hand's muzzle (brightness %.1f, reach %.0f)", h ? "gun" : "other", g_mf[h].dimmer, g_mf[h].radius);
     }
