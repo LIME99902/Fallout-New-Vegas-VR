@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.3.6 (power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.3.7 (other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -278,7 +278,7 @@ static void Gun_Palm(int h, float *palm); static char *LG_Root(char *ref); stati
 static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket */
 static bool  g_mrPocket2 = true;   /* [Reload] bSecondPocket: an ammo pocket on both hips */
 static float g_mrPocketSide = 0.15f, g_mrPocketDown = 0.62f, g_mrPocketFwd = 0.20f, g_mrPocketR = 0.13f, g_mrLoadR = 0.10f;
-static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static bool MR_HandBusy(int h); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
+static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static bool MR_HandBusy(int h); static bool MR_AnyBusy(void); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
 static bool g_pfGameSwing = true;   /* [Weapons] bPowerFistGameSwing */
 static bool g_mfOn = true; static float g_mfScale = 1.0f;   /* [Weapons] bMuzzleLight / fMuzzleLight */
 static void *g_pf1Right = NULL;   /* (the power fist last seen on the gun hand) */
@@ -1883,7 +1883,7 @@ static void Controllers_Poll(bool menu)
     p->bRightTrigger = (BYTE)(fminf(fmaxf(am->rAxis[1].x, 0.0f), 1.0f) * 255.0f);   /* attack */
     {   /* the Pip-Boy's item list: the left trigger makes the item your other hand's weapon */
         static bool ltP = false; bool lt = mv->rAxis[1].x > (ltP ? 0.35f : 0.7f);
-        bool inv = menu && ((const volatile bool *)0x011F308F)[1002];
+        bool inv = (menu || g_pipOpen) && ((const volatile bool *)0x011F308F)[1002];   /* (the world-running Pip-Boy clears the game's menu note) */
         if (inv && g_dualOn && lt && !ltP) g_lgAssignReq = true;
         if (inv) p->bLeftTrigger = 0;
         ltP = lt;
@@ -2614,7 +2614,8 @@ static void VR_Tick(void)
                 if (g_handSpeed[0] > (g_lg.on ? 0.8f : 1.5f)) lastFast = now;
                 bool swinging = lastFast && now - lastFast < (g_lg.on ? 700.0 : 350.0);
                 double holdMs = g_lg.on ? 450.0 : 180.0;
-                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen && !weapBusy && !swinging) {
+                bool reloading = MR_AnyBusy();   /* (reaching to the pouch and back passes the wrist across your face) */
+                if (lookOpen && rearmed && !otherMenu && !g_twoHand && !g_pipPressMask && !g_setOpen && !weapBusy && !swinging && !reloading) {
                     if (!since) since = now;
                     if (now - since > holdMs) {
                         g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = now + 250.0; since = 0; g_pipExpectUntil = now + 1000.0;
@@ -6029,6 +6030,30 @@ static void Trk_Update(void)
     }
     if (!alive) g_trk.ref = NULL;
 }
+/* the gun hand's bullets for their first few frames: if the game turns one again after it's created (toward where your
+   head looks), it's put back on the barrel's line - like the other hand's bullets, which the game never turns */
+static struct { char *ref; uint32_t id; float h, p; int fo[4], nfo, frames; } g_bt[8]; static int g_btNext = 0;
+static void BT_Add(char *ref, float h, float p, const int *fo, int nfo)
+{
+    int k = g_btNext++ & 7; g_bt[k].ref = ref; g_bt[k].id = *(uint32_t *)(ref + 0x0C); g_bt[k].h = h; g_bt[k].p = p; g_bt[k].frames = 0;
+    g_bt[k].nfo = nfo; for (int i = 0; i < nfo; i++) g_bt[k].fo[i] = fo[i];
+}
+static void BT_Tick(void)
+{
+    for (int k = 0; k < 8; k++) {
+        char *r = g_bt[k].ref; if (!r) continue;
+        if (++g_bt[k].frames > 6 || LookupForm(g_bt[k].id) != (void *)r) { g_bt[k].ref = NULL; continue; }
+        float h = g_bt[k].h, pt = g_bt[k].p, f[3] = { sinf(h) * cosf(pt), cosf(h) * cosf(pt), -sinf(pt) };
+        float rx = *(float *)(r + 0x24), rz = *(float *)(r + 0x2C);
+        float dz = remainderf(rz - h, 2.0f * PI_F), dx = rx - pt; bool turned = fabsf(dz) > 0.001f || fabsf(dx) > 0.001f;
+        int nv = 0;
+        for (int i = 0; i < g_bt[k].nfo; i++) { float *v = (float *)(r + g_bt[k].fo[i]); if (IsBadReadPtr(v, 12)) continue;
+            float L = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); if (!(L > 0.0001f)) continue;
+            float c = (v[0] * f[0] + v[1] * f[1] + v[2] * f[2]) / L; if (c < 0.99999f) { for (int q = 0; q < 3; q++) v[q] = f[q] * L; nv++; } }
+        if (turned) { *(float *)(r + 0x24) = pt; *(float *)(r + 0x2C) = h; }
+        if (turned || nv) { static int nl = 0; if (nl++ < 6) Log("Bullet launch: the game turned a gun-hand bullet again on frame %d (%+.2f deg sideways, %+.2f down; %d direction values) - put back on the barrel line", g_bt[k].frames, dz * RAD2DEG, dx * RAD2DEG, nv); }
+    }
+}
 static void *__cdecl Hook_ProjSpawn(void *proj, void *shooter, void *cc, void *weap, float px, float py, float pz, float rotZ, float rotX,
                                     void *node, void *target, uint32_t b1, uint32_t b2, float f1, float f2, uint32_t z)
 {
@@ -6086,7 +6111,7 @@ static void *__cdecl Hook_ProjSpawn(void *proj, void *shooter, void *cc, void *w
             float r0x = *(float *)(ref + 0x24), r0z = *(float *)(ref + 0x2C);
             float f[3] = { sinf(h) * cosf(pt), cosf(h) * cosf(pt), -sinf(pt) };
             float g[3] = { sinf(r0z) * cosf(r0x), cosf(r0z) * cosf(r0x), -sinf(r0x) };
-            char found[256] = ""; int nf = 0;
+            char found[256] = ""; int nf = 0; int fo[4]; int nfo = 0;
             for (int off = 0x3C; off <= 0x400; off += 4) {
                 float *v = (float *)(ref + off);
                 if (IsBadReadPtr(v, 12)) break;
@@ -6098,6 +6123,7 @@ static void *__cdecl Hook_ProjSpawn(void *proj, void *shooter, void *cc, void *w
                 if (lenOk && (c > 0.9998f || cf > 0.9998f)) {      /* points the way the bullet goes */
                     if (g_tracked < 6 && nf < 6) { char t[48]; snprintf(t, sizeof t, " +%X(len %.1f)", off, L); strcat(found, t); }
                     for (int k = 0; k < 3; k++) v[k] = f[k] * L;
+                    if (nfo < 4) fo[nfo++] = off;
                     nf++; off += 8;
                 }
             }
@@ -6105,6 +6131,7 @@ static void *__cdecl Hook_ProjSpawn(void *proj, void *shooter, void *cc, void *w
                 Log("Bullet %d: right after creation it pointed %+.2f deg sideways, %+.2f deg down vs the crosshair; extra args %.4f %.4f %u %u; direction values fixed:%s",
                     g_tracked + 1, remainderf(r0z - h, 2.0f * PI_F) * RAD2DEG, (r0x - pt) * RAD2DEG, f1, f2, b1 & 0xFF, b2 & 0xFF, nf ? found : " none found");
             *(float *)(ref + 0x24) = pt; *(float *)(ref + 0x2C) = h;
+            if (!g_scopeSighting) BT_Add(ref, h, pt, fo, nfo);
             if (!g_scopeSighting) { static int bl = 0; if (bl++ < 3) Log("Bullet launch: gun hand's bullet put straight down the drawn barrel (it had turned %+.2f deg sideways, %+.2f deg down; %d direction values fixed)", remainderf(r0z - h, 2.0f * PI_F) * RAD2DEG, (r0x - pt) * RAD2DEG, nf); }
         }
         if (g_scopeSighting && ref && g_tracked < 6) {   /* follow this bullet for a moment (diagnostics) */
@@ -12133,6 +12160,14 @@ static void MR_Tick(void)
     }
     if (g_mr.item && !g_mr.g[g_mr.itemGun].base) g_mr.item = MRI_NONE;
 }
+static double g_mrBusyAt = 0;
+static bool MR_AnyBusy(void)   /* (in the middle of reloading: a gun open or waiting, ammo in hand - or just now) */
+{
+    if (!g_mrOn) return false;
+    bool b = g_mr.item != MRI_NONE || g_mr.rack || g_mr.g[0].st != MRS_READY || g_mr.g[1].st != MRS_READY;
+    if (b) g_mrBusyAt = QpcMs();
+    return b || QpcMs() - g_mrBusyAt < 1500.0;
+}
 static bool MR_HandBusy(int h) { return g_mrOn && h >= 0 && h < 2 && (g_mr.eatGrip[h] || (g_mr.item && g_mr.itemHand == h) || (g_mr.rack && g_mr.rackHand == h)); }
 static void MR_LeftHud(char *out, size_t n)   /* (the other hand's HUD line while reloading) */
 {
@@ -12388,9 +12423,11 @@ static void MR_VisualGun(int g, char *top)
     /* the cylinder swings out to the side while open */
     if (G->cls == MRC_REVOLVER && G->st == MRS_OPEN && MR_Ok(G->cylNode)) {
         float m[3], c[3]; MR_Mid(G->cylNode, m); MR_WorldOf(G->cylNode, m, c);
-        float side = 1.0f;   /* (out to the right in either hand, like the game's own reload animation: +turn about the barrel takes the top to the right) */
-        float piv[3]; for (int i = 0; i < 3; i++) piv[i] = c[i] - up[i] * 0.9f - sd[i] * 0.5f * side;
-        MR_Turn(G->cylNode, fw, piv, 80.0f * side);
+        /* straight out to the gun's right, in either hand */
+        (void)c; float org[3]; M3 Wc; memcpy(Wc, G->cylNode + NIAV_WORLD_ROTATE, sizeof Wc);
+        const float *Ct = (const float *)(G->cylNode + NIAV_WORLD_TRANSLATE);
+        for (int i = 0; i < 3; i++) org[i] = Ct[i] + sd[i] * 2.2f;
+        MR_Move(G->cylNode, org, Wc);
     }
     /* a break-action's barrels tip down while open */
     if (G->cls == MRC_BREAK && G->st == MRS_OPEN && MR_Ok(G->barrelNode)) {
@@ -15153,7 +15190,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         }
         t3 = QpcMs(); g_tVis += t3 - t2;
         if (!armsDone) g_capWant = false;
-        Trk_Update();
+        Trk_Update(); BT_Tick();
         g_capCount = 0; g_inRenderFrame = true;
         g_lgdWant = grabVis && g_lgWithArms && g_lgPlaced && cam; g_lgdCam = cam;   /* (fingers behind the other hand's gun hidden this frame) */
         bool full = g_stereoFull && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11 && !((const volatile bool *)0x011F308F)[1007];
