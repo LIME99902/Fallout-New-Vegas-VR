@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.3.1 (ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.3.2 (Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -503,6 +503,11 @@ static int   g_pipPulse = 0;          /* (unused) */
 static double g_pipPressUntil = 0;    /* wrist gesture: hold a button until this time */
 static double g_pipExpectUntil = 0;   /* the Pip-Boy was just asked to open: don't flash the flat screen */
 static WORD  g_pipPressMask = 0;
+static bool  g_pipYOpen = false;       /* [Controls] bPipBoyButtonY: left Y opens / closes the Pip-Boy */
+static bool  g_pipYFront = true;       /* [PipScreen] bYMenuInFront: opened with Y, the menu floats in front of you (like trading) */
+static bool  g_pipNoMove = true;       /* [Controls] bPipBoyHoldStill: you don't walk while the Pip-Boy is open */
+static bool  g_pipByY = false;         /* (this Pip-Boy was opened with Y) */
+static float g_pipFrontC[3], g_pipFrontRt[3], g_pipFrontFw[3]; static bool g_pipFrontOk = false;   /* (where it floats, VR space) */
 static float g_pipScale = 1.0f;       /* INI [Controls] fPipBoyScale: how much bigger the screen picture is while open */
 static bool  g_wristPip = true;       /* INI [Controls] bWristPipBoy */
 static int   g_pipModeRaw = 0;
@@ -722,6 +727,9 @@ static void LoadSettings(void)
     g_handCollision = GetPrivateProfileIntA("Grab", "bHandCollision", 1, g_iniPath) != 0;
     g_climbEnabled = GetPrivateProfileIntA("Grab", "bClimbing", 1, g_iniPath) != 0;
     g_wristPip = GetPrivateProfileIntA("Controls", "bWristPipBoy", 1, g_iniPath) != 0;
+    g_pipYOpen = GetPrivateProfileIntA("Controls", "bPipBoyButtonY", 0, g_iniPath) != 0;
+    g_pipYFront = GetPrivateProfileIntA("PipScreen", "bYMenuInFront", 1, g_iniPath) != 0;
+    g_pipNoMove = GetPrivateProfileIntA("Controls", "bPipBoyHoldStill", 1, g_iniPath) != 0;
     g_flatMenus = GetPrivateProfileIntA("Display", "bFlatMenus", 0, g_iniPath) != 0;
     g_curvedUI = GetPrivateProfileIntA("Display", "bCurvedUI", 1, g_iniPath) != 0;
     { char sb[32]; GetPrivateProfileStringA("Display", "fUIDistance", "0.6", sb, sizeof sb, g_iniPath); float v = (float)atof(sb); if (v >= 0.2f && v <= 5.0f) g_uiDist = v;
@@ -1632,19 +1640,21 @@ static void Key_RealTick(void)
 static TrackedDevicePose_t g_waitPoses[16]; static bool g_haveWaitPose;
 static void PipControls_Hold(int want)
 {
-    static int on = 0; static void *dis[3], *en[3]; static bool failed = false;
+    static int on = 0; static void *dis[4], *en[4]; static bool failed = false;
     if (want == on || failed || !g_scriptIntf || !g_scriptIntf->CompileScript || !g_scriptIntf->CallFunctionAlt) return;
     if (!dis[1]) {
         dis[1] = g_scriptIntf->CompileScript("Begin Function { }\nDisablePlayerControls 0 0 0 0 1 0 0\nEnd\n");
         en[1]  = g_scriptIntf->CompileScript("Begin Function { }\nEnablePlayerControls 0 0 0 0 1 0 0\nEnd\n");
         dis[2] = g_scriptIntf->CompileScript("Begin Function { }\nDisablePlayerControls 1 0 0 0 1 0 0\nEnd\n");
+        dis[3] = g_scriptIntf->CompileScript("Begin Function { }\nDisablePlayerControls 1 0 0 0 0 0 0\nEnd\n");
+        en[3]  = g_scriptIntf->CompileScript("Begin Function { }\nEnablePlayerControls 1 0 0 0 0 0 0\nEnd\n");
         en[2]  = g_scriptIntf->CompileScript("Begin Function { }\nEnablePlayerControls 1 0 0 0 1 0 0\nEnd\n");
-        if (!dis[1] || !en[1] || !dis[2] || !en[2]) { failed = true; Log("Menus: couldn't set up holding your character still"); return; }
+        if (!dis[1] || !en[1] || !dis[2] || !en[2] || !dis[3] || !en[3]) { failed = true; Log("Menus: couldn't set up holding your character still"); return; }
     }
     if (on) g_scriptIntf->CallFunctionAlt(en[on], GetPlayer(), 0);
     on = want;
     if (on) g_scriptIntf->CallFunctionAlt(dis[on], GetPlayer(), 0);
-    static int l = 0; if (l++ < 8) Log("Menus: character %s", on == 2 ? "movement and looking held" : on == 1 ? "looking held (Pip-Boy)" : "back to normal");
+    static int l = 0; if (l++ < 8) Log("Menus: character %s", on == 2 ? "movement and looking held" : on == 3 ? "held still (Pip-Boy open)" : on == 1 ? "looking held (Pip-Boy)" : "back to normal");
 }
 static void Key_Tap(int key)
 {
@@ -2019,6 +2029,30 @@ static void Controllers_Poll(bool menu)
         if (!menu && g_inGameplay && g_lg.on && !g_lg.melee && lY && !yPrev) g_lg.reloadReq = true;
         yPrev = lY;
     }
+    {   /* left Y and the Pip-Boy: hold it for the Pip-Boy light; tap it to open / close the Pip-Boy (when that's switched on).
+           Not while a gun is in the left hand (Y reloads it), a menu or the quick-loot window is up. */
+        static bool yP = false, used = false; static double yAt = 0; double t = QpcMs();
+        bool can = g_inGameplay && g_wristPip && !(g_lg.on && !g_lg.melee) && !g_setOpen && !(g_lootShown && g_lootControls) && (g_pipOpen || !IsMenuMode()) && !g_pipPressMask;
+        if (lY && !yP) { yAt = t; used = false; }
+        if (can && lY && !used && !g_pipOpen && t - yAt > 600.0) {   /* held: the light (the game's own long press of its Pip-Boy button) */
+            g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = t + 1800.0; used = true;
+            Log("Pip-Boy: left Y held - switching the Pip-Boy light");
+        }
+        if (can && !lY && yP && !used && t - yAt < 600.0 && g_pipYOpen) {
+            if (!g_pipOpen && g_pipModeRaw == 0) {
+                g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = t + 250.0; g_pipExpectUntil = t + 1000.0; g_pipByY = true;
+                {   /* where the menu floats: in front of you, a little below your eyes */
+                    float y = g_vrHeadYaw;
+                    float fw[3] = { -sinf(y), 0, -cosf(y) }, rt[3] = { cosf(y), 0, -sinf(y) };
+                    for (int i = 0; i < 3; i++) { g_pipFrontC[i] = g_vrHeadPos[i] + fw[i] * 0.55f; g_pipFrontRt[i] = rt[i]; g_pipFrontFw[i] = fw[i]; }
+                    g_pipFrontC[1] -= 0.12f; g_pipFrontOk = true;
+                }
+                Log("Pip-Boy: left Y - opening%s", g_pipYFront ? " (menu in front of you)" : "");
+            } else if (g_pipOpen && g_pipModeRaw == 3) { g_pipPressMask = XB_B; g_pipPressUntil = t + 150.0; Log("Pip-Boy: left Y - closing"); }
+            used = true;
+        }
+        yP = lY;
+    }
     if (g_pipPressMask && QpcMs() < g_pipPressUntil) b |= g_pipPressMask; else g_pipPressMask = 0;
     if (g_holsterPress && QpcMs() < g_holsterPressUntil) b |= g_holsterPress; else g_holsterPress = 0;
     if (g_crouchPress && QpcMs() < g_crouchPressUntil) b |= g_crouchPress; else g_crouchPress = 0;
@@ -2111,7 +2145,7 @@ static void Controllers_Poll(bool menu)
         else { p->sThumbRX = 0; p->sThumbRY = 0; } }
     if (g_lootShown && g_lootControls && !menu) p->sThumbRX = 0;   /* quick-loot window up: the right stick never turns you */
     g_headingLockWant = false;   /* (holding the facing still made the view snap back each frame - retired) */
-    PipControls_Hold(g_liveMenuNow ? 2 : 0);   /* (the Pip-Boy's own hold left activating switched off afterwards - removed) */
+    PipControls_Hold(g_liveMenuNow ? 2 : (g_pipOpen && g_pipNoMove) ? 3 : 0);   /* (the Pip-Boy's own hold left activating switched off afterwards - removed) */
     {   /* once: switch every player control back on, in case a save kept them off from the last version */
         static bool done = false;
         if (g_newGameWait) done = true;   /* (a brand-new game: nothing to repair - and the intro scenes set their own controls) */
@@ -2426,6 +2460,8 @@ static void VR_Tick(void)
         bool open = g_wristPip && menu && (pm == 2 || pm == 3 || pm == 5 || QpcMs() < g_pipExpectUntil || PipMenusVisible());
         { static bool pmv = false; bool v = PipMenusVisible(); if (v != pmv) { pmv = v; Log("Pip-Boy screens %s (mode %d)", v ? "showing" : "gone", pm); } }
         if (open != g_pipOpen) Log("Pip-Boy %s", open ? "open - shown on your wrist" : "closed");
+        if (!open && g_pipOpen) g_pipByY = false;
+        if (!open && !g_pipOpen && g_pipByY && pm == 0 && QpcMs() > g_pipExpectUntil + 500.0) g_pipByY = false;   /* (it never opened) */
         g_pipOpen = open;
     }
     if (g_pipOpen) menu = false;          /* the world, your head and your arms keep going while the Pip-Boy is up */
@@ -2566,7 +2602,7 @@ static void VR_Tick(void)
                 since = 0;
                 static double fullSince = 0;
                 if (g_pipModeRaw != 3) fullSince = 0; else if (!fullSince) fullSince = now;
-                if (!lookKeep && fullSince && now - fullSince > 300.0) {
+                if (!lookKeep && fullSince && now - fullSince > 300.0 && !g_pipByY) {
                     if (!lostSince) lostSince = now;
                     if (now - lostSince > 250.0 && !g_pipPressMask && g_pipModeRaw == 3) {
                         g_pipPressMask = XB_B; g_pipPressUntil = now + 150.0; lostSince = now + 600.0;   /* back out (retry later if needed) */
@@ -7184,6 +7220,7 @@ static void PipScr_Adjust(void)
 
 /* Once your arm is posed for the frame: where the screen is, and where that lands in the picture. */
 static bool g_pipPrepQuiet = false;   /* (a second look in the same frame: no adjusting, no saving) */
+static float g_handW[2][3]; static bool g_handWOk[2];   /* (set further down, each frame) */
 static void PipScr_Prepare(char *player, char *cam)
 {
     g_pipQuad.ok = false;
@@ -7193,6 +7230,30 @@ static void PipScr_Prepare(char *player, char *cam)
     static uint32_t ptGen = 0;
     if (g_pipTwFor != node || ptGen != g_fpGen) { g_pipTwFor = node; ptGen = g_fpGen; g_pipTw = FindBone(node, "Bip01 L ForeTwist", 0); if (!g_pipScrUser) g_pipScrHave = false; }
     char *tw = g_pipTw; if (!tw) return;
+    if (g_pipByY && g_pipYFront && g_pipFrontOk) {   /* opened with Y: the menu floats in front of you, like trading and containers */
+        float asp = g_pipScrAspect > 0.3f && g_pipScrAspect < 4.0f ? g_pipScrAspect : 4.0f / 3.0f;
+        float hw = 0.26f, hh = hw / asp;
+        float O = g_vrYawOffset; M3 Mvr = { { cosf(O), 0.0f, -sinf(O) }, { -sinf(O), 0.0f, -cosf(O) }, { 0.0f, 1.0f, 0.0f } };
+        int h = g_handWOk[0] ? 0 : g_handWOk[1] ? 1 : -1;
+        const float *C = (const float *)(cam + NIAV_WORLD_TRANSLATE), *Cw = (const float *)(cam + NIAV_WORLD_ROTATE);
+        float F[3] = { Cw[0], Cw[3], Cw[6] }, Up[3] = { Cw[1], Cw[4], Cw[7] }, Rt[3] = { Cw[2], Cw[5], Cw[8] };
+        const float *fr = (const float *)(cam + NICAMERA_FRUSTUM);
+        if (!(fr[1] > fr[0]) || !(fr[2] > fr[3])) return;
+        static const float cs[4][2] = { { -1, 1 }, { 1, 1 }, { 1, -1 }, { -1, -1 } };   /* top-left, top-right, bottom-right, bottom-left */
+        for (int k = 0; k < 4; k++) {
+            float pv[3], P[3], q[3];
+            for (int i = 0; i < 3; i++) pv[i] = g_pipFrontC[i] + g_pipFrontRt[i] * hw * cs[k][0] + (i == 1 ? hh * cs[k][1] : 0.0f);
+            const float *base = h >= 0 ? g_vrHandPos[h] : g_vrHeadPos; const float *baseW = h >= 0 ? g_handW[h] : C;
+            for (int i = 0; i < 3; i++) { float r = 0; for (int j = 0; j < 3; j++) r += Mvr[i][j] * (pv[j] - base[j]); P[i] = baseW[i] + r * g_unitsPerMeter; }
+            V3Sub(q, P, C); float z = V3Dot(q, F); if (z < 0.5f) return;
+            g_pipQuad.x[k] = (V3Dot(q, Rt) / z - fr[0]) / (fr[1] - fr[0]) * g_bbW;
+            g_pipQuad.y[k] = (fr[2] - V3Dot(q, Up) / z) / (fr[2] - fr[3]) * g_bbH;
+            g_pipQuad.rhw[k] = 1.0f / z;
+        }
+        g_pipQuad.ok = true; g_pipQuad.at = QpcMs(); g_pipQuadLast = g_pipQuad;
+        { static int nl = 0; if (nl++ == 10) Log("Pip-Boy screen: menu in front of you (opened with Y)"); }
+        return;
+    }
     {   /* the game's own screen shape: which part of the menu picture is the menu, and its proportions */
         static char *aspFor = NULL;
         char *im = *(char **)0x011D8A80; char *pm = Rd(im, 0x178) ? *(char **)(im + 0x174) : NULL;
@@ -16645,6 +16706,9 @@ static const SetOpt g_setOpts[] = {
     { SP_BODY, ST_INFO, "World size now", 0, 0, &g_unitsPerMeter, 0, 0, 0, "%.1f units/m", 0, 0, "The world size in use right now (game units per real metre)." },
 
     { SP_PIP, ST_BOOL, "Pip-Boy on your wrist", "Controls", "bWristPipBoy", &g_wristPip, 0, 0, 0, 0, 0, 0, "Raise your left wrist to your face to open the Pip-Boy on your arm. OFF: the game's normal flat Pip-Boy." },
+    { SP_PIP, ST_BOOL, "Left Y opens the Pip-Boy", "Controls", "bPipBoyButtonY", &g_pipYOpen, 0, 0, 0, 0, 0, 0, "ON: tap left Y to open or close the Pip-Boy (as well as raising your wrist). Not while a gun is in your left hand - then Y reloads it." },
+    { SP_PIP, ST_BOOL, "Y Pip-Boy: menu in front of you", "PipScreen", "bYMenuInFront", &g_pipYFront, 0, 0, 0, 0, 0, 0, "ON: a Pip-Boy opened with Y shows its menu floating in front of you, like trading and containers, and stays open until you close it. OFF: on your wrist." },
+    { SP_PIP, ST_BOOL, "Hold still while it's open", "Controls", "bPipBoyHoldStill", &g_pipNoMove, 0, 0, 0, 0, 0, 0, "ON: you don't walk or run while the Pip-Boy is open (the world still runs). OFF: you can move with it open." },
     { SP_PIP, ST_BOOL, "Menu drawn on the screen", "PipScreen", "bDrawMenu", &g_pipScrOn, 0, 0, 0, 0, 0, 0, "FNVR draws the Pip-Boy menu right on the Pip-Boy 2000's screen, without the dark box around it." },
     { SP_PIP, ST_BOOL, "Black box: Pip-Boy screen box", "PipScreen", "bShowScreenBox", &g_pipBoxShow, 0, 0, 0, 0, 0, 0, "The dark screen box of the Pip-Boy model. OFF hides it (the menu may need it to show - try both)." },
     { SP_PIP, ST_BOOL, "Black box: menu background", "PipScreen", "bMenuBackground", &g_pipMenuBg, 0, 0, 0, 0, 0, 0, "The dark background behind the menu itself. OFF: only the glowing menu shows (may not show over the live world)." },
