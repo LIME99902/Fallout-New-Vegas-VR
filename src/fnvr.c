@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.3.4 (muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.3.5 (ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -281,7 +281,8 @@ static float g_mrPocketSide = 0.15f, g_mrPocketDown = 0.62f, g_mrPocketFwd = 0.2
 static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static bool MR_HandBusy(int h); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
 static bool g_mfOn = true; static float g_mfScale = 1.0f;   /* [Weapons] bMuzzleLight / fMuzzleLight */
 static void *g_pf1Right = NULL;   /* (the power fist last seen on the gun hand) */
-static bool g_olOn = true;   /* [Reload] bOutlines */ static bool g_mrShowPouch = true;   /* [Reload] bShowPouches */ static void Ol_Draw(IDirect3DDevice9 *dev); static void Ol_Collect(char *cam);
+static float g_pchScale = 1.0f, g_pchTurn = 0.0f;   /* [Reload] fPouchModelScale / fPouchModelTurn (degrees) */
+static bool g_olOn = false;   /* [Reload] bOutlines */ static bool g_mrShowPouch = true;   /* [Reload] bShowPouches */ static void Ol_Draw(IDirect3DDevice9 *dev); static void Ol_Collect(char *cam);
 static void Pf_Blow(int h); static void Pf_Visual(void); static void Mf_Shot(int h, void *weap, float len); static float Mf_LenNode(char *n);
 static void MR_LeftHud(char *out, size_t n); static bool MR_LeftBlocksAutoReload(void); static void InstallReloadHook(void);
 static bool LG_PoseNow(float *org, M3 W, float *aim);   /* (the other hand's weapon as last drawn - for shots and blows) */
@@ -669,7 +670,9 @@ static void LoadSettings(void)
     g_lgWithArms = GetPrivateProfileIntA("Grab", "bOtherHandWithArms", 1, g_iniPath) != 0;
     g_lgMotion = GetPrivateProfileIntA("Grab", "bOtherHandGunMotion", 1, g_iniPath) != 0;
     g_mrOn = GetPrivateProfileIntA("Reload", "bManualReload", 1, g_iniPath) != 0;
-    g_olOn = GetPrivateProfileIntA("Reload", "bOutlines", 1, g_iniPath) != 0;
+    g_olOn = GetPrivateProfileIntA("Reload", "bOutlines", 0, g_iniPath) != 0;
+    { char b[32]; GetPrivateProfileStringA("Reload", "fPouchModelScale", "1.0", b, sizeof b, g_iniPath); g_pchScale = fminf(fmaxf((float)atof(b), 0.2f), 5.0f);
+      GetPrivateProfileStringA("Reload", "fPouchModelTurn", "0", b, sizeof b, g_iniPath); g_pchTurn = (float)atof(b); }
     g_mrShowPouch = GetPrivateProfileIntA("Reload", "bShowPouches", 1, g_iniPath) != 0;
     g_mfOn = GetPrivateProfileIntA("Weapons", "bMuzzleLight", 1, g_iniPath) != 0;
     { char b[32]; GetPrivateProfileStringA("Weapons", "fMuzzleLight", "1.0", b, sizeof b, g_iniPath); g_mfScale = fminf(fmaxf((float)atof(b), 0.1f), 3.0f); }
@@ -5861,7 +5864,7 @@ static FireWeapon_t o_FireWeapon = NULL;
 static unsigned g_shotsRedirected = 0;
 static bool Barrel_Aim(float *h, float *p);
 
-static bool g_scopeSighting;
+static bool g_scopeSighting; static bool g_brlShot = false;   /* (this shot goes out along the drawn barrel) */
 static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unusedEdx, void *actor)
 {
     (void)unusedEdx;
@@ -5936,7 +5939,9 @@ static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unused
             }
             if (al++ < 3) Log("Aim point: head-look points moved onto the aim line for the shot:%s", nap ? found : " none found");
         }
+        g_brlShot = brl;
         o_FireWeapon(weapon, actor);
+        g_brlShot = false;
         {   int wt = *(BYTE *)((char *)weapon + 0xF4); if (wt >= 3 && wt <= 9) Mf_Shot(1, weapon, -1.0f); }
         for (int i = 0; i < nap; i++) memcpy(ap[i].p, ap[i].old, 12);
         if (camTurned) memcpy(cam + NIAV_WORLD_ROTATE, camSave, sizeof camSave);
@@ -6014,7 +6019,9 @@ static void *__cdecl Hook_ProjSpawn(void *proj, void *shooter, void *cc, void *w
         static int logs = 0;
         if (logs++ < 6) Log("Bullet launch: game direction is %+.2f deg sideways, %+.2f deg up/down from the hand aim%s",
                             dz * RAD2DEG, dx * RAD2DEG, g_scopeSighting ? (same ? " - scope: sent straight down the crosshair" : " - not corrected (unexpected angles)") : "");
-        if (g_scopeSighting && same) { rotZ = h; rotX = pt; }
+        int npj = weap && !IsBadReadPtr((char *)weap + 0x11E, 1) ? *(BYTE *)((char *)weap + 0x11E) : 1;
+        bool fix = same && (g_scopeSighting || (g_brlShot && npj <= 1));   /* (scope: down the crosshair; otherwise straight out of the drawn barrel - not shotgun pellets) */
+        if (fix) { rotZ = h; rotX = pt; }
         /* The game launches the bullet along the gun model's muzzle point (node), not the angles above.
            Learn which way that point "shoots" in its own frame, then turn it onto the aim line while the
            bullet is created. */
@@ -6052,7 +6059,7 @@ static void *__cdecl Hook_ProjSpawn(void *proj, void *shooter, void *cc, void *w
             Log("Bullet launch: the muzzle point \"%s\" shoots along its local (%.3f, %.3f, %.3f) - corrected from the next shot on",
                 nn && !IsBadStringPtrA(nn, 64) ? nn : "?", g_projAxis[0], g_projAxis[1], g_projAxis[2]);
         }
-        if (g_scopeSighting && same && ref) {
+        if (fix && ref) {
             /* the game turns the bullet after creating it (spread / aim toward where your head looks):
                put it back on the crosshair line, along with any stored direction vector that matches */
             float r0x = *(float *)(ref + 0x24), r0z = *(float *)(ref + 0x2C);
@@ -6073,10 +6080,11 @@ static void *__cdecl Hook_ProjSpawn(void *proj, void *shooter, void *cc, void *w
                     nf++; off += 8;
                 }
             }
-            if (g_tracked < 6)
+            if (g_tracked < 6 && g_scopeSighting)
                 Log("Bullet %d: right after creation it pointed %+.2f deg sideways, %+.2f deg down vs the crosshair; extra args %.4f %.4f %u %u; direction values fixed:%s",
                     g_tracked + 1, remainderf(r0z - h, 2.0f * PI_F) * RAD2DEG, (r0x - pt) * RAD2DEG, f1, f2, b1 & 0xFF, b2 & 0xFF, nf ? found : " none found");
             *(float *)(ref + 0x24) = pt; *(float *)(ref + 0x2C) = h;
+            if (!g_scopeSighting) { static int bl = 0; if (bl++ < 3) Log("Bullet launch: gun hand's bullet put straight down the drawn barrel (it had turned %+.2f deg sideways, %+.2f deg down; %d direction values fixed)", remainderf(r0z - h, 2.0f * PI_F) * RAD2DEG, (r0x - pt) * RAD2DEG, nf); }
         }
         if (g_scopeSighting && ref && g_tracked < 6) {   /* follow this bullet for a moment (diagnostics) */
             g_tracked++;
@@ -12259,6 +12267,48 @@ static void MR_InHand(char *n, int fh, M3 rel, const float *mid)
     float org[3]; for (int i = 0; i < 3; i++) org[i] = palm[i] - sc * (W[i][0] * mid[0] + W[i][1] * mid[1] + W[i][2] * mid[2]);
     MR_Show(n); MR_Move(n, org, W);
 }
+/* the speedloader / shell / round you took from the pouch, held in that hand: its own copy of the gun's part, hung on the
+   hand's bone (so it's drawn with your hand, fingers around it), the part in the gun left alone */
+static struct { char *src, *copy, *bone; float mid[3]; bool used; } g_mrHI[2];
+static void MRHI_Unhide(char *n, int d)
+{
+    if (!n || d > 10 || IsBadReadPtr(n, 0xB0)) return;
+    *(uint32_t *)(n + 0x30) &= ~1u;
+    float *sc = (float *)(n + NIAV_LOCAL_SCALE); if (!(*sc > 0.001f)) *sc = 1.0f;   /* (parts the reload animation keeps shrunk to nothing) */
+    if (!AsNode(n)) return;
+    char **kids = *(char ***)(n + 0xA0); unsigned kc = *(uint16_t *)(n + 0xA6);
+    for (unsigned i = 0; kids && i < kc && i < 64; i++) MRHI_Unhide(kids[i], d + 1);
+}
+static bool MR_HandItem(int fh, char *part, M3 rel, float gunScale)
+{
+    char *bone = g_bones[fh][B_HAND];
+    if (!MR_Ok(part) || !MR_Ok(bone) || !AsNode(bone) || !g_handWOk[fh]) return false;
+    if (g_mrHI[fh].src != part || g_mrHI[fh].bone != bone || !MR_Ok(g_mrHI[fh].copy)) {
+        char *c = ((char *(__attribute__((thiscall)) *)(char *))0x00A5D680)(part);
+        if (!MR_Ok(c)) { static int nl = 0; if (nl++ < 3) Log("Reload: couldn't copy the gun's part for your hand"); return false; }
+        InterlockedIncrement((volatile LONG *)(c + 4));
+        MRHI_Unhide(c, 0);
+        float I[9] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 }; memcpy(c + NIAV_LOCAL_ROTATE, I, 36); memset(c + NIAV_LOCAL_TRANSLATE, 0, 12);
+        ((NiAttach_t)(*(void ***)bone)[55])(bone, c, true);
+        if (*(char **)(c + NIAV_PARENT) != bone) { Log("Reload: couldn't put the part in your hand"); return false; }
+        g_mrHI[fh].src = part; g_mrHI[fh].copy = c; g_mrHI[fh].bone = bone;
+        MR_Mid(c, g_mrHI[fh].mid);
+        const char *nm = *(const char **)(part + 0x08);
+        Log("Reload: %s held in your %s hand (its own copy, on the hand)", nm && !IsBadStringPtrA(nm, 64) ? nm : "the part", fh ? "right" : "left");
+    }
+    char *c = g_mrHI[fh].copy;
+    M3 W; M3Mul(W, g_handWR[fh], rel);
+    float palm[3]; Gun_Palm(fh, palm);
+    { const float *Hb = (const float *)(bone + NIAV_WORLD_TRANSLATE); for (int i = 0; i < 3; i++) palm[i] += Hb[i] - g_handW[fh][i]; }
+    float S = gunScale > 0.0001f ? gunScale : 1.0f, bs = *(const float *)(bone + NIAV_WORLD_SCALE); if (!(bs > 0.0001f)) bs = 1.0f;
+    *(float *)(c + NIAV_LOCAL_SCALE) = S / bs;
+    float org[3]; for (int i = 0; i < 3; i++) org[i] = palm[i] - S * (W[i][0] * g_mrHI[fh].mid[0] + W[i][1] * g_mrHI[fh].mid[1] + W[i][2] * g_mrHI[fh].mid[2]);
+    MR_PlaceNode(c, org, W);
+    *(uint32_t *)(c + 0x30) &= ~1u;
+    NodeUpdate(c);
+    g_mrHI[fh].used = true;
+    return true;
+}
 /* g: 0 gun hand's gun (its first-person model), 1 the other hand's gun (its world model) */
 static void MR_VisualGun(int g, char *top)
 {
@@ -12298,7 +12348,8 @@ static void MR_VisualGun(int g, char *top)
     for (int k = MRI_SPEED; k <= MRI_ROUND; k++) {
         char *p = G->itemNode[k]; if (!MR_Ok(p)) continue;
         if (!G->itemRestOk[k]) { MR_Mid(p, G->itemMid[k]); M3 HT, Wp; M3T(HT, g_handWR[h]); memcpy(Wp, p + NIAV_WORLD_ROTATE, sizeof Wp); M3Mul(G->itemRel[k], HT, Wp); G->itemRestOk[k] = true; }
-        if (g_mr.item == k && g_mr.itemGun == g && g_mr.itemHand == fh) MR_InHand(p, fh, G->itemRel[k], G->itemMid[k]);
+        if (g_mr.item == k && g_mr.itemGun == g && g_mr.itemHand == fh) { float gs = *(const float *)(top + NIAV_WORLD_SCALE);
+            if (!MR_HandItem(fh, p, G->itemRel[k], gs)) MR_InHand(p, fh, G->itemRel[k], G->itemMid[k]); }
     }
     /* the slide / bolt: locked back while empty with the magazine out or waiting to be worked; follows your pull */
     bool racking = g_mr.rack && g_mr.rackGun == g;
@@ -12326,11 +12377,107 @@ static void MR_VisualGun(int g, char *top)
         MR_Turn(G->barrelNode, sd, piv, -35.0f);
     }
 }
+/* ---- The ammo pouches as real game models -----------------------------------------------------------------------------
+   The pouches on your belt use a pouch model from the game's own files (with its real textures), when one is found:
+   [Reload] sPouchModel names one (a path under meshes\, e.g. armor\something\pouch.nif); otherwise FNVR looks once through
+   the game's objects for a model whose name says pouch, and remembers what it found. Without one, a plain pouch is drawn. */
+static char g_pchPath[200] = ""; static int g_pchState = 0;   /* 0 not looked yet, 1 have a model, -1 none */
+static char *g_pchSrc = NULL, *g_pchCopy[2] = { NULL, NULL }, *g_pchOn[2] = { NULL, NULL }; static float g_pchMid[3], g_pchSize = 1.0f;
+static int Pch_Score(const char *str, int len)
+{
+    char lo[200]; int n = len < 199 ? len : 199; for (int i = 0; i < n; i++) lo[i] = (char)tolower((unsigned char)str[i]); lo[n] = 0;
+    if (n < 6 || strcmp(lo + n - 4, ".nif") || !strstr(lo, "pouch")) return 0;
+    int sc = 1; if (strstr(lo, "ncr")) sc += 4; if (strstr(lo, "ammo")) sc += 2; if (strstr(lo, "belt")) sc += 1; if (strstr(lo, "1stperson") || strstr(lo, "_1st")) sc -= 1;
+    return sc;
+}
+static void Pch_Find(void)
+{
+    if (g_pchState) return;
+    char ini[200]; GetPrivateProfileStringA("Reload", "sPouchModel", "", ini, sizeof ini, g_iniPath);
+    if (ini[0]) { snprintf(g_pchPath, sizeof g_pchPath, "%s", ini); g_pchState = 1; Log("Pouches: using the model set in FNVR.ini: %s", g_pchPath); return; }
+    char found[200]; GetPrivateProfileStringA("Reload", "sPouchModelFound", "", found, sizeof found, g_iniPath);
+    if (found[0]) { if (!strcmp(found, "-")) { g_pchState = -1; return; } snprintf(g_pchPath, sizeof g_pchPath, "%s", found); g_pchState = 1; Log("Pouches: using the pouch model found before: %s", g_pchPath); return; }
+    double t0 = QpcMs(); int best = 0, seen = 0; char list[1500] = ""; size_t L = 0;
+    for (int mod = 0; mod < 10; mod++) {
+        uint32_t top = mod == 0 ? 0x00190000 : 0x00030000;
+        for (uint32_t id = 0x800; id < top; id++) {
+            char *f = (char *)LookupForm(((uint32_t)mod << 24) | id); if (!f) continue;
+            if (((uintptr_t)f & 0xFFF) > 0xFB0 && IsBadReadPtr(f, 0x48)) continue;   /* (a small object at the end of a page) */
+            for (int k = 0; k < 2; k++) {
+                int off = k ? 0x40 : 0x34;
+                const char *str = *(const char **)(f + off); uint16_t len = *(uint16_t *)(f + off + 4);
+                if (len < 6 || len > 190 || (uintptr_t)str < 0x10000 || IsBadReadPtr(str, len)) continue;
+                int sc = Pch_Score(str, len); if (!sc) continue;
+                seen++;
+                if (L < 1300) L += (size_t)snprintf(list + L, sizeof list - L, "%s%.*s", L ? ", " : "", len, str);
+                if (sc > best) { best = sc; snprintf(g_pchPath, sizeof g_pchPath, "%.*s", len, str); }
+            }
+        }
+    }
+    Log("Pouches: looked through the game's objects in %.0f ms - %d pouch model(s)%s%s", QpcMs() - t0, seen, seen ? ": " : "", list);
+    g_pchState = best ? 1 : -1;
+    WritePrivateProfileStringA("Reload", "sPouchModelFound", best ? g_pchPath : "-", g_iniPath);
+    if (best) Log("Pouches: using %s", g_pchPath); else Log("Pouches: no pouch model in the game's objects - a plain pouch is drawn (set [Reload] sPouchModel to use one)");
+}
+/* (render hook) the two pouch models, placed on your belt for this frame; false: draw the plain ones */
+static bool Pch_Models(char *player)
+{
+    bool want = g_mrOn && g_mrShowPouch && g_bodyValid && !g_pipOpen && !IsMenuMode();
+    int t = PlayerWeaponType(); want = want && ((PlayerWeaponOut() && t >= 3 && t <= 9) || (g_lg.on && !g_lg.melee));
+    char *fp = player ? *(char **)(player + PLAYER_NODE_1ST_PERSON) : NULL;
+    int h = g_handWOk[1] ? 1 : g_handWOk[0] ? 0 : -1;
+    if (!want || !MR_Ok(fp) || !AsNode(fp) || h < 0) { for (int k = 0; k < 2; k++) if (MR_Ok(g_pchCopy[k]) && g_pchOn[k] && *(char **)(g_pchCopy[k] + NIAV_PARENT) == g_pchOn[k]) *(uint32_t *)(g_pchCopy[k] + 0x30) |= 1u; return false; }
+    if (!g_pchState) Pch_Find();
+    if (g_pchState < 0) return false;
+    if (!g_pchSrc) {
+        void *loader = *(void **)0x011C3B3C; if (!loader) return false;
+        char *src = (char *)((LoadModel_t)0x00447080)(loader, g_pchPath, 0, true, 0, false, true);
+        if (!MR_Ok(src)) { Log("Pouches: couldn't load %s - a plain pouch is drawn", g_pchPath); g_pchState = -1; return false; }
+        InterlockedIncrement((volatile LONG *)(src + 4)); g_pchSrc = src;
+        g_lgPtN = 0; LG_PtsWalk(src, NULL, NULL, 0);
+        float mn[3] = { 1e9f, 1e9f, 1e9f }, mx[3] = { -1e9f, -1e9f, -1e9f };
+        for (int q = 0; q < g_lgPtN; q++) for (int i = 0; i < 3; i++) { if (g_lgPts[q][i] < mn[i]) mn[i] = g_lgPts[q][i]; if (g_lgPts[q][i] > mx[i]) mx[i] = g_lgPts[q][i]; }
+        float big = 0; for (int i = 0; i < 3; i++) { g_pchMid[i] = g_lgPtN ? (mn[i] + mx[i]) * 0.5f : 0; if (mx[i] - mn[i] > big) big = mx[i] - mn[i]; }
+        g_pchSize = g_lgPtN && big > 0.01f ? big : 10.0f;
+        Log("Pouches: model %s loaded - %.1f x %.1f x %.1f units", g_pchPath, mx[0] - mn[0], mx[1] - mn[1], mx[2] - mn[2]);
+    }
+    float y = g_bodyYawOk ? g_bodyYaw : g_vrHeadYaw;
+    float fwV[3] = { -sinf(y), 0, -cosf(y) }, rtV[3] = { cosf(y), 0, -sinf(y) };
+    float O = g_vrYawOffset; M3 Mvr = { { cosf(O), 0.0f, -sinf(O) }, { -sinf(O), 0.0f, -cosf(O) }, { 0.0f, 1.0f, 0.0f } };
+    float rtG[3], fwG[3]; for (int i = 0; i < 3; i++) { rtG[i] = Mvr[i][0] * rtV[0] + Mvr[i][1] * rtV[1] + Mvr[i][2] * rtV[2]; fwG[i] = Mvr[i][0] * fwV[0] + Mvr[i][1] * fwV[1] + Mvr[i][2] * fwV[2]; }
+    float upG[3] = { 0, 0, 1 };
+    float S = 0.13f * g_unitsPerMeter / g_pchSize * g_pchScale;
+    for (int k = 0; k < (g_mrPocket2 ? 2 : 1); k++) {
+        if (!MR_Ok(g_pchCopy[k]) || g_pchOn[k] != fp || *(char **)(g_pchCopy[k] + NIAV_PARENT) != fp) {
+            char *c = ((char *(__attribute__((thiscall)) *)(char *))0x00A5D680)(g_pchSrc); if (!MR_Ok(c)) return false;
+            InterlockedIncrement((volatile LONG *)(c + 4));
+            ((NiAttach_t)(*(void ***)fp)[55])(fp, c, true);
+            if (*(char **)(c + NIAV_PARENT) != fp) { Log("Pouches: couldn't put the model on you - a plain pouch is drawn"); g_pchState = -1; return false; }
+            g_pchCopy[k] = c; g_pchOn[k] = fp;
+        }
+        char *c = g_pchCopy[k];
+        float side = k ? -1.0f : 1.0f, pv[3]; MR_PocketPos(side, pv);
+        /* the model's own turn: its X across your body, Y forward, Z up (turned about up by fPouchModelTurn; mirrored side faces out) */
+        float a = (g_pchTurn + (k ? 180.0f : 0.0f) * 0) / RAD2DEG, ca = cosf(a), sa = sinf(a);
+        M3 W; for (int i = 0; i < 3; i++) { float xr = rtG[i] * ca + fwG[i] * sa, yr = -rtG[i] * sa + fwG[i] * ca; W[i][0] = xr; W[i][1] = yr; W[i][2] = upG[i]; }
+        float pg[3]; for (int i = 0; i < 3; i++) { float r = 0; for (int j = 0; j < 3; j++) r += Mvr[i][j] * (pv[j] - g_vrHandPos[h][j]); pg[i] = g_handW[h][i] + r * g_unitsPerMeter; }
+        for (int i = 0; i < 3; i++) pg[i] -= S * (W[i][0] * g_pchMid[0] + W[i][1] * g_pchMid[1] + W[i][2] * g_pchMid[2]);
+        float ps = *(const float *)(fp + NIAV_WORLD_SCALE); if (!(ps > 0.0001f)) ps = 1.0f;
+        *(float *)(c + NIAV_LOCAL_SCALE) = S / ps;
+        MR_PlaceNode(c, pg, W);
+        *(uint32_t *)(c + 0x30) &= ~1u;
+        NodeUpdate(c);
+    }
+    return true;
+}
+static bool g_pchModelNow = false;
 static void MR_Visual(void)
 {
-    g_mrVisN = 0;
+    g_mrVisN = 0; g_mrHI[0].used = g_mrHI[1].used = false;
     MR_VisualGun(0, g_weaponNode);
     MR_VisualGun(1, g_lg.on && !g_lg.melee && g_lg.ref ? LG_Root(g_lg.ref) : NULL);
+    g_pchModelNow = Pch_Models((char *)GetPlayer());
+    for (int fh = 0; fh < 2; fh++) if (!g_mrHI[fh].used && MR_Ok(g_mrHI[fh].copy) && *(char **)(g_mrHI[fh].copy + NIAV_PARENT) == g_mrHI[fh].bone) *(uint32_t *)(g_mrHI[fh].copy + 0x30) |= 1u;   /* (put away: hidden) */
 }
 static void MR_VisualRestore(void)
 {
@@ -12410,7 +12557,7 @@ static bool Mf_Make(int h)
             static const uintptr_t fn[4] = { 0x00450B80, 0x00AA13E0, 0x00A71F60, 0x00B5C940 }; char bytes[64] = ""; bool good = true;
             for (int i = 0; i < 4; i++) { BYTE b0 = *(BYTE *)fn[i]; char t[8]; snprintf(t, sizeof t, " %02X", b0); strcat(bytes, t);
                 if (!(b0 == 0x55 || b0 == 0x56 || b0 == 0x53 || b0 == 0x57 || b0 == 0x51 || b0 == 0x83 || b0 == 0x8B || b0 == 0x6A || b0 == 0x64 || b0 == 0xA1 || b0 == 0xE9 || b0 == 0x81 || b0 == 0x8D)) good = false; }
-            uintptr_t v0 = *(uintptr_t *)0x0109DD0C; if (v0 < 0x00401000 || v0 > 0x00FFFFFF) good = false;
+            uintptr_t v0 = *(uintptr_t *)0x0109DD0C; { int inExe = 0; for (int k = 0; k < 8; k++) { uintptr_t e = ((uintptr_t *)0x0109DD0C)[k]; if (e >= 0x00401000 && e <= 0x00FFFFFF) inExe++; } if (inExe < 5) good = false; }   /* (another plugin may have hooked a slot or two) */
             chk = good ? 1 : -1;
             Log("Muzzle light: game functions start%s, point light table %08X - %s", bytes, (unsigned)v0, good ? "ok" : "unexpected, muzzle light off");
         }
@@ -14181,6 +14328,7 @@ static void Pch_Collect(char *cam)
 {
     g_pch.n = 0;
     if (!g_mrOn || !g_mrShowPouch || !cam || !g_bbW || !g_bodyValid || g_pipOpen || IsMenuMode()) return;
+    bool boxes = !g_pchModelNow;
     int t = PlayerWeaponType(); bool gun = (PlayerWeaponOut() && t >= 3 && t <= 9) || (g_lg.on && !g_lg.melee);
     if (!gun) return;
     int h = g_handWOk[1] ? 1 : g_handWOk[0] ? 0 : -1; if (h < 0) return;
@@ -14191,6 +14339,7 @@ static void Pch_Collect(char *cam)
         bool in = MR_InOnePocket(0, side) || MR_InOnePocket(1, side);
         DWORD a = in ? 0x70 : 0xE6;   /* (see-through while your hand is in it, so you can see the hand) */
         /* the pouch: canvas brown, a darker flap over its top, brass rounds peeking out at the back */
+        if (boxes) {
         Pch_Box(cam, h, c, rt, fw, 0.055f, 0.065f, 0.032f, 0x6B5434, a, 3);
         float fl[3]; for (int i = 0; i < 3; i++) fl[i] = c[i] + fw[i] * 0.004f; fl[1] += 0.05f;
         Pch_Box(cam, h, fl, rt, fw, 0.058f, 0.02f, 0.036f, 0x4A3A22, a, -1);
@@ -14198,7 +14347,8 @@ static void Pch_Collect(char *cam)
             float r[3]; for (int i = 0; i < 3; i++) r[i] = c[i] + rt[i] * (0.022f * k) - fw[i] * 0.012f; r[1] += 0.075f;
             Pch_Box(cam, h, r, rt, fw, 0.007f, 0.012f, 0.007f, 0xC8A040, a, -1);
         }
-        if (in) {   /* the orange outline: your hand is in it */
+        }
+        if (in && g_olOn) {   /* the orange outline: your hand is in it */
             float O = g_vrYawOffset; M3 Mvr = { { cosf(O), 0.0f, -sinf(O) }, { -sinf(O), 0.0f, -cosf(O) }, { 0.0f, 1.0f, 0.0f } };
             float P[8][3];
             for (int k = 0; k < 8; k++) { float pv[3]; for (int i = 0; i < 3; i++) pv[i] = c[i] + rt[i] * 0.058f * ((k & 1) ? 1 : -1) + (i == 1 ? 0.068f * ((k & 2) ? 1 : -1) : 0) + fw[i] * 0.035f * ((k & 4) ? 1 : -1);
