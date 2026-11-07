@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.3.9 (pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.4.0 (FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -996,7 +996,16 @@ static bool VR_Start(void)
 {
     LogMem("before SteamVR");
     char path[MAX_PATH];
-    snprintf(path, sizeof path, "%sFNVR\\openvr_api.dll", g_pluginDir);
+    /* FNVR Stereo: OpenVR in its own 64-bit process (FNVR\Stereo\openvr_api.dll + x64\FNVR-VRHost.exe) - SteamVR's client
+       then takes nothing from the game's 4 GB. [Stereo] bOutOfProcessVR; if the host can't start, OpenVR runs in the game as before. */
+    static int oop = -1;
+    if (oop < 0) {
+        char sp[MAX_PATH]; snprintf(sp, sizeof sp, "%sFNVR\\Stereo\\openvr_api.dll", g_pluginDir);
+        oop = GetPrivateProfileIntA("Stereo", "bOutOfProcessVR", 1, g_iniPath) && GetFileAttributesA(sp) != INVALID_FILE_ATTRIBUTES ? 1 : 0;
+        if (oop) Log("FNVR Stereo found - OpenVR runs in its own 64-bit process (FNVR-VRHost.exe)");
+    }
+    if (oop == 1) snprintf(path, sizeof path, "%sFNVR\\Stereo\\openvr_api.dll", g_pluginDir);
+    else snprintf(path, sizeof path, "%sFNVR\\openvr_api.dll", g_pluginDir);
     if (!g_ovrDll) {
         g_ovrDll = LoadLibraryA(path);
         if (!g_ovrDll) {
@@ -1031,6 +1040,11 @@ static bool VR_Start(void)
     EVRInitError err = EVRInitError_VRInitError_None;
     if (init2) init2(&err, type, "");
     else       init1(&err, type);
+    if (err != EVRInitError_VRInitError_None && oop == 1 && (int)err == 1001) {   /* (the VR host couldn't start: OpenVR in the game instead) */
+        Log("FNVR Stereo: the VR host couldn't start (see FNVR_Stereo.log) - using OpenVR inside the game");
+        FreeLibrary(g_ovrDll); g_ovrDll = NULL; oop = 0;
+        return VR_Start();
+    }
     if (err != EVRInitError_VRInitError_None) {
         Log("SteamVR init failed: error %d (%s). Will retry in 10 seconds.",
             (int)err, errStr ? errStr(err) : "?");
