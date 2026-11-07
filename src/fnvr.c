@@ -9632,7 +9632,7 @@ static bool Hit_Scripts(void)
     for (int i = 0; i < 4; i++) { char b[128]; snprintf(b, sizeof b, "ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho %d\nEnd\n", force[i]); g_hrPushScr[i] = g_scriptIntf->CompileScript(b); }
     g_hrKoPushScr = g_scriptIntf->CompileScript("ref rWho\nBegin Function { rWho }\nplayer.PushActorAway rWho 4\nEnd\n");
     /* the weapon's own effect on whoever it hits (super-heated fire, shock, poison, bleeding...) - its enchantment, cast on them */
-    g_hrCritScr = g_scriptIntf->CompileScript("ref rW\nfloat fC\nBegin Function { rW }\nset fC to player.GetAV CritChance\nSetFunctionValue fC\nEnd\n");   /* (your crit chance; the roll is done here) */
+    g_hrCritScr = g_scriptIntf->CompileScript("ref rWeap\nfloat fVal\nBegin Function { rWeap }\nset fVal to player.GetAV CritChance\nSetFunctionValue fVal\nEnd\n");   /* (your crit chance; the roll is done here) */
     Log("Hit reactions: critical effects %s", g_hrCritScr ? "ok" : "FAILED");
     g_hrEnchScr = g_scriptIntf->CompileScript("ref rWho\nref rE\nBegin Function { rWho, rE }\nrWho.CastImmediateOnSelf rE\nEnd\n");
     g_hrSndScr = g_scriptIntf->CompileScript("ref rWho\nref rSnd\nBegin Function { rWho, rSnd }\nrWho.PlaySound3D rSnd\nEnd\n");
@@ -11613,9 +11613,9 @@ static void MR_Scripts(void)
 {
     if (g_mrScrTried || !g_scriptIntf || !g_scriptIntf->CompileScript) return;
     g_mrScrTried = true;
-    g_mrScr[MRS_GETR] = g_scriptIntf->CompileScript("ref rW\nint iN\nBegin Function { rW }\nset iN to GetPlayerCurrentAmmoRounds\nSetFunctionValue iN\nEnd\n");
-    g_mrScr[MRS_SETR] = g_scriptIntf->CompileScript("ref rW\nint iN\nBegin Function { rW, iN }\nSetPlayerCurrentAmmoRounds iN\nEnd\n");
-    g_mrScr[MRS_INV]  = g_scriptIntf->CompileScript("ref rW\nref rA\nint iN\nBegin Function { rW }\nset iN to 0\nlet rA := GetPlayerCurrentAmmo\nif rA\nset iN to player.GetItemCount rA\nendif\nSetFunctionValue iN\nEnd\n");
+    g_mrScr[MRS_GETR] = g_scriptIntf->CompileScript("ref rWeap\nint iVal\nBegin Function { rWeap }\nset iVal to GetPlayerCurrentAmmoRounds\nSetFunctionValue iVal\nEnd\n");
+    g_mrScr[MRS_SETR] = g_scriptIntf->CompileScript("ref rWeap\nint iNum\nBegin Function { rWeap, iNum }\nSetPlayerCurrentAmmoRounds iNum\nEnd\n");
+    g_mrScr[MRS_INV]  = g_scriptIntf->CompileScript("ref rWeap\nref rAmmo\nint iNum\nBegin Function { rWeap }\nset iNum to 0\nlet rAmmo := GetPlayerCurrentAmmo\nif rAmmo\nset iNum to player.GetItemCount rAmmo\nendif\nSetFunctionValue iNum\nEnd\n");
     g_mrScr[MRS_LOAD] = g_scriptIntf->CompileScript(   /* (the other hand's gun: take rounds out of your ammo) */
         "ref rWeap\nint iNeed\nref rAmmo\nref rList\nint iN\nint iI\nint iC\nint iGot\nBegin Function { rWeap, iNeed }\nset iGot to 0\nset rList to GetWeaponAmmo rWeap\n"
         "if rList\nset iN to 0\nif GetType rList == 85\nset iN to ListGetCount rList\nendif\n"
@@ -11758,8 +11758,33 @@ static bool __attribute__((fastcall)) Hook_PlayReload(void *actor, void *unusedE
     }
     return o_PlayReload ? o_PlayReload(actor, weap, anim, useMod) : true;
 }
+/* the player's own reload (PlayerCharacter::ReloadWeapon, PC 0x0095D850 - checked against fnv_decomp): the reload button and
+   the automatic reload when a gun runs empty go through here, with the animation */
+#define PLAYERRELOAD_ADDR 0x0095D850
+static PlayReload_t o_PlayerReload = NULL;
+static bool __attribute__((fastcall)) Hook_PlayerReload(void *player, void *unusedEdx, void *weap, int mode, int useMod)
+{
+    (void)unusedEdx;
+    static int cl = 0; if (cl++ < 12) Log("Reload: the game's player reload called (mode %d, weapon %s)", mode, weap == g_mr.g[0].base ? "the gun hand's" : "another");
+    if (g_mrOn && mode != 0 && g_mr.g[0].cls != MRC_NONE && weap == g_mr.g[0].base) {
+        static double clickAt = 0; double now = QpcMs();
+        if (now - clickAt > 350.0) { clickAt = now; MR_Buzz(MR_GunHand(0), 400);
+            const MRGun *G = &g_mr.g[0];
+            if (G->st == MRS_READY) MR_Hint(0, G->cls == MRC_REVOLVER ? "Empty - B opens the cylinder" : G->cls == MRC_BREAK ? "Empty - B breaks it open" :
+                                       G->cls == MRC_TUBE || G->cls == MRC_SINGLE ? "Empty - load from an ammo pocket" : "Empty - B drops the magazine"); }
+        static int bl = 0; if (bl++ < 5) Log("Reload: the game's own reload (mode %d) blocked - manual reloading", mode);
+        return false;
+    }
+    return o_PlayerReload ? o_PlayerReload(player, weap, mode, useMod) : false;
+}
 static void InstallReloadHook(void)
 {
+    {   static const BYTE e1[5] = { 0x55, 0x8B, 0xEC, 0x6A, 0xFF }, e2[5] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC };
+        BYTE *fn = (BYTE *)PLAYERRELOAD_ADDR;
+        if (!memcmp(fn, e2, 5)) { BYTE e2x[6]; memcpy(e2x, fn, 6); o_PlayerReload = (PlayReload_t)HookEntry(PLAYERRELOAD_ADDR, e2x, 6, (void *)Hook_PlayerReload, "Player reload hook"); }
+        else o_PlayerReload = (PlayReload_t)HookEntry(PLAYERRELOAD_ADDR, e1, 5, (void *)Hook_PlayerReload, "Player reload hook");
+        if (!o_PlayerReload) { const BYTE *b = fn; Log("Reload: player reload hook not placed - its first bytes are %02X %02X %02X %02X %02X %02X", b[0], b[1], b[2], b[3], b[4], b[5]); }
+    }
     static bool done = false; if (done) return; done = true;
     static const BYTE e1[5] = { 0x55, 0x8B, 0xEC, 0x6A, 0xFF }, e2[5] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC };
     BYTE *fn = (BYTE *)PLAYRELOAD_ADDR;
@@ -12093,7 +12118,7 @@ static void MR_VisualGun(int g, char *top)
     /* the cylinder swings out to the side while open */
     if (G->cls == MRC_REVOLVER && G->st == MRS_OPEN && MR_Ok(G->cylNode)) {
         float m[3], c[3]; MR_Mid(G->cylNode, m); MR_WorldOf(G->cylNode, m, c);
-        float side = g_leftHanded ? -1.0f : 1.0f; if (g == 1) side = -side;   /* (out to the left of a right-hand gun) */
+        float side = -1.0f;   /* (out to the right in either hand, like the game's own reload animation) */
         float piv[3]; for (int i = 0; i < 3; i++) piv[i] = c[i] - up[i] * 0.9f - sd[i] * 0.5f * side;
         MR_Turn(G->cylNode, fw, piv, 80.0f * side);
     }
