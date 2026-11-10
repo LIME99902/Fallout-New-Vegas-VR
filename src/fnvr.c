@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.7 (live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.8 (full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -209,6 +209,14 @@ static bool g_matchHeadsetFov = true;
 static bool g_asyncCapture;
 static bool  g_stereo = true;
 static bool  g_stereoFull = false;
+/* [Stereo] i3DMode - how the world reaches your eyes: 0 = 2D (the same picture in both eyes: fastest, but the world looks like
+   one big flat screen), 1 = alternating eyes (each frame draws one eye: lighter, can shimmer when things move fast), 2 = full
+   3D (both eyes drawn every frame, like a game made for VR: about twice the drawing work). Full 3D is the standard view. */
+static int   g_3dMode = 2;
+static bool  g_3dModeNew = false;   /* (this start moved from the old on/off switches to the 3D view choice) */
+static double g_fullDrawnAt = 0;    /* (when a frame was last drawn in full 3D) */
+static void Stereo_FromMode(void) { if (g_3dMode < 0 || g_3dMode > 2) g_3dMode = 2; g_stereo = g_3dMode >= 1; g_stereoFull = g_3dMode == 2; }
+static const char *Stereo_ModeName(void) { return g_3dMode == 2 ? "full 3D (both eyes every frame)" : g_3dMode == 1 ? "alternating eyes" : "2D (the same picture in both eyes)"; }
 /* Fast alternate eyes: the headset waits only after the right eye, so the left-eye frame runs straight on - a pair of
    eyes per headset refresh (90+ pairs a second at 90 Hz) instead of one eye. [Stereo] bFastAlternate */
 static bool  g_fastAer = true; static int g_aerDrewEye = -1;   /* (the eye this frame drew, -1 none) */
@@ -630,6 +638,15 @@ static bool  g_startSetup = true;              /* INI [Startup] bShowSetup: the 
 static int   g_gfxHeadset = 0;                 /* [Startup] iHeadset: 0 = from SteamVR, then the headset list below */
 static int   g_gfxWirelessI = 0;               /* [Startup] bWirelessI: 1 = streamed over Wi-Fi (Air Link, Virtual Desktop, Steam Link) */
 static int   g_gfxTier = 1;                    /* [Startup] iPCTier: 0 low end, 1 medium, 2 high end, 3 very high end */
+/* [Startup] iGameResolution: 0 = automatic (from the headset and PC choices), 1..7 = a size of your own (below), 8 = leave it
+   as the game's launcher (or the INI) sets it - FNVR doesn't touch it */
+static int   g_gameResSel = 0;
+static int   g_gameW = 0, g_gameH = 0, g_gameSig = -1, g_startSig = -1;   /* [Startup] iGameW/iGameH/iGameSig: the size FNVR keeps the game at and the menu choices it came from; the choices the game started with */
+static int   g_gfxResPct;   /* (defined with the settings table) */
+static int   Gfx_Sig(void);
+static const int g_gameResList[8][2] = { { 0, 0 }, { 1920, 1080 }, { 2560, 1440 }, { 2880, 1620 }, { 3200, 1800 }, { 3840, 2160 }, { 4480, 2520 }, { 5120, 2880 } };
+#define GAMERES_LEAVE 8
+static bool  g_startRestartAsked = false;     /* (Start playing found a new resolution waiting: asked once to quit first) */
 static bool  g_gfxDof = false;                 /* [Startup] bDepthOfField: the game's depth-of-field blur (blurry in VR) */
 static float g_recPxPerTan = 0;                /* (SteamVR's recommended sharpness for this headset) */
 static float g_eyeTanSpan = 0;                 /* (one eye's width in view tangents, from SteamVR) */
@@ -679,8 +696,13 @@ static void LoadSettings(void)
     g_pixelDensityPct = (int)GetPrivateProfileIntA("Display", "iPixelDensityPercent", 0, g_iniPath);
     g_matchHeadsetFov = GetPrivateProfileIntA("Display", "bMatchHeadsetFOV", 1, g_iniPath) != 0;
     g_asyncCapture = GetPrivateProfileIntA("Display", "bAsyncCapture", 1, g_iniPath) != 0;
-    g_stereo = GetPrivateProfileIntA("Stereo", "bStereo", 0, g_iniPath) != 0;
-    g_stereoFull = GetPrivateProfileIntA("Stereo", "bFullStereo", 0, g_iniPath) != 0;
+    g_3dMode = GetPrivateProfileIntA("Stereo", "i3DMode", -1, g_iniPath);
+    if (g_3dMode < 0 || g_3dMode > 2) {   /* (from the old on/off switches - both off unless someone turned one on: full 3D is the standard view now) */
+        bool alt = GetPrivateProfileIntA("Stereo", "bStereo", 0, g_iniPath) != 0, full = GetPrivateProfileIntA("Stereo", "bFullStereo", 0, g_iniPath) != 0;
+        g_3dMode = alt && !full ? 1 : 2; g_3dModeNew = true;
+        char b3[8]; snprintf(b3, sizeof b3, "%d", g_3dMode); WritePrivateProfileStringA("Stereo", "i3DMode", b3, g_iniPath);
+    }
+    Stereo_FromMode();
     g_fastAer = GetPrivateProfileIntA("Stereo", "bFastAlternate", 1, g_iniPath) != 0;
     g_renderScaleSel = GetPrivateProfileIntA("Display", "iRenderScale", 0, g_iniPath); if (g_renderScaleSel < 0 || g_renderScaleSel > 4) g_renderScaleSel = 0;
     g_sharpenSel = GetPrivateProfileIntA("Display", "iSharpen", 0, g_iniPath); if (g_sharpenSel < 0 || g_sharpenSel > 3) g_sharpenSel = 0;
@@ -858,6 +880,11 @@ g_pipHudMode = GetPrivateProfileIntA("Controls", "bPipBoyHudMode", 0, g_iniPath)
     g_gfxHeadset = GetPrivateProfileIntA("Startup", "iHeadset", 0, g_iniPath); if (g_gfxHeadset < 0 || g_gfxHeadset > 12) g_gfxHeadset = 0;
     g_gfxWirelessI = GetPrivateProfileIntA("Startup", "bWirelessI", 0, g_iniPath) ? 1 : 0;
     g_gfxTier = GetPrivateProfileIntA("Startup", "iPCTier", 1, g_iniPath); if (g_gfxTier < 0 || g_gfxTier > 3) g_gfxTier = 1;
+    g_gameResSel = GetPrivateProfileIntA("Startup", "iGameResolution", 0, g_iniPath); if (g_gameResSel < 0 || g_gameResSel > GAMERES_LEAVE) g_gameResSel = 0;
+    g_gfxResPct = GetPrivateProfileIntA("Startup", "iResolutionPercent", 0, g_iniPath); if (g_gfxResPct < 0 || g_gfxResPct > 120) g_gfxResPct = 0;   /* (it was saved but never read back) */
+    g_gameW = GetPrivateProfileIntA("Startup", "iGameW", 0, g_iniPath); g_gameH = GetPrivateProfileIntA("Startup", "iGameH", 0, g_iniPath);
+    g_gameSig = GetPrivateProfileIntA("Startup", "iGameSig", -1, g_iniPath);
+    g_startSig = Gfx_Sig();
     g_gfxDof = GetPrivateProfileIntA("Startup", "bDepthOfField", 0, g_iniPath) != 0;
     g_bulletKey = GetPrivateProfileIntA("Controls", "iBulletTimeKey", 46, g_iniPath);
     { char cb[32]; GetPrivateProfileStringA("Controls", "fChestDown", "0.32", cb, sizeof cb, g_iniPath); g_chestDown = (float)atof(cb);
@@ -973,9 +1000,10 @@ g_pipHudMode = GetPrivateProfileIntA("Controls", "bPipBoyHudMode", 0, g_iniPath)
     if (g_pixelDensityPct > 200) g_pixelDensityPct = 200;
     Profiles_Init();
     Log("Settings: %s", g_iniPath);
-    Log("  iPredictionMs=%d bHeadsetDisplay=%d iPixelDensityPercent=%d bMatchHeadsetFOV=%d bAsyncCapture=%d bStereo=%d fWorldScale=%.1f",
+    Log("  iPredictionMs=%d bHeadsetDisplay=%d iPixelDensityPercent=%d bMatchHeadsetFOV=%d bAsyncCapture=%d i3DMode=%d fWorldScale=%.1f",
         g_predictionMs, (int)g_headsetDisplay, g_pixelDensityPct, (int)g_matchHeadsetFov, (int)g_asyncCapture,
-        (int)g_stereo, g_unitsPerMeter);
+        g_3dMode, g_unitsPerMeter);
+    Log("3D view: %s%s", Stereo_ModeName(), g_3dModeNew ? " - the standard view from this version on (FNVR menu > Display > 3D view, or Ctrl+F10, to change)" : "");
     Log("  bMotionControls=%d bHandAim=%d bLeftHanded=%d fAimPitchOffset=%.1f",
         (int)g_motionControls, (int)g_handAim, (int)g_leftHanded, g_aimPitchOffsetDeg);
     Log("  bGrabObjects=%d fGrabReach=%.1f fGrabMaxMass=%.1f fThrowStrength=%.2f bPhysicalCrouchLean=%d fMaxLean=%.2f",
@@ -2443,10 +2471,35 @@ static void Arms_LogHidden(const char *when)
 }
 
 static void D3D9_CheckHooks(void);
+/* the game's own quit - what the main menu's Quit (and the console's qqq) do: one flag the game's main loop checks */
+static double g_quitAt = 0;
+static HWND Game_Window(void)
+{
+    unsigned char *os = *(unsigned char **)0x011DEA0C;   /* (OSGlobals) */
+    HWND w = os ? *(HWND *)(os + 8) : NULL;
+    if (!w && g_hookedDevice) { D3DDEVICE_CREATION_PARAMETERS cp; if (SUCCEEDED(IDirect3DDevice9_GetCreationParameters(g_hookedDevice, &cp))) w = cp.hFocusWindow; }
+    if (!w) w = FindWindowA(NULL, "Fallout: New Vegas");
+    return w;
+}
+static void Game_Quit(void)
+{
+    unsigned char *os = *(unsigned char **)0x011DEA0C;
+    if (os) os[1] = 1;
+    g_quitAt = QpcMs(); if (g_quitAt <= 0) g_quitAt = 1;
+}
+static void Quit_Tick(void)   /* (still running a while after the quit: the window is closed, then the game ended) */
+{
+    static int stage = 0;
+    if (!g_quitAt) return;
+    double t = QpcMs() - g_quitAt;
+    if (stage == 0 && t > 5000.0) { HWND w = Game_Window(); stage = 1; Log("Quit: the game is still running - closing its window (%p)", (void *)w); if (w) PostMessageA(w, WM_CLOSE, 0, 0); }
+    else if (stage == 1 && t > 15000.0) { stage = 2; Log("Quit: still running - ending the game"); TerminateProcess(GetCurrentProcess(), 0); }
+}
 static void VR_Tick(void)
 {
     DWORD now = GetTickCount();
     g_ticksSinceLog++;
+    Quit_Tick();
     D3D9_CheckHooks();
     g_frameHasSample = false;
 
@@ -2458,10 +2511,10 @@ static void VR_Tick(void)
         UIMessage(g_trackingEnabled ? "FNVR: head tracking ON" : "FNVR: head tracking OFF");
     }
     if (KeyPressed(VK_F10, &g_kF10) && HeadsetDisplayActive() && (GetAsyncKeyState(VK_CONTROL) & 0x8000)) {   /* Ctrl+F10 (plain F10 is the real-time Pip-Boy) */
-        g_stereo = !g_stereo;
-        SaveInt("Stereo", "bStereo", g_stereo ? 1 : 0);
-        Log("Stereo %s (F10)", g_stereo ? "ON" : "OFF");
-        UIMessage(g_stereo ? "FNVR: 3D ON" : "FNVR: 3D OFF (flat)");
+        g_3dMode = (g_3dMode + 2) % 3;   /* (full 3D -> alternating eyes -> 2D -> full 3D) */
+        Stereo_FromMode(); SaveInt("Stereo", "i3DMode", g_3dMode);
+        Log("3D view: %s (Ctrl+F10)", Stereo_ModeName());
+        UIMessage(g_3dMode == 2 ? "FNVR: full 3D (both eyes every frame)" : g_3dMode == 1 ? "FNVR: 3D with alternating eyes" : "FNVR: 2D (flat)");
     }
     if (HeadsetDisplayActive() && g_handAim && g_motionControls) {
         /* Shot fine-tuning: F3/F4 = left/right, F6/F7 = down/up, half a degree per press */
@@ -3652,6 +3705,7 @@ static bool Capture_Eye_(IDirect3DDevice9 *dev, int eye)
     D3DSURFACE_DESC bd;
     IDirect3DSurface9_GetDesc(bb, &bd);
     g_bbW = bd.Width; g_bbH = bd.Height;
+    { static bool noted = false; if (!noted) { noted = true; void Gfx_NoteRunning_(void); Gfx_NoteRunning_(); } }
     if (!g_d11 && !Display_InitD3D11()) { IDirect3DSurface9_Release(bb); return false; }
 
     CapSlot *slot;
@@ -14094,9 +14148,29 @@ static void LHud_Draw(IDirect3DDevice9 *dev)
 }
 /* (present) the frame rate counter: top middle of the view, like the HUD */
 static float g_fpsVal = 0, g_fpsMs = 0;
+static void Full3D_Hint(double now, double dt)
+{
+    static double resumed = 0, acc = 0; static int n = 0; static bool said = false;
+    if (said) return;
+    bool fullNow = g_stereoFull && g_fullDrawnAt > 0 && now - g_fullDrawnAt < 250.0;
+    if (!fullNow || dt <= 0 || dt > 250.0) { resumed = 0; return; }
+    if (!resumed) { resumed = now; return; }
+    if (now - resumed < 3000.0) return;   /* (the first seconds after loading or a menu are uneven) */
+    acc += dt; n++;
+    if (acc < 20000.0) return;
+    said = true;
+    float fps = (float)(n * 1000.0 / acc);
+    float hz = g_vrSystem ? g_vrSystem->GetFloatTrackedDeviceProperty(0, ETrackedDeviceProperty_Prop_DisplayFrequency_Float, NULL) : 0;
+    Log("Full 3D: %.0f frames a second over 20 s of play (headset %.0f Hz)", fps, hz);
+    if (hz > 1 && fps < hz * 0.75f) {
+        char m[200]; snprintf(m, sizeof m, "FNVR: full 3D runs at %.0f FPS here (headset %.0f Hz). Smoother: lower PC power, or 3D view: Alternating (FNVR menu > Display)", fps, hz);
+        UIMessage(m);
+    }
+}
 static void Fps_Tick(void)
 {
     static double last = 0, acc = 0, rep = 0; static int n = 0; double now = QpcMs();
+    Full3D_Hint(now, last > 0 ? now - last : 0);
     if (last > 0 && now - last < 1000.0) { acc += now - last; n++; }
     last = now;
     if (now - rep > 500.0 && n > 0) { g_fpsMs = (float)(acc / n); g_fpsVal = g_fpsMs > 0.01f ? 1000.0f / g_fpsMs : 0; acc = 0; n = 0; rep = now; }
@@ -16124,6 +16198,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                 if (eye == 0) ok0 = Capture_Eye(dev, 0); else ok1 = ok0 && Capture_Eye(dev, 1);
             }
             for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
+            g_fullDrawnAt = QpcMs();
             if (ok0 && ok1 && g_fillSlot) g_fillSlot->targetEye = 2;
             g_stereoCapturedThisFrame = ok0;
             {   static int fl = 0; static double nl = 0;
@@ -16208,7 +16283,7 @@ static void InstallRenderHook(void)
     BYTE *fn = (BYTE *)DORENDERFRAME_ADDR;
     static const BYTE expected[6] = { 0x55, 0x8B, 0xEC, 0x83, 0xEC, 0x08 };   /* push ebp; mov ebp,esp; sub esp,8 */
     BYTE *tramp = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!tramp) { Log("Stereo: VirtualAlloc failed - stereo disabled"); g_stereo = false; return; }
+    if (!tramp) { Log("Stereo: VirtualAlloc failed - stereo disabled"); g_stereo = g_stereoFull = false; return; }
 
     if (memcmp(fn, expected, 6) == 0) {
         /* Trampoline: the 6 original bytes, then jump back into the function. */
@@ -16224,7 +16299,7 @@ static void InstallRenderHook(void)
     } else {
         Log("Stereo: unexpected bytes at %08X (%02X %02X %02X %02X %02X %02X) - stereo disabled",
             DORENDERFRAME_ADDR, fn[0], fn[1], fn[2], fn[3], fn[4], fn[5]);
-        g_stereo = false;
+        g_stereo = g_stereoFull = false;
         return;
     }
     FlushInstructionCache(GetCurrentProcess(), tramp, 64);
@@ -17916,8 +17991,8 @@ enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP
 static const char *const g_setPageName[SP_COUNT] = { "FNVR SETTINGS", "BODY & PROFILES", "PIP-BOY", "CONTROLS", "HOLSTERS & GESTURES", "HANDS & OBJECTS",
                                                      "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC", "ADVANCED: HEADSET & CONTROLS" };
 enum { ST_BOOL, ST_FLOAT, ST_INT, ST_PAGE, ST_ACTION, ST_SIGN, ST_PROFILE, ST_INFO, ST_CHOICE, ST_RES };
-enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16, SF_MELEE = 32, SF_HOLM = 64 };
-enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_PIP_GLUE, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP, SA_REQ };
+enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16, SF_MELEE = 32, SF_HOLM = 64, SF_IFRESTART = 128 };
+enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_PIP_GLUE, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP, SA_REQ, SA_QUIT_GAME };
 /* ---- Setup check: is everything FNVVRMC needs actually loaded? (shown first on the startup screen, and in the log) ---- */
 static char g_reqLabel[96] = "Setup check", g_reqDesc[700] = "Checking what's installed...";
 static int  g_reqMissing = 0;
@@ -18008,7 +18083,9 @@ static const SetOpt g_setOpts[] = {
     { SP_START, ST_CHOICE, "VR headset", "Startup", "iHeadset", &g_gfxHeadset, 0, 12, 1, GFX_HEADSETS, 0, 0, "Which headset you play on - sets how sharp the game is drawn for it. From SteamVR uses what SteamVR recommends for your headset." },
     { SP_START, ST_CHOICE, "Connection", "Startup", "bWirelessI", &g_gfxWirelessI, 0, 1, 1, "Wired (Link cable, DisplayPort)|Wireless (Air Link, Virtual Desktop, Steam Link)", 0, 0, "Wireless streaming compresses the picture, so slightly less resolution is used - it looks the same and runs smoother." },
     { SP_START, ST_CHOICE, "PC power", "Startup", "iPCTier", &g_gfxTier, 0, 3, 1, "Low end|Medium|High end|Very high end", 0, 0, "How strong your PC is. Higher = sharper picture in the headset, but harder on your graphics card. If the game stutters, pick one lower." },
-    { SP_START, ST_RES, "Game resolution", 0, 0, 0, 0, 0, 0, 0, 0, 0, "The size the game is drawn at - the headset picture can only be as sharp as this. A change needs a game restart (done for you when you press Start playing - just restart once)." },
+    { SP_START, ST_CHOICE, "3D view", "Stereo", "i3DMode", &g_3dMode, 0, 2, 1, "2D (flat)|Alternating eyes|Full 3D", 0, 0, "FULL 3D: each eye gets its own picture every frame, like a game made for VR - real depth, the world all around you, your hands and guns right in front of you. It draws the world twice, so it needs a strong PC (lower PC power if the frame rate drops). ALTERNATING EYES: one eye per frame - real depth for less work, but fast movement can shimmer. 2D: both eyes see the same picture - fastest, but the world looks like a big flat screen. Ctrl+F10 switches too." },
+    { SP_START, ST_RES, "Game resolution", 0, 0, 0, 0, 0, 0, 0, 0, 0, "The size the game is drawn at - the headset picture can only be as sharp as this. Left/right: Automatic (from the headset and PC choices above), a size of your own, or the launcher's (FNVR leaves it alone). FNVR keeps the game at this size every time it starts; a change is used from the next start." },
+    { SP_START, ST_ACTION, "Quit now - the new resolution starts next time", 0, 0, 0, 0, 0, 0, 0, SF_IFRESTART, SA_QUIT_GAME, "The game only picks up a new resolution when it starts. This closes the game (nothing is lost at this menu) - start it again and it runs at the new size." },
     { SP_START, ST_PAGE, "Advanced settings", 0, 0, 0, 0, 0, 0, 0, 0, SP_ADV, "Everything about the headset picture and motion controls: resolution, sharpness, 3D, field of view, aiming, fingers." },
     { SP_START, ST_ACTION, "Calibrate height and arms", 0, 0, 0, 0, 0, 0, 0, 0, SA_CAL_BODY, "Two quick steps: your height (standing straight, or sitting up straight for seated play), then both arms straight out in front." },
     { SP_START, ST_ACTION, "Start playing", 0, 0, 0, 0, 0, 0, 0, 0, SA_START_PLAY, "Go to the main menu (and save the headset and PC choices). A profile that isn't calibrated is calibrated first. (Change any of this later: hold both thumbsticks in for a second.)" },
@@ -18018,12 +18095,12 @@ static const SetOpt g_setOpts[] = {
     { SP_ADV, ST_CHOICE, "Connection", "Startup", "bWirelessI", &g_gfxWirelessI, 0, 1, 1, "Wired|Wireless", 0, 0, "Wireless streaming compresses the picture, so slightly less resolution is used." },
     { SP_ADV, ST_CHOICE, "PC power", "Startup", "iPCTier", &g_gfxTier, 0, 3, 1, "Low end|Medium|High end|Very high end", 0, 0, "Higher = sharper but harder on your graphics card." },
     { SP_ADV, ST_INT, "Resolution (% of headset)", "Startup", "iResolutionPercent", &g_gfxResPct, 0, 120, 5, "%.0f %%", 0, 0, "Overrides the PC power choice: how sharp the game is drawn compared with what your headset can show (100% = full sharpness, very demanding). 0 = from PC power." },
-    { SP_ADV, ST_RES, "Game resolution", 0, 0, 0, 0, 0, 0, 0, 0, 0, "The size the game is drawn at. Use Apply below, then restart the game." },
+    { SP_ADV, ST_RES, "Game resolution", 0, 0, 0, 0, 0, 0, 0, 0, 0, "The size the game is drawn at. Left/right: Automatic, a size of your own, or the launcher's (FNVR leaves it alone). Used from the next start." },
+    { SP_ADV, ST_ACTION, "Quit now - the new resolution starts next time", 0, 0, 0, 0, 0, 0, 0, SF_IFRESTART, SA_QUIT_GAME, "Closes the game so it starts at the new resolution next time." },
     { SP_ADV, ST_ACTION, "Apply resolution (restart after)", 0, 0, 0, 0, 0, 0, 0, 0, SA_GFX_APPLY, "Writes the resolution to the game's settings, turns off v-sync (it holds the game to your monitor's refresh rate - stutter in the headset) and sets windowed mode (needed for sizes bigger than your monitor). Restart the game to use it." },
     { SP_ADV, ST_BOOL, "Depth of field blur", "Startup", "bDepthOfField", &g_gfxDof, 0, 0, 0, 0, 0, 0, "The game's blur on distant things. Looks smeared in VR - OFF recommended. Applied with the resolution (restart)." },
     { SP_ADV, ST_INT, "Sharpness", "Display", "iPixelDensityPercent", &g_pixelDensityPct, 0, 200, 5, "%.0f %%", SF_RESTART, 0, "Size of the picture sent to the headset. 0 = automatic (matches the game's resolution, recommended). Restart to apply." },
-    { SP_ADV, ST_BOOL, "Full 3D (both eyes every frame)", "Stereo", "bFullStereo", &g_stereoFull, 0, 0, 0, 0, 0, 0, "Real 3D: the world is drawn from each eye every frame. About twice the drawing work - for high end PCs." },
-    { SP_ADV, ST_BOOL, "3D depth (experimental)", "Stereo", "bStereo", &g_stereo, 0, 0, 0, 0, 0, 0, "3D depth by drawing each eye in turn (fast movement can shimmer)." },
+    { SP_ADV, ST_CHOICE, "3D view", "Stereo", "i3DMode", &g_3dMode, 0, 2, 1, "2D (flat)|Alternating eyes|Full 3D", 0, 0, "FULL 3D: each eye gets its own picture every frame, like a game made for VR - real depth, the world all around you, your hands and guns right in front of you. It draws the world twice, so it needs a strong PC (lower PC power if the frame rate drops). ALTERNATING EYES: one eye per frame - real depth for less work, but fast movement can shimmer. 2D: both eyes see the same picture - fastest, but the world looks like a big flat screen. Ctrl+F10 switches too." },
     { SP_ADV, ST_BOOL, "Match headset field of view", "Display", "bMatchHeadsetFOV", &g_matchHeadsetFov, 0, 0, 0, 0, SF_FOV, 0, "Widen the game's view so it fills your headset." },
     { SP_ADV, ST_BOOL, "Copy frames in background", "Display", "bAsyncCapture", &g_asyncCapture, 0, 0, 0, 0, SF_RESTART, 0, "Faster frame copying to the headset. Restart to apply." },
     { SP_ADV, ST_BOOL, "Curved menus and HUD", "Display", "bCurvedUI", &g_curvedUI, 0, 0, 0, 0, SF_RESTART, 0, "Menus and the HUD on a curved panel in front of you. Restart to apply." },
@@ -18156,12 +18233,11 @@ static const SetOpt g_setOpts[] = {
     { SP_DISPLAY, ST_BOOL, "US units (feet & inches)", "Display", "bUSUnits", &g_imperial, 0, 0, 0, 0, 0, 0, "ON: heights, reaches and distances in this panel are shown in feet and inches (speeds in mph) instead of metres." },
     { SP_DISPLAY, ST_BOOL, "Game in the headset", "Display", "bHeadsetDisplay", &g_headsetDisplay, 0, 0, 0, 0, SF_RESTART, 0, "OFF: head tracking only, the game stays on the monitor. Takes effect after a restart." },
     { SP_DISPLAY, ST_BOOL, "Frame rate counter", "Display", "bFpsCounter", &g_fpsShow, 0, 0, 0, 0, 0, 0, "ON: the frame rate at the top of your view - frames a second, milliseconds per frame, the headset's refresh rate, and the display setup in use (zero copy or CPU copy, render resolution, frame rate limit, 3D mode)." },
-    { SP_DISPLAY, ST_CHOICE, "Render resolution", "Display", "iRenderScale", &g_renderScaleSel, 0, 4, 1, "100% (full)|85%|75%|66%|50%", 0, 0, "How much of the full resolution the game draws at. Lower = faster frames; the picture is scaled up to the headset and can be sharpened (below). Takes effect after a restart." },
+    { SP_DISPLAY, ST_CHOICE, "Render resolution", "Display", "iRenderScale", &g_renderScaleSel, 0, 4, 1, "100% (full)|85%|75%|66%|50%", 0, 0, "How much of the full resolution the game draws at (with Game resolution on Automatic). Lower = faster frames; the picture is scaled up to the headset and can be sharpened (below). Takes effect after a restart." },
     { SP_DISPLAY, ST_CHOICE, "Sharpening", "Display", "iSharpen", &g_sharpenSel, 0, 3, 1, "Off|Low|Medium|High", 0, 0, "Sharpens the picture on its way to the headset (AMD's contrast adaptive sharpening) - most useful with a lower render resolution. Needs FNVR Stereo with zero copy (see FNVR.log)." },
     { SP_DISPLAY, ST_BOOL, "FNVR runs the game clock", "Clock", "bVRClock", &g_vrClock, 0, 0, 0, 0, 0, 0, "ON: the game moves by the real time between frames (or whole headset refreshes), at any frame rate - instead of New Vegas Tick Fix's frame-time fix, which puts the game in fast motion above its limit. Takes effect after a restart." },
     { SP_DISPLAY, ST_CHOICE, "Game frame rate", "Stereo", "iFrameRate", &g_fpsMode, 0, 5, 1, "Unlimited|120|90|60|30|Match the headset (old way)", 0, 0, "How many frames a second the game may draw. The game no longer waits for the headset: it draws as fast as this allows and each headset refresh gets the newest picture (SteamVR fills in when the game is slower). Unlimited = as fast as your PC can. Match the headset = wait for every refresh, as before." },
-    { SP_DISPLAY, ST_BOOL, "Full 3D (both eyes every frame)", "Stereo", "bFullStereo", &g_stereoFull, 0, 0, 0, 0, 0, 0, "ON: real 3D - the world is drawn twice every frame, once from each eye, so near things (your hands, guns, the Pip-Boy) have true depth. Costs about twice the drawing time. Overrides the alternating mode below." },
-    { SP_DISPLAY, ST_BOOL, "3D depth (experimental)", "Stereo", "bStereo", &g_stereo, 0, 0, 0, 0, 0, 0, "ON: real 3D depth - the game is drawn from your left and right eye in turn (each eye gets a new picture every other frame, so fast movement can shimmer). OFF: the same picture in both eyes. Ctrl+F10 toggles it too." },
+    { SP_DISPLAY, ST_CHOICE, "3D view", "Stereo", "i3DMode", &g_3dMode, 0, 2, 1, "2D (flat)|Alternating eyes|Full 3D", 0, 0, "FULL 3D: each eye gets its own picture every frame, like a game made for VR - real depth, the world all around you, your hands and guns right in front of you. It draws the world twice, so it needs a strong PC (lower PC power if the frame rate drops). ALTERNATING EYES: one eye per frame - real depth for less work, but fast movement can shimmer. 2D: both eyes see the same picture - fastest, but the world looks like a big flat screen. Ctrl+F10 switches too." },
     { SP_DISPLAY, ST_BOOL, "Match headset field of view", "Display", "bMatchHeadsetFOV", &g_matchHeadsetFov, 0, 0, 0, 0, SF_FOV, 0, "Widen the game's view so it fills your headset (F9 toggles it too)." },
     { SP_DISPLAY, ST_INT, "Sharpness", "Display", "iPixelDensityPercent", &g_pixelDensityPct, 0, 200, 5, "%.0f %%", SF_RESTART, 0, "Headset sharpness. 0 = automatic (matches the game's resolution, recommended). Restart to apply." },
     { SP_DISPLAY, ST_BOOL, "Copy frames in background", "Display", "bAsyncCapture", &g_asyncCapture, 0, 0, 0, 0, SF_RESTART, 0, "Faster frame copying to the headset. Restart to apply." },
@@ -18297,10 +18373,11 @@ static HFONT g_setFontBig = NULL, g_setFont = NULL, g_setFontSmall = NULL;
 static HmdMatrix34_t g_setPose; static float g_setWidthM = 0.46f;
 static bool   g_setShown = false, g_setCurShown = false;
 
+static bool Gfx_RestartPending(void);
 static int Set_PageRows(int page, int *idx, int max)
 {
     int n = 0;
-    for (int i = 0; i < SET_NOPTS && n < max; i++) if (g_setOpts[i].page == page) idx[n++] = i;
+    for (int i = 0; i < SET_NOPTS && n < max; i++) if (g_setOpts[i].page == page && (!(g_setOpts[i].flags & SF_IFRESTART) || Gfx_RestartPending())) idx[n++] = i;
     if (page != SP_MAIN && page != SP_START && n < max) idx[n++] = -1;   /* "Back" */
     return n;
 }
@@ -18320,20 +18397,48 @@ static void Gfx_PrefsPath(char *out, size_t cap)
     if (FAILED(SHGetFolderPathA(NULL, CSIDL_PERSONAL, NULL, 0, doc))) doc[0] = 0;
     snprintf(out, cap, "%s\\My Games\\FalloutNV\\FalloutPrefs.ini", doc);
 }
+/* the same file found without the shell (when FNVR loads, the shell's own lookup isn't safe to use yet): your Documents
+   folder as Windows records it for you */
+static void Gfx_PrefsPathEarly(char *out, size_t cap)
+{
+    char raw[MAX_PATH] = "", doc[MAX_PATH] = ""; DWORD sz = sizeof raw;
+    if (RegGetValueA(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders", "Personal",
+                     RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ | RRF_NOEXPAND, NULL, raw, &sz) == ERROR_SUCCESS && raw[0]) {
+        DWORD n = ExpandEnvironmentStringsA(raw, doc, sizeof doc); if (!n || n > sizeof doc) doc[0] = 0;
+    }
+    if (!doc[0]) { sz = sizeof doc; if (RegGetValueA(HKEY_CURRENT_USER, "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders", "Personal", RRF_RT_REG_SZ, NULL, doc, &sz) != ERROR_SUCCESS) doc[0] = 0; }
+    if (!doc[0]) { DWORD n = GetEnvironmentVariableA("USERPROFILE", raw, sizeof raw); if (n && n < sizeof raw) snprintf(doc, sizeof doc, "%s\\Documents", raw); }
+    snprintf(out, cap, "%s\\My Games\\FalloutNV\\FalloutPrefs.ini", doc);
+}
 static void Gfx_TargetFor(int tier, int *w, int *h);
+/* the menu choices an automatic size comes from */
+static int Gfx_Sig(void) { return (g_gameResSel & 15) | (g_gfxTier & 7) << 4 | (g_gfxHeadset & 31) << 7 | (g_gfxWirelessI & 1) << 12 | (g_gfxResPct & 255) << 13 | (g_renderScaleSel & 15) << 21; }
 static void Gfx_Target(int *w, int *h)
 {
     static bool inferred = false;
+    if (g_startSig < 0) g_startSig = Gfx_Sig();
     if (!inferred && g_bbW > 0) {   /* (first time: the PC choice starts at what this PC already runs, so nothing gets worse) */
         inferred = true;
         if (GetPrivateProfileIntA("Startup", "iPCTier", -1, g_iniPath) == -1) {
             int best = 0, bd = 1 << 30;
             for (int t = 0; t < 4; t++) { int tw, th; Gfx_TargetFor(t, &tw, &th); int d = abs(tw - (int)g_bbW); if (d < bd) { bd = d; best = t; } }
-            g_gfxTier = best; SaveInt("Startup", "iPCTier", best);
+            g_gfxTier = best; SaveInt("Startup", "iPCTier", best); g_startSig = Gfx_Sig();   /* (that's what it started with) */
             Log("Graphics: PC power starts at %d (closest to the %ux%u the game runs at)", best, g_bbW, g_bbH);
         }
     }
-    Gfx_TargetFor(g_gfxTier, w, h);
+    if (g_gameResSel >= 1 && g_gameResSel < GAMERES_LEAVE) { *w = g_gameResList[g_gameResSel][0]; *h = g_gameResList[g_gameResSel][1]; return; }   /* (a size of your own) */
+    if (g_gameResSel == GAMERES_LEAVE) {   /* (the launcher's: whatever the game's settings say) */
+        char pp[MAX_PATH]; Gfx_PrefsPath(pp, sizeof pp);
+        *w = GetPrivateProfileIntA("Display", "iSize W", (int)g_bbW, pp); *h = GetPrivateProfileIntA("Display", "iSize H", (int)g_bbH, pp); return;
+    }
+    int rw, rh; Gfx_TargetFor(g_gfxTier, &rw, &rh);
+    /* (automatic: what SteamVR reports wobbles a little from one start to the next - the size only moves for a choice in the
+       menu or a real change, such as another headset, never for a few pixels, so it doesn't ask for a restart now and then) */
+    int sig = Gfx_Sig(), kw = 0, kh = 0;
+    if (sig == g_gameSig && g_gameW >= 1280 && g_gameH >= 720) { kw = g_gameW; kh = g_gameH; }   /* (what these same choices gave before) */
+    else if (sig == g_startSig && g_bbW >= 1280 && g_bbH >= 720 && fabsf((float)g_bbW / (float)g_bbH - 16.0f / 9.0f) < 0.03f) { kw = (int)g_bbW; kh = (int)g_bbH; }   /* (the choices the game started with: what it runs at, if that's close) */
+    if (kw && fabsf((float)(rw - kw)) < 0.15f * (float)kw) { rw = kw; rh = kh; }
+    *w = rw; *h = rh;
 }
 static void Gfx_TargetFor(int tier, int *w, int *h)
 {
@@ -18354,11 +18459,16 @@ static void Gfx_TargetFor(int tier, int *w, int *h)
 static void Gfx_Text(char *out, size_t cap)
 {
     int w, h; Gfx_Target(&w, &h);
-    char pp[MAX_PATH]; Gfx_PrefsPath(pp, sizeof pp);
-    int sw = GetPrivateProfileIntA("Display", "iSize W", 0, pp), sh = GetPrivateProfileIntA("Display", "iSize H", 0, pp);
-    if (sw == w && sh == h && (int)g_bbW == w) snprintf(out, cap, "%dx%d", w, h);
-    else if (sw == w && sh == h) snprintf(out, cap, "%dx%d after restart", w, h);
-    else snprintf(out, cap, "%ux%u -> %dx%d", g_bbW, g_bbH, w, h);
+    const char *kind = g_gameResSel == 0 ? "Auto " : g_gameResSel == GAMERES_LEAVE ? "Launcher's " : "";
+    if ((int)g_bbW == w && (int)g_bbH == h) snprintf(out, cap, "%s%dx%d", kind, w, h);
+    else snprintf(out, cap, "%s%dx%d (now %ux%u - next start)", kind, w, h, g_bbW, g_bbH);
+}
+/* a resolution is waiting for the game to start again */
+static bool Gfx_RestartPending(void)
+{
+    if (!g_bbW || g_gameResSel == GAMERES_LEAVE) return false;
+    int w, h; Gfx_Target(&w, &h);
+    return (int)g_bbW != w || (int)g_bbH != h;
 }
 /* write it to the game's settings; true when the game needs a restart to use it */
 static bool Gfx_Apply(void)
@@ -18366,19 +18476,60 @@ static bool Gfx_Apply(void)
     int w, h; Gfx_Target(&w, &h);
     char pp[MAX_PATH]; Gfx_PrefsPath(pp, sizeof pp);
     if (GetFileAttributesA(pp) == INVALID_FILE_ATTRIBUTES) { Log("Graphics: the game's settings file wasn't found (%s)", pp); return false; }
-    bool change = false;
+    bool change = false, leave = g_gameResSel == GAMERES_LEAVE;
     #define GFX_SET(sec, key, val) do { if (GetPrivateProfileIntA(sec, key, -12345, pp) != (val)) { char b_[16]; snprintf(b_, sizeof b_, "%d", (val)); WritePrivateProfileStringA(sec, key, b_, pp); change = true; } } while (0)
-    GFX_SET("Display", "iSize W", w);
-    GFX_SET("Display", "iSize H", h);
-    GFX_SET("Display", "bFull Screen", 0);
+    if (!leave) {
+        GFX_SET("Display", "iSize W", w);
+        GFX_SET("Display", "iSize H", h);
+        GFX_SET("Display", "bFull Screen", 0);
+        g_gameW = w; g_gameH = h; g_gameSig = Gfx_Sig();   /* (FNVR puts the game back at this size every time it starts) */
+        SaveInt("Startup", "iGameW", w); SaveInt("Startup", "iGameH", h); SaveInt("Startup", "iGameSig", g_gameSig);
+    }
     GFX_SET("Display", "iPresentInterval", 0);
     GFX_SET("Imagespace", "bDoDepthOfField", g_gfxDof ? 1 : 0);
     #undef GFX_SET
     static const char *const tn[4] = { "low end", "medium", "high end", "very high end" };
     Log("Graphics: %s, %s, %s PC -> game resolution %dx%d (running at %ux%u)%s", g_gfxHeadset ? "headset picked" : "headset from SteamVR",
         g_gfxWirelessI ? "wireless" : "wired", tn[g_gfxTier & 3], w, h, g_bbW, g_bbH, change ? " - written to FalloutPrefs.ini, restart to use it" : "");
-    return change || (int)g_bbW != w || (int)g_bbH != h;
+    return !leave && (change || (int)g_bbW != w || (int)g_bbH != h);
 }
+/* (very early - NVSE loads FNVR before the game reads its settings) the game starts at the resolution chosen in FNVR's
+   menu, whatever put another size in the game's settings since (the game's launcher, the game itself on the way out).
+   "Launcher's" in the menu leaves the size to the launcher. */
+static int g_gfxOverW = 0, g_gfxOverH = 0;   /* (a size changed outside FNVR that was set back at this start - said on the startup screen) */
+static void Gfx_EnforceEarly(void)
+{
+    char pp[MAX_PATH]; Gfx_PrefsPathEarly(pp, sizeof pp);
+    if (GetFileAttributesA(pp) == INVALID_FILE_ATTRIBUTES) { Log("Graphics: the game's settings file isn't there yet (%s) - the game makes it on its first start", pp); return; }
+    int iw = GetPrivateProfileIntA("Display", "iSize W", 0, pp), ih = GetPrivateProfileIntA("Display", "iSize H", 0, pp);
+    int tw = g_gameW, th = g_gameH;
+    int lw = GetPrivateProfileIntA("Startup", "iLastRunW", 0, g_iniPath), lh = GetPrivateProfileIntA("Startup", "iLastRunH", 0, g_iniPath);
+    static const char *const mode[3] = { "automatic", "a size of your own", "the launcher's" };
+    Log("Graphics: the game's settings (%s) say %dx%d; FNVR keeps the game at %dx%d (%s); it last ran at %dx%d", pp, iw, ih, tw, th,
+        mode[g_gameResSel == 0 ? 0 : g_gameResSel == GAMERES_LEAVE ? 2 : 1], lw, lh);
+    if (g_gameResSel == GAMERES_LEAVE || tw < 1280 || th < 720 || (iw == tw && ih == th)) return;
+    char b[16];
+    snprintf(b, sizeof b, "%d", tw); WritePrivateProfileStringA("Display", "iSize W", b, pp);
+    snprintf(b, sizeof b, "%d", th); WritePrivateProfileStringA("Display", "iSize H", b, pp);
+    if (GetPrivateProfileIntA("Display", "bFull Screen", 0, pp) != 0) WritePrivateProfileStringA("Display", "bFull Screen", "0", pp);
+    bool outside = iw > 0 && lw > 0 && !(iw == lw && ih == lh);   /* (not just the game putting back the size it last ran at) */
+    if (outside) { g_gfxOverW = iw; g_gfxOverH = ih; }
+    Log("Graphics: the game's settings had %dx%d%s - set back to %dx%d before the game read them (Game resolution: Launcher's in FNVR's startup menu leaves it alone)",
+        iw, ih, outside ? " (changed outside FNVR - the launcher's options?)" : " (the size it ran at before - the game writes its settings back)", tw, th);
+}
+/* (the first frame) the size the game really started at - remembered, and checked against its settings */
+static void Gfx_NoteRunning(void)
+{
+    static bool done = false; if (done || !g_bbW) return; done = true;
+    SaveInt("Startup", "iLastRunW", (int)g_bbW); SaveInt("Startup", "iLastRunH", (int)g_bbH);
+    char pp[MAX_PATH]; Gfx_PrefsPath(pp, sizeof pp);
+    { char pe[MAX_PATH]; Gfx_PrefsPathEarly(pe, sizeof pe); if (_stricmp(pe, pp)) Log("Graphics: the settings file found at load (%s) isn't the shell's (%s)", pe, pp); }
+    int iw = GetPrivateProfileIntA("Display", "iSize W", 0, pp), ih = GetPrivateProfileIntA("Display", "iSize H", 0, pp);
+    if (iw > 0 && (iw != (int)g_bbW || ih != (int)g_bbH))
+        Log("Graphics: the game started at %ux%u although its settings say %dx%d - something else sets the size (ENB's ForceBorderlessFullscreen, OneTweak, a DXVK setting or a mod manager's own copy of the settings?)", g_bbW, g_bbH, iw, ih);
+    else Log("Graphics: the game started at %ux%u, as its settings say", g_bbW, g_bbH);
+}
+void Gfx_NoteRunning_(void) { Gfx_NoteRunning(); }
 static bool g_setFromStart = false;   /* (the advanced page was opened from the startup screen: Back goes there) */
 static void Set_ValueText(const SetOpt *o, char *out, size_t cap)
 {
@@ -18430,7 +18581,16 @@ static void Set_Changed(const SetOpt *o)
     if (o->flags & SF_MELEE) MeleeAngle_Save();
     if (o->flags & SF_HOLM) Hol_Save();
     if (o->var == &g_wristPip || o->var == &g_pipScrOn) g_pipScrDrawing = false;
-    if (o->var == &g_renderScaleSel) { if (Gfx_Apply()) { int w, h; Gfx_Target(&w, &h); char m[96]; snprintf(m, sizeof m, "Game resolution %dx%d - restart the game to use it", w, h); Set_Toast(m); } }
+    if (o->var == &g_renderScaleSel || o->var == &g_gfxTier || o->var == &g_gfxHeadset || o->var == &g_gfxWirelessI || o->var == &g_gfxResPct) {
+        /* (the game's settings follow the menu at once - the next start, or "Quit now", uses it) */
+        int w, h; Gfx_Target(&w, &h); char m[128];
+        if (Gfx_Apply() && Gfx_RestartPending()) { snprintf(m, sizeof m, "Game resolution %dx%d - used from the next start", w, h); Set_Toast(m); }
+    }
+    if (o->var == &g_3dMode) {
+        Stereo_FromMode();
+        Set_Toast(g_3dMode == 2 ? "Full 3D: both eyes drawn every frame - real depth, about twice the drawing work" :
+                  g_3dMode == 1 ? "Alternating eyes: real depth for less work (fast movement can shimmer)" : "2D: the same picture in both eyes - fastest, but flat");
+    }
     if (o->flags & SF_RESTART) Set_Toast("Saved - restart the game for this one to take effect");
     char v[64]; Set_ValueText(o, v, sizeof v);
     Log("Settings: %s = %s", o->label, v);
@@ -18459,6 +18619,14 @@ static void Set_Step(const SetOpt *o, int dir, float mult)
         int *v = (int *)o->var, nv = *v + (dir >= 0 ? 1 : -1);
         if (nv < (int)o->mn) nv = (int)o->mx; if (nv > (int)o->mx) nv = (int)o->mn;
         *v = nv; break; }
+    case ST_RES: {
+        g_gameResSel = (g_gameResSel + dir + GAMERES_LEAVE + 1) % (GAMERES_LEAVE + 1);
+        SaveInt("Startup", "iGameResolution", g_gameResSel);
+        int w, h; Gfx_Target(&w, &h); char m[128];
+        if (g_gameResSel == GAMERES_LEAVE) snprintf(m, sizeof m, "Resolution: the launcher's (%dx%d) - FNVR leaves it alone", w, h);
+        else if (Gfx_Apply()) snprintf(m, sizeof m, "Resolution %dx%d - used from the next start", w, h);
+        else snprintf(m, sizeof m, "Resolution %dx%d", w, h);
+        Set_Toast(m); Set_Buzz(500); g_setDirty = true; return; }
     case ST_PROFILE: {
         int s = g_profActive + dir; if (s < 1) s = 4; if (s > 4) s = 1;
         Profile_Save(); Profile_Load(s);
@@ -18485,12 +18653,18 @@ static void Set_Activate(int optIdx, int part)
     case ST_PAGE: if (o->arg == SP_ADV) g_setFromStart = g_setPage == SP_START; g_setPageSel[g_setPage] = g_setSel; g_setPage = o->arg; g_setSel = g_setPageSel[o->arg]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); break;
     case ST_BOOL: case ST_SIGN: Set_Step(o, 1, 1); break;
     case ST_FLOAT: case ST_INT: if (part) Set_Step(o, part, 1); break;
-    case ST_PROFILE: case ST_CHOICE: Set_Step(o, part ? part : 1, 1); break;
+    case ST_PROFILE: case ST_CHOICE: case ST_RES: Set_Step(o, part ? part : 1, 1); break;
     case ST_ACTION:
         Set_Buzz(1200);
         switch (o->arg) {
         case SA_CLOSE: Settings_Close(); break;
         case SA_START_PLAY:
+            if (Body_Calibrated() && !g_startRestartAsked && Gfx_Apply() && Gfx_RestartPending()) {
+                int w, h; Gfx_Target(&w, &h); char m[160]; g_startRestartAsked = true; Profile_Save();
+                snprintf(m, sizeof m, "New resolution %dx%d saved - pick \"Quit now\" and start the game again (or Start playing again to play at %ux%u for now)", w, h, g_bbW, g_bbH);
+                Set_Toast(m); g_setDirty = true; Log("Startup: resolution %dx%d waiting for a restart (running %ux%u)", w, h, g_bbW, g_bbH);
+                break;
+            }
             if (Body_Calibrated()) { Profile_Save(); Settings_Close(); Start_Graphics(); Log("Startup: %s is playing %s", g_profName[g_profActive], g_seated ? "seated" : "standing"); }
             else { g_startAfterCal = true; g_setCal = 1; g_setCalAt = QpcMs(); g_setDirty = true; }
             break;
@@ -18518,6 +18692,11 @@ static void Set_Activate(int optIdx, int part)
         case SA_GFX_APPLY: { int w, h; Gfx_Target(&w, &h); char m[128];
             if (Gfx_Apply()) snprintf(m, sizeof m, "Saved %dx%d - restart the game to use it", w, h); else snprintf(m, sizeof m, "Already running at %dx%d", w, h);
             Set_Toast(m); break; }
+        case SA_QUIT_GAME:   /* (closes the game the normal way - as the main menu's Quit does) */
+            Log("Startup: quitting so the new resolution is used next start");
+            Gfx_Apply(); Profile_Save(); Game_Quit();
+            Set_Toast("Closing the game - start it again and it uses the new resolution");
+            break;
         case SA_REQ: Req_Check(); Set_Toast(g_reqMissing ? "Missing parts - run FNVVRMC-Setup.exe" : "Everything FNVVRMC needs is installed"); break;
         case SA_CAL_SKIP:
             g_calSkip = true; g_startAfterCal = false; Body_Apply();
@@ -18691,6 +18870,10 @@ static void Settings_OpenStart(void)
     int sp = 0, ci = 0; { int idx[64]; int n = Set_PageRows(SP_START, idx, 64); for (int k = 0; k < n; k++) if (idx[k] >= 0 && g_setOpts[idx[k]].type == ST_ACTION) { if (g_setOpts[idx[k]].arg == SA_START_PLAY) sp = k; if (g_setOpts[idx[k]].arg == SA_CAL_BODY) ci = k; } (void)ci; }
     g_setPage = SP_START; g_setSel = Body_Calibrated() ? sp : 0; g_setScroll = 0; g_setDirty = true;
     g_setToastUntil = 0;
+    if (g_gfxOverW) {   /* (the launcher's options changed the size: say why FNVR's is used) */
+        char m[200]; snprintf(m, sizeof m, "Resolution kept at %dx%d (the game's settings had %dx%d). For the launcher's size: Game resolution > Launcher's", g_gameW, g_gameH, g_gfxOverW, g_gfxOverH);
+        Set_Toast(m); g_setToastUntil = QpcMs() + 9000.0; g_gfxOverW = 0;
+    } else if (g_3dModeNew) { Set_Toast("New: full 3D - each eye gets its own picture. 3D view (above) to change"); g_setToastUntil = QpcMs() + 9000.0; g_3dModeNew = false; }
     Log("Startup: setup screen shown (%s, %s, %s)", g_profName[g_profActive], g_seated ? "seated" : "standing", Body_Calibrated() ? "calibrated" : "not calibrated");
 }
 static void StartSetup_Tick(void)
@@ -18807,6 +18990,14 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
         return true;
     }
     int idx[64]; int n = Set_PageRows(g_setPage, idx, 64);
+    {   /* (a row that comes and goes - "Quit now" - doesn't move the selection onto another option) */
+        static int lastPage = -1, lastN = 0, lastIdx[64];
+        if (g_setPage == lastPage && n != lastN && g_setSel >= 0 && g_setSel < lastN) {
+            int opt = lastIdx[g_setSel];
+            for (int k = 0; k < n; k++) if (idx[k] == opt) { g_setSel = k; g_setDirty = true; break; }
+        }
+        lastPage = g_setPage; lastN = n; memcpy(lastIdx, idx, sizeof(int) * (size_t)n);
+    }
     /* pointing with the aiming hand */
     g_setHover = -1; g_setHoverPart = 0;
     {
@@ -19525,6 +19716,7 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface *nvse)
 {
     Log("NVSEPlugin_Load called");
     LoadSettings();
+    Gfx_EnforceEarly();
     {   /* (the text helper FNVR uses for the other hand's readout, loaded now: loading it later, mid-game, made overlay programs
            that watch for graphics libraries hook the game's Direct3D device again - which threw FNVR's hooks out) */
         HMODULE dx = LoadLibraryA("d3dx9_43.dll"); Log("Text helper d3dx9_43.dll %s", dx ? "loaded early" : "not found (the other hand's readout will be off)"); }

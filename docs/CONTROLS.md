@@ -168,5 +168,5 @@ When the game starts, the setup screen asks who's playing, standing or seated, a
 | F8 | Head tracking on/off |
 | F9 | Fill the whole headset view on/off |
 | F10 | Pip-Boy: world keeps running / world pauses |
-| Ctrl+F10 | Real 3D stereo on/off (heavier on the PC) |
+| Ctrl+F10 | 3D view: full 3D → alternating eyes → 2D (flat) |
 | F11 | VR settings panel |

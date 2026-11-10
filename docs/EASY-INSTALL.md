@@ -94,7 +94,7 @@ Players get a "new revision" button.
 > 2. Run **FNVpatch.exe** in your Fallout New Vegas folder **once** (the 4GB patch).
 > 3. Start **SteamVR**, then launch the game from **Steam** as usual.
 > 4. The first time, FNVVRMC asks for your **headset, wired or wireless, and how powerful your PC is**. Pick them, then
->    **restart the game once**, and it sets the resolution for you.
+>    if it shows a new resolution, choose **Quit now** and start the game again. FNVVRMC keeps that resolution from then on.
 > 5. Calibrate your height and arms when asked, and play.
 >
 > **Problems?** Send `FNVR.log` from your Fallout New Vegas folder.
