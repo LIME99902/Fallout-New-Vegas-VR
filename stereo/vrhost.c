@@ -70,7 +70,7 @@ static ID3D11Texture2D *Tex_Open(const IpcTex *it)
    When the game draws below the headset's resolution, its picture is scaled up and comes out soft; this pass sharpens it
    on the way to SteamVR, on this process's own D3D11 device. Strength from the game (0 = off). */
 typedef HRESULT (WINAPI *D3DCompile_t)(const void *, SIZE_T, const char *, const void *, void *, const char *, const char *, UINT, UINT, ID3DBlob **, ID3DBlob **);
-static ID3D11VertexShader *g_vs; static ID3D11PixelShader *g_ps; static ID3D11Buffer *g_cb; static bool g_shTried, g_shOk;
+static ID3D11VertexShader *g_vs; static ID3D11PixelShader *g_ps, *g_psInk; static ID3D11Buffer *g_cb; static bool g_shTried, g_shOk;
 static struct { ID3D11Texture2D *t[2]; ID3D11RenderTargetView *rtv[2]; UINT w, h; DXGI_FORMAT f; int k; } g_sharp[2];
 static struct { ID3D11Texture2D *t; ID3D11ShaderResourceView *srv; } g_srv[8]; static int g_srvN;
 static const char *k_sharpHlsl =
@@ -87,6 +87,12 @@ static const char *k_sharpHlsl =
 "  float3 w = amp * peak;\n"
 "  float3 r = (c + (a + b + d + e) * w) / (1.0 + 4.0 * w);\n"
 "  return float4(saturate(r), cc.a);\n"
+"}\n"
+"float4 PSInk(float4 pos : SV_Position) : SV_Target {\n"
+"  float4 c = T.Load(int3(int2(pos.xy), 0));\n"
+"  float m = max(c.r, max(c.g, c.b));\n"
+"  float ink = saturate((m - 8.0 / 255.0) / (40.0 / 255.0));\n"
+"  return float4(c.rgb, peak + (1.0 - peak) * ink);\n"
 "}\n";
 static bool Sharp_Init(void)
 {
@@ -99,6 +105,8 @@ static bool Sharp_Init(void)
         Log("sharpening off: shader didn't compile (%s)", er ? (const char *)ID3D10Blob_GetBufferPointer(er) : "?"); return false; }
     ID3D11Device_CreateVertexShader(g_dev, ID3D10Blob_GetBufferPointer(vb), ID3D10Blob_GetBufferSize(vb), NULL, &g_vs);
     ID3D11Device_CreatePixelShader(g_dev, ID3D10Blob_GetBufferPointer(pb), ID3D10Blob_GetBufferSize(pb), NULL, &g_ps);
+    {   ID3DBlob *ib = NULL; if (SUCCEEDED(comp(k_sharpHlsl, strlen(k_sharpHlsl), "ink", NULL, NULL, "PSInk", "ps_4_0", 0, 0, &ib, &er)) && ib)
+            ID3D11Device_CreatePixelShader(g_dev, ID3D10Blob_GetBufferPointer(ib), ID3D10Blob_GetBufferSize(ib), NULL, &g_psInk); }
     D3D11_BUFFER_DESC bd = { 16, D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 };
     ID3D11Device_CreateBuffer(g_dev, &bd, NULL, &g_cb);
     g_shOk = g_vs && g_ps && g_cb; Log("sharpening %s", g_shOk ? "ready" : "off (shader setup failed)");
@@ -137,6 +145,45 @@ static ID3D11Texture2D *Sharp_Apply(ID3D11Texture2D *src, int eye, float amount)
     ID3D11DeviceContext_OMSetRenderTargets(g_ctx, 0, NULL, NULL);
     ID3D11DeviceContext_Flush(g_ctx);
     return g_sharp[eye].t[k];
+}
+
+/* An overlay whose dark parts should be see-through (the Pip-Boy HUD): alpha from how bright each pixel is - done here on
+   the GPU instead of the game's CPU. opacity = how solid the darkest parts stay (0 clear .. 1 solid). */
+static struct { uint64_t ov; ID3D11Texture2D *t[2]; ID3D11RenderTargetView *rtv[2]; UINT w, h; int k; } g_ink[4];
+static ID3D11Texture2D *Ink_Apply(uint64_t ov, ID3D11Texture2D *src, float opacity)
+{
+    if (!Sharp_Init() || !g_psInk) return src;
+    int e = -1; for (int i = 0; i < 4; i++) if (g_ink[i].ov == ov) e = i;
+    if (e < 0) for (int i = 0; i < 4; i++) if (!g_ink[i].ov) { e = i; g_ink[i].ov = ov; break; }
+    if (e < 0) return src;
+    D3D11_TEXTURE2D_DESC d; ID3D11Texture2D_GetDesc(src, &d);
+    ID3D11ShaderResourceView *srv = NULL;
+    for (int i = 0; i < g_srvN; i++) if (g_srv[i].t == src) srv = g_srv[i].srv;
+    if (!srv) { if (FAILED(ID3D11Device_CreateShaderResourceView(g_dev, (ID3D11Resource *)src, NULL, &srv))) return src;
+        int k = g_srvN < 8 ? g_srvN++ : 7; g_srv[k].t = src; g_srv[k].srv = srv; }
+    if (g_ink[e].w != d.Width || g_ink[e].h != d.Height || !g_ink[e].t[0]) {
+        for (int k = 0; k < 2; k++) { if (g_ink[e].rtv[k]) ID3D11RenderTargetView_Release(g_ink[e].rtv[k]); if (g_ink[e].t[k]) ID3D11Texture2D_Release(g_ink[e].t[k]); g_ink[e].t[k] = NULL; g_ink[e].rtv[k] = NULL; }
+        D3D11_TEXTURE2D_DESC o = { d.Width, d.Height, 1, 1, DXGI_FORMAT_B8G8R8A8_UNORM, { 1, 0 }, D3D11_USAGE_DEFAULT, D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE, 0, 0 };
+        for (int k = 0; k < 2; k++) { if (FAILED(ID3D11Device_CreateTexture2D(g_dev, &o, NULL, &g_ink[e].t[k]))) return src; ID3D11Device_CreateRenderTargetView(g_dev, (ID3D11Resource *)g_ink[e].t[k], NULL, &g_ink[e].rtv[k]); }
+        g_ink[e].w = d.Width; g_ink[e].h = d.Height; Log("see-through overlay %ux%u", d.Width, d.Height);
+    }
+    int k = g_ink[e].k ^= 1;
+    D3D11_MAPPED_SUBRESOURCE m; if (SUCCEEDED(ID3D11DeviceContext_Map(g_ctx, (ID3D11Resource *)g_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
+        float v[4] = { opacity, 0, 0, 0 }; memcpy(m.pData, v, 16); ID3D11DeviceContext_Unmap(g_ctx, (ID3D11Resource *)g_cb, 0); }
+    D3D11_VIEWPORT vp = { 0, 0, (float)d.Width, (float)d.Height, 0, 1 };
+    ID3D11DeviceContext_OMSetRenderTargets(g_ctx, 1, &g_ink[e].rtv[k], NULL);
+    ID3D11DeviceContext_RSSetViewports(g_ctx, 1, &vp);
+    ID3D11DeviceContext_IASetInputLayout(g_ctx, NULL);
+    ID3D11DeviceContext_IASetPrimitiveTopology(g_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    ID3D11DeviceContext_VSSetShader(g_ctx, g_vs, NULL, 0);
+    ID3D11DeviceContext_PSSetShader(g_ctx, g_psInk, NULL, 0);
+    ID3D11DeviceContext_PSSetConstantBuffers(g_ctx, 0, 1, &g_cb);
+    ID3D11DeviceContext_PSSetShaderResources(g_ctx, 0, 1, &srv);
+    ID3D11DeviceContext_Draw(g_ctx, 3, 0);
+    ID3D11ShaderResourceView *none = NULL; ID3D11DeviceContext_PSSetShaderResources(g_ctx, 0, 1, &none);
+    ID3D11DeviceContext_OMSetRenderTargets(g_ctx, 0, NULL, NULL);
+    ID3D11DeviceContext_Flush(g_ctx);
+    return g_ink[e].t[k];
 }
 static void Handle(int fn)
 {
@@ -216,6 +263,8 @@ static void Handle(int fn)
     case O_SORT: { uint64_t h; uint32_t so; memcpy(&h, in, 8); memcpy(&so, in + 8, 4); i32 = O ? O->SetOverlaySortOrder(h, so) : 1; memcpy(out, &i32, 4); break; }
     case O_COLOR: { uint64_t h; float c[3]; memcpy(&h, in, 8); memcpy(c, in + 8, 12); i32 = O ? O->SetOverlayColor(h, c[0], c[1], c[2]) : 1; memcpy(out, &i32, 4); break; }
     case O_TEXTURE: { uint64_t h; IpcTex it; memcpy(&h, in, 8); memcpy(&it, in + 8, sizeof it); ID3D11Texture2D *t = Tex_Open(&it);
+        { uint32_t magic; float op; memcpy(&magic, in + 8 + sizeof it, 4); memcpy(&op, in + 12 + sizeof it, 4);
+          if (t && magic == 0x214B4E49u && op >= 0.0f && op <= 1.0f) t = Ink_Apply(h, t, op); }
         i32 = EVROverlayError_VROverlayError_InvalidTexture;
         if (t && O) { Texture_t tx = { t, ETextureType_TextureType_DirectX, (EColorSpace)it.colorSpace }; i32 = O->SetOverlayTexture(h, &tx); }
         memcpy(out, &i32, 4); break; }

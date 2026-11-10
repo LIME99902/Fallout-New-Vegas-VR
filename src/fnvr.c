@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.4 (grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.5 (Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -527,6 +527,12 @@ static bool  g_pipByY = false;         /* (this Pip-Boy was opened with Y) */
 static float g_pipFrontC[3], g_pipFrontRt[3], g_pipFrontFw[3]; static bool g_pipFrontOk = false;   /* (where it floats, VR space) */
 static float g_pipScale = 1.0f;       /* INI [Controls] fPipBoyScale: how much bigger the screen picture is while open */
 static bool  g_wristPip = true;       /* INI [Controls] bWristPipBoy */
+static bool  g_pipHudMode = false;    /* INI [Controls] bPipBoyHudMode: left Y opens the head-locked Pip-Boy HUD */
+static bool  g_pipStopMovement = false; /* INI [Controls] bPipBoyStopMovement: hold player controls while Pip-Boy is open */
+static bool PipOnWrist(void) { return g_wristPip && !g_pipHudMode; }
+static bool PipDisplayEnabled(void) { return g_wristPip || g_pipHudMode; }
+static float g_pipHudDistance = 0.75f, g_pipHudWidth = 0.55f, g_pipHudUp = -0.02f, g_pipHudBlackOpacity = 0.0f;
+
 static int   g_pipModeRaw = 0;
 static bool g_pipRealTime;
 /* ---- Live menus: talking, trading, containers and pop-up messages with the world still running ----
@@ -761,6 +767,7 @@ static void LoadSettings(void)
     g_pipYOpen = GetPrivateProfileIntA("Controls", "bPipBoyButtonY", 0, g_iniPath) != 0;
     g_pipYFront = GetPrivateProfileIntA("PipScreen", "bYMenuInFront", 1, g_iniPath) != 0;
     g_pipNoMove = GetPrivateProfileIntA("Controls", "bPipBoyHoldStill", 1, g_iniPath) != 0;
+g_pipHudMode = GetPrivateProfileIntA("Controls", "bPipBoyHudMode", 0, g_iniPath) != 0;
     g_flatMenus = GetPrivateProfileIntA("Display", "bFlatMenus", 0, g_iniPath) != 0;
     g_curvedUI = GetPrivateProfileIntA("Display", "bCurvedUI", 1, g_iniPath) != 0;
     { char sb[32]; GetPrivateProfileStringA("Display", "fUIDistance", "0.6", sb, sizeof sb, g_iniPath); float v = (float)atof(sb); if (v >= 0.2f && v <= 5.0f) g_uiDist = v;
@@ -875,6 +882,13 @@ static void LoadSettings(void)
       GetPrivateProfileStringA("Controls", "fPipScreenOut", "0.045", pb, sizeof pb, g_iniPath); g_pipOvIni[1] = (float)atof(pb);
       GetPrivateProfileStringA("Controls", "fPipScreenUp", "0.0", pb, sizeof pb, g_iniPath); g_pipOvIni[2] = (float)atof(pb);
       GetPrivateProfileStringA("Controls", "fPipScreenWidth", "0.11", pb, sizeof pb, g_iniPath); g_pipOvIni[3] = (float)atof(pb); }
+
+
+    { char hb[32];
+      GetPrivateProfileStringA("PipHud", "fDistance", "0.75", hb, sizeof hb, g_iniPath); g_pipHudDistance = fminf(fmaxf((float)atof(hb), 0.25f), 3.0f);
+      GetPrivateProfileStringA("PipHud", "fWidth", "0.55", hb, sizeof hb, g_iniPath); g_pipHudWidth = fminf(fmaxf((float)atof(hb), 0.15f), 1.5f);
+      GetPrivateProfileStringA("PipHud", "fVerticalOffset", "-0.02", hb, sizeof hb, g_iniPath); g_pipHudUp = fminf(fmaxf((float)atof(hb), -0.5f), 0.5f);
+      GetPrivateProfileStringA("PipHud", "fBlackOpacity", "0.0", hb, sizeof hb, g_iniPath); g_pipHudBlackOpacity = fminf(fmaxf((float)atof(hb), 0.0f), 1.0f); }
     { char fb[32]; GetPrivateProfileStringA("Controls", "fPipBoyScreenFit", "1.0", fb, sizeof fb, g_iniPath); float v = (float)atof(fb); if (v >= 0.3f && v <= 3.0f) g_pipFitIni = v; }
     g_mmPointer = GetPrivateProfileIntA("Controls", "bMenuPointer", 1, g_iniPath) != 0;
     g_mmShot = GetPrivateProfileIntA("Controls", "bMenuPointerShot", 1, g_iniPath) != 0;
@@ -1700,7 +1714,7 @@ static void Key_RealTick(void)
 /* While the Pip-Boy is open with the world running, the game would still take its buttons as moves (A = jump,
    right stick = turn). The character's movement and looking are switched off for that time (the game's own
    DisablePlayerControls), and switched back on when it closes. */
-/* mode: 0 = nothing held, 1 = looking held (Pip-Boy: its A still selects), 2 = movement + looking held (live menus) */
+/* mode: 0 = nothing held, 1 = looking held, 2 = movement + looking held (live menus), 3 = movement held only */
 static TrackedDevicePose_t g_waitPoses[16]; static bool g_haveWaitPose;
 static void PipControls_Hold(int want)
 {
@@ -1809,7 +1823,7 @@ static bool PipAdjust_Update(const VRControllerState_t *mv, const VRControllerSt
     lcPrev = lClick; aPrev = rA; bPrev = rB; xPrev = lX;
     int mh = g_leftHanded ? 1 : 0, ah = 1 - mh;
     g_adjIn[0] = g_adjIn[1] = g_adjIn[2] = g_adjIn[3] = 0;
-    if (!(g_pipOpen && g_wristPip && g_pipModeRaw == 3)) {
+    if (!(g_pipOpen && PipOnWrist() && g_pipModeRaw == 3)) {
         if (g_adjOn) { g_adjOn = false; Log("Pip-Boy screen: adjusting stopped (Pip-Boy closed)"); }
         return false;
     }
@@ -1955,8 +1969,15 @@ static void Controllers_Poll(bool menu)
     bool lX = Pressed(sL, EVRButtonId_k_EButton_A), lY = Pressed(sL, EVRButtonId_k_EButton_ApplicationMenu);
     {   /* a button still held from a menu or the Pip-Boy (A to fast travel, B to close) does nothing in the game until it's let go */
         static bool aLatch = false, bLatch = false;
-        if (menu || g_pipOpen) { aLatch = rA; bLatch = rB; }
+        if (menu || g_pipOpen || g_liveMenuNow || g_lootShown) { aLatch = rA; bLatch = rB; }
         else { if (!rA) aLatch = false; if (!rB) bLatch = false; if (aLatch) rA = false; if (bLatch) rB = false; }
+    }
+    {   /* Live-menu B is the game's Back button, not the gameplay reload/ready-item action. */
+        static bool liveBPrev = false;
+        bool liveMenuB = g_liveMenuNow && !g_pipOpen && !g_lootShown;
+        if (liveMenuB && rB) b |= XB_B;
+        if (liveMenuB && rB && !liveBPrev) Log("Live menus: B sent as gamepad Back");
+        liveBPrev = liveMenuB && rB;
     }
     bool rClick = Pressed(sR, EVRButtonId_k_EButton_SteamVR_Touchpad);
     bool lClick = Pressed(sL, EVRButtonId_k_EButton_SteamVR_Touchpad);
@@ -2088,15 +2109,30 @@ static void Controllers_Poll(bool menu)
         }   /* no weapon: left trigger only curls fingers (no aim/block pose) */
         if (grabMode[mvH] || g_holding[mvH] || noWeapon) lGrip = false;     /* VATS only with a weapon out */
     }
-    {   /* left Y: reload the other hand's gun (the Pip-Boy opens by looking at your wrist) */
-        static bool yPrev = false;
-        if (!menu && g_inGameplay && g_lg.on && !g_lg.melee && lY && !yPrev) g_lg.reloadReq = true;
-        yPrev = lY;
+    {   /* In HUD mode left Y opens the Pip-Boy when closed, then acts as its Y button while open. */
+        static bool yPrev = false, hudYPrev = false, hudToggleHeld = false;
+        bool rawY = lY, yEdge = rawY && !hudYPrev;
+        hudYPrev = rawY;
+        if (!rawY) hudToggleHeld = false;
+        if (g_pipHudMode) {
+            if (!g_pipOpen && yEdge && g_inGameplay && !g_setOpen && !g_liveMenuNow && !g_lootShown && (!menu || PipBoyMode() != 0)) {
+                double now = QpcMs();
+                g_pipPressMask = g_bindMask[BIND_PIPBOY];
+                g_pipPressUntil = now + 180.0;
+                g_pipExpectUntil = now + 1000.0;
+                hudToggleHeld = true;
+                Log("Pip-Boy HUD: left Y toggled the HMD screen");
+            }
+            lY = g_pipOpen && rawY && !hudToggleHeld; /* closed: left Y opens; open: it is the Pip-Boy's Y button */
+        } else if (!menu && g_inGameplay && g_lg.on && !g_lg.melee && rawY && !yPrev) {
+            g_lg.reloadReq = true;
+        }
+        yPrev = rawY;
     }
     {   /* left Y and the Pip-Boy: hold it for the Pip-Boy light; tap it to open / close the Pip-Boy (when that's switched on).
            Not while a gun is in the left hand (Y reloads it), a menu or the quick-loot window is up. */
         static bool yP = false, used = false; static double yAt = 0; double t = QpcMs();
-        bool can = g_inGameplay && g_wristPip && !(g_lg.on && !g_lg.melee) && !g_setOpen && !(g_lootShown && g_lootControls) && (g_pipOpen || !IsMenuMode()) && !g_pipPressMask;
+        bool can = g_inGameplay && g_wristPip && !g_pipHudMode && !(g_lg.on && !g_lg.melee) && !g_setOpen && !(g_lootShown && g_lootControls) && (g_pipOpen || !IsMenuMode()) && !g_pipPressMask;
         if (lY && !yP) { yAt = t; used = false; }
         if (can && lY && !used && !g_pipOpen && t - yAt > 600.0) {   /* held: the light (the game's own long press of its Pip-Boy button) */
             g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = t + 1800.0; used = true;
@@ -2117,6 +2153,7 @@ static void Controllers_Poll(bool menu)
         }
         yP = lY;
     }
+    if (g_pipHudMode && g_pipOpen) g_pipPressMask = 0; /* don't let the opening press leak into the Pip-Boy menu */
     if (g_pipPressMask && QpcMs() < g_pipPressUntil) b |= g_pipPressMask; else g_pipPressMask = 0;
     if (g_holsterPress && QpcMs() < g_holsterPressUntil) b |= g_holsterPress; else g_holsterPress = 0;
     if (g_crouchPress && QpcMs() < g_crouchPressUntil) b |= g_crouchPress; else g_crouchPress = 0;
@@ -2149,6 +2186,7 @@ static void Controllers_Poll(bool menu)
         if (rA) b |= XB_A;
         if (rB) b |= XB_B;
         if (lX) b |= XB_X;
+        if (g_pipHudMode && lY) b |= XB_Y;
         if (lGripRaw) b |= XB_LSHOULDER;
         if (rGripRaw) b |= XB_RSHOULDER;
         if (lClick) b |= XB_LTHUMB;
@@ -2184,12 +2222,12 @@ static void Controllers_Poll(bool menu)
         }
     } else {
         if (rA)     b |= g_bindMask[BIND_JUMP];
-        if (rB)     b |= g_bindMask[BIND_RELOAD];
+        if (rB && !g_liveMenuNow && !g_lootShown && PlayerWeaponOut() && PlayerWeaponType() >= 3) b |= g_bindMask[BIND_RELOAD]; /* reload only; no ready-item draw when holstered */
         if (rGrip)  b |= g_bindMask[BIND_ACTIVATE];
         if (rClick) b |= g_bindMask[BIND_SNEAK];
         /* left grip no longer opens VATS (it grabs objects / steadies the gun) */
     }
-    bool pipMap = g_pipOpen && g_wristPip && ((const volatile bool *)0x011F308F)[0x3FF];   /* Pip-Boy on its map page */
+    bool pipMap = g_pipOpen && PipDisplayEnabled() && ((const volatile bool *)0x011F308F)[0x3FF];   /* Pip-Boy on its map page */
     if (menu && !pipMap) {   /* in menus, the aim stick also works as a d-pad for tabs (not in the Pip-Boy: there it is the real right stick) */
         if (sR->rAxis[0].y >  0.7f) b |= XB_DPAD_UP;
         if (sR->rAxis[0].y < -0.7f) b |= XB_DPAD_DOWN;
@@ -2202,7 +2240,7 @@ static void Controllers_Poll(bool menu)
         if (want) p->sThumbRX = 0;
     }
     p->wButtons = b;
-    if (g_pipOpen && g_wristPip) {   /* Pip-Boy up: the right stick moves the map cursor on the map page; elsewhere it only flips
+    if (g_pipOpen && PipDisplayEnabled()) {   /* Pip-Boy up: the right stick moves the map cursor on the map page; elsewhere it only flips
                                         through lists (as the d-pad) - so it never turns you while the world is running */
         if (pipMap) {   /* map page: the game's right stick moves the map cursor - it also turns the running world, so it's sent
                            at a third of its strength (the cursor still moves, the turning is gentle) */
@@ -2498,7 +2536,7 @@ static void VR_Tick(void)
     {   /* Pip-Boy up: the right stick works its menus - it must not turn you */
         static bool held = false; static float heldZ = 0;
         void *pl_ = GetPlayer(); float *rz = pl_ ? PlayerRotZ(pl_) : NULL;
-        if (rz && g_pipOpen && g_wristPip) { if (!held) { held = true; heldZ = *rz; } else if (menu) *rz = heldZ; else heldZ = *rz; }
+        if (rz && g_pipOpen && PipDisplayEnabled()) { if (!held) { held = true; heldZ = *rz; } else if (menu) *rz = heldZ; else heldZ = *rz; }
         else held = false;
     }
     if (g_reequipAt > 0 && QpcMs() > g_reequipAt && g_inGameplay && !menu && player_ok_for_reequip()) {
@@ -2526,7 +2564,7 @@ static void VR_Tick(void)
             }
             g_pipModeRaw = pm;
         }
-        bool open = g_wristPip && menu && (pm == 2 || pm == 3 || pm == 5 || QpcMs() < g_pipExpectUntil || PipMenusVisible());
+        bool open = PipDisplayEnabled() && menu && (pm == 2 || pm == 3 || pm == 5 || QpcMs() < g_pipExpectUntil || PipMenusVisible());
         { static bool pmv = false; bool v = PipMenusVisible(); if (v != pmv) { pmv = v; Log("Pip-Boy screens %s (mode %d)", v ? "showing" : "gone", pm); } }
         if (open != g_pipOpen) Log("Pip-Boy %s", open ? "open - shown on your wrist" : "closed");
         if (!open && g_pipOpen) g_pipByY = false;
@@ -2558,7 +2596,7 @@ static void VR_Tick(void)
         /* ---- Head drives the game camera (and the character's facing) ---- */
         float *rotX = PlayerRotX(player), *rotZ = PlayerRotZ(player);
         /* Pip-Boy up: the right stick works its menus, so it must not turn your body (undo any stick turn). */
-        if (g_haveLastPose && g_pipOpen && g_wristPip) *rotZ = g_writtenHeading;
+        if (g_haveLastPose && g_pipOpen && PipDisplayEnabled()) *rotZ = g_writtenHeading;
         if (g_haveLastPose) {
             /* Yaw: apply head turn as a delta so stick/mouse turning still works on top. */
             float newZ = *rotZ - WrapPi(yaw - g_lastYaw);
@@ -2628,7 +2666,7 @@ static void VR_Tick(void)
 
         /* ---- Pip-Boy by looking at your wrist: raise the left forearm in front of your face with the back
            of the wrist toward your eyes and it opens; lower it and it closes. ---- */
-        if (g_wristPip && g_vrHandOk[0] && g_inGameplay) {
+        if (PipOnWrist() && g_vrHandOk[0] && g_inGameplay) {
             const float (*pm)[4] = pose.mDeviceToAbsoluteTracking.m;
             float hd[3] = { pm[0][3] - g_vrHandPos[0][0], pm[1][3] - g_vrHandPos[0][1], pm[2][3] - g_vrHandPos[0][2] };
             float dist = V3Len(hd);
@@ -2919,13 +2957,11 @@ static void Display_Release9(void)
     g_fillSlot = NULL;
 }
 
+static void Eye11_Release(void);
 static void Display_ReleaseAll(void)
 {
     Display_Release9();
-    for (int e = 0; e < 2; e++) {
-        if (g_eyeRTV[e]) { ID3D11RenderTargetView_Release(g_eyeRTV[e]); g_eyeRTV[e] = NULL; }
-        if (g_eyeTex[e]) { ID3D11Texture2D_Release(g_eyeTex[e]); g_eyeTex[e] = NULL; }
-    }
+    Eye11_Release();
     if (g_d11ctx) { ID3D11DeviceContext_Release(g_d11ctx); g_d11ctx = NULL; }
     if (g_d11)    { ID3D11Device_Release(g_d11); g_d11 = NULL; }
     g_haveWaitPose = false;
@@ -2938,6 +2974,35 @@ static void DisplayFail(const char *what, HRESULT hr)
     Log("ERROR: %s failed (hr=0x%08lX) - headset display disabled, tracking still works", what, (unsigned long)hr);
     g_displayFailed = true;
     UIMessage("FNVR: headset display failed - see FNVR.log");
+}
+
+/* The game's own eye pictures on our D3D11 device (the CPU-copy path). With zero copy they aren't used, so they're let go
+   (two full-size pictures less on the graphics card) and only made again if zero copy has to fall back. */
+static bool Eye11_Ensure(void)
+{
+    if (g_eyeTex[0] && g_eyeTex[1]) return true;
+    if (!g_d11 || !g_eyeW || !g_eyeH) return false;
+    D3D11_TEXTURE2D_DESC td = {0};
+    td.Width = g_eyeW; td.Height = g_eyeH; td.MipLevels = 1; td.ArraySize = 1;
+    td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    td.SampleDesc.Count = 1;
+    td.Usage = D3D11_USAGE_DEFAULT;
+    td.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+    for (int e = 0; e < 2; e++) {
+        if (g_eyeTex[e]) continue;
+        HRESULT hr = ID3D11Device_CreateTexture2D(g_d11, &td, NULL, &g_eyeTex[e]);
+        if (FAILED(hr)) { g_eyeTex[e] = NULL; DisplayFail("CreateTexture2D (eye)", hr); return false; }
+        hr = ID3D11Device_CreateRenderTargetView(g_d11, (ID3D11Resource *)g_eyeTex[e], NULL, &g_eyeRTV[e]);
+        if (FAILED(hr)) { g_eyeRTV[e] = NULL; DisplayFail("CreateRenderTargetView", hr); return false; }
+    }
+    return true;
+}
+static void Eye11_Release(void)
+{
+    for (int e = 0; e < 2; e++) {
+        if (g_eyeRTV[e]) { ID3D11RenderTargetView_Release(g_eyeRTV[e]); g_eyeRTV[e] = NULL; }
+        if (g_eyeTex[e]) { ID3D11Texture2D_Release(g_eyeTex[e]); g_eyeTex[e] = NULL; }
+    }
 }
 
 typedef HRESULT (WINAPI *CreateDXGIFactory1_t)(REFIID, void **);
@@ -3016,19 +3081,7 @@ static bool Display_InitD3D11(void)
         g_bounds[e].vMax = (dn[e] - g_vT) / (g_vB - g_vT);
     }
 
-    D3D11_TEXTURE2D_DESC td = {0};
-    td.Width = g_eyeW; td.Height = g_eyeH; td.MipLevels = 1; td.ArraySize = 1;
-    td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    td.SampleDesc.Count = 1;
-    td.Usage = D3D11_USAGE_DEFAULT;
-    td.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
-    for (int e = 0; e < 2; e++) {
-        hr = ID3D11Device_CreateTexture2D(g_d11, &td, NULL, &g_eyeTex[e]);
-        if (FAILED(hr)) { DisplayFail("CreateTexture2D (eye)", hr); return false; }
-        hr = ID3D11Device_CreateRenderTargetView(g_d11, (ID3D11Resource *)g_eyeTex[e], NULL, &g_eyeRTV[e]);
-        if (FAILED(hr)) { DisplayFail("CreateRenderTargetView", hr); return false; }
-    }
-    return true;
+    return Eye11_Ensure();
 }
 
 /* Tangent range the game camera is rendering this frame (v down). Returns false if unknown. */
@@ -3209,7 +3262,7 @@ static void ApplyHeadsetFov(void)
     }
 
     int pmF = PipBoyMode();
-    bool pipUp = g_wristPip && (g_pipOpen || QpcMs() < g_pipExpectUntil || pmF == 2 || pmF == 3 || pmF == 5);
+    bool pipUp = PipDisplayEnabled() && (g_pipOpen || QpcMs() < g_pipExpectUntil || pmF == 2 || pmF == 3 || pmF == 5);
     bool want = g_matchHeadsetFov && (!g_flatMenus || (g_inGameplay && (!IsMenuMode() || pipUp)));   /* full view everywhere */
     if (!want) {
         if (g_fovOverridden) RestoreGameFov(!g_inGameplay ? "main menu" : IsMenuMode() ? "menu open" : "fill off");
@@ -3297,6 +3350,7 @@ static bool ZC_Decide(IDirect3DDevice9 *dev)
     p_SubmitShared9 = g_ovrDll ? (SubmitShared9_t)GetProcAddress(g_ovrDll, "FNVRStereo_SubmitShared9") : NULL;
     if (!p_SubmitShared9) { Log("Zero copy: off - OpenVR isn't running in FNVR-VRHost.exe"); return false; }
     g_zc = 1; Log("Zero copy: ON - eye pictures go to the headset as shared textures (no copy through the CPU)");
+    Eye11_Release();
     return true;
 }
 static int ZC_Take(IDirect3DDevice9 *dev)
@@ -3351,11 +3405,14 @@ static void ZC_Submit(void)
    texture the VR host shows - no copy through the CPU. A frame later (when the copy is finished) it's handed over, so the
    game never waits for the graphics card. */
 typedef uint32_t (*SetOverlayShared9_t)(uint64_t overlay, uint64_t handle, uint32_t w, uint32_t h, int colorSpace);
+typedef uint32_t (*SetOverlayShared9Ink_t)(uint64_t overlay, uint64_t handle, uint32_t w, uint32_t h, int colorSpace, float opacity);
+static SetOverlayShared9Ink_t p_SetOverlayShared9Ink;
 static SetOverlayShared9_t p_SetOverlayShared9; static bool g_ovZcTried = false;
 static bool OvZc_On(void)
 {
     if (g_zc != 1) return false;
     if (!g_ovZcTried) { g_ovZcTried = true; p_SetOverlayShared9 = g_ovrDll ? (SetOverlayShared9_t)GetProcAddress(g_ovrDll, "FNVRStereo_SetOverlayShared9") : NULL;
+        p_SetOverlayShared9Ink = g_ovrDll ? (SetOverlayShared9Ink_t)GetProcAddress(g_ovrDll, "FNVRStereo_SetOverlayShared9Ink") : NULL;
         Log("Zero copy: overlays (HUD, Pip-Boy screen) %s", p_SetOverlayShared9 ? "too" : "not supported by this FNVR Stereo - CPU copy for them"); }
     return p_SetOverlayShared9 != NULL;
 }
@@ -3365,9 +3422,9 @@ static void OvZc_Release(OvZc *z)
     z->next = 0;
 }
 /* the picture in src (whole surface, scaled to w x h) to overlay ov; true = done this way (skip the CPU copy) */
-static bool OvZc_Set(IDirect3DDevice9 *dev, OvZc *z, IDirect3DSurface9 *src, const RECT *srcRect, UINT w, UINT h, D3DFORMAT f, VROverlayHandle_t ov, int cs, D3DTEXTUREFILTERTYPE filt)
+static bool OvZc_Set(IDirect3DDevice9 *dev, OvZc *z, IDirect3DSurface9 *src, const RECT *srcRect, UINT w, UINT h, D3DFORMAT f, VROverlayHandle_t ov, int cs, D3DTEXTUREFILTERTYPE filt, float ink)
 {
-    if (!OvZc_On() || !src || !ov) return false;
+    if (!OvZc_On() || !src || !ov || (ink >= 0 && !p_SetOverlayShared9Ink)) return false;
     OvZcSlot *k = &z->s[z->next];
     if (k->pending) {   /* (all three still in flight: skip this frame's picture) */
         if (IDirect3DQuery9_GetData(k->q, NULL, 0, D3DGETDATA_FLUSH) != S_OK) return true;
@@ -3388,14 +3445,16 @@ static bool OvZc_Set(IDirect3DDevice9 *dev, OvZc *z, IDirect3DSurface9 *src, con
     for (int i = 0; i < 3; i++) { OvZcSlot *c = &z->s[i]; if (!c->tex || !c->seq) continue;
         if (c->pending && IDirect3DQuery9_GetData(c->q, NULL, 0, 0) == S_OK) c->pending = false;
         if (!c->pending && (!best || c->seq > best->seq)) best = c; }
-    if (best && best->seq != z->shown) { z->shown = best->seq; p_SetOverlayShared9((uint64_t)ov, (uint64_t)(uintptr_t)best->h, best->w, best->hgt, cs); }
+    if (best && best->seq != z->shown) { z->shown = best->seq;
+        if (ink >= 0) p_SetOverlayShared9Ink((uint64_t)ov, (uint64_t)(uintptr_t)best->h, best->w, best->hgt, cs, ink);   /* (its dark parts see-through, done in the VR host) */
+        else p_SetOverlayShared9((uint64_t)ov, (uint64_t)(uintptr_t)best->h, best->w, best->hgt, cs); }
     return true;
 }
 static void Capture_Upload(CapSlot *slot)
 {
     if (g_zc == 1) { ZC_Upload(slot); return; }
     static const float black[4] = { 0, 0, 0, 1 };
-    if (slot->eyes < 1 || !slot->sys[0]) return;
+    if (slot->eyes < 1 || !slot->sys[0] || !Eye11_Ensure()) return;
     if (slot->targetEye == 2) {   /* full 3D: both eyes drawn this frame */
         if (slot->eyes < 2 || !slot->sys[1]) { slot->targetEye = -1; }
         else {
@@ -3473,6 +3532,7 @@ static void Display_Submit(void)
 {
     if (!g_haveEyeImage) return;
     if (g_zc == 1) { ZC_Submit(); return; }
+    if (!Eye11_Ensure()) return;
     bool stereo = !g_monoImage && g_haveEye[0] && g_haveEye[1];
     for (int e = 0; e < 2; e++) {
         int src = stereo ? e : 0;
@@ -3530,7 +3590,7 @@ static bool ScreenModeNow(void)
         return false;
     }
     int pmNow = PipBoyMode();
-    bool pipUp = g_wristPip && (g_pipOpen || QpcMs() < g_pipExpectUntil || pmNow == 2 || pmNow == 3 || pmNow == 5);
+    bool pipUp = PipDisplayEnabled() && (g_pipOpen || QpcMs() < g_pipExpectUntil || pmNow == 2 || pmNow == 3 || pmNow == 5);
     bool screen = !g_inGameplay || (IsMenuMode() && !pipUp && !g_liveMenuNow);
     if (screen && !g_inScreenMode) {
         TrackedDevicePose_t p;
@@ -4280,7 +4340,7 @@ static void UI_Present(IDirect3DDevice9 *dev)
     bool drew = g_uiDrewThisFrame && !g_farActive && !g_setOpen; g_uiDrewThisFrame = false;
     static bool shown = false;
     if (!drew || !g_uiSurf || !g_d11) { if (shown) { g_vrOverlay->HideOverlay(g_uiOverlay); shown = false; } return; }
-    if (OvZc_Set(dev, &g_uiZc, g_uiSurf, NULL, UI_OUT_W, UI_OUT_H, D3DFMT_A8R8G8B8, g_uiOverlay, EColorSpace_ColorSpace_Auto, D3DTEXF_LINEAR)) goto uiPlaced;
+    if (OvZc_Set(dev, &g_uiZc, g_uiSurf, NULL, UI_OUT_W, UI_OUT_H, D3DFMT_A8R8G8B8, g_uiOverlay, EColorSpace_ColorSpace_Auto, D3DTEXF_LINEAR, -1.0f)) goto uiPlaced;
     if (FAILED(IDirect3DDevice9_StretchRect(dev, g_uiSurf, NULL, g_uiSmall, NULL, D3DTEXF_LINEAR))) return;
     if (FAILED(IDirect3DDevice9_GetRenderTargetData(dev, g_uiSmall, g_uiSys))) return;
     if (!g_uiTex11) {
@@ -4347,6 +4407,44 @@ uiPlaced: ;
 #define MM_H 1440
 static IDirect3DSurface9 *g_mmRT = NULL, *g_mmSys = NULL;
 static ID3D11Texture2D *g_mmTex11 = NULL; static ID3D11ShaderResourceView *g_mmSRV = NULL;
+/* Zero copy for the menu room: the game picture goes into a shared texture that our D3D11 device opens directly (no copy
+   through the CPU). Three in turn; the newest one the graphics card has finished is shown. */
+typedef struct { IDirect3DTexture9 *tex; IDirect3DSurface9 *surf; IDirect3DQuery9 *q; ID3D11Texture2D *t11; ID3D11ShaderResourceView *srv; DWORD seq; bool pending; } MmZcSlot;
+static MmZcSlot g_mmZc[3]; static int g_mmZcNext = 0; static DWORD g_mmZcSeq = 0; static bool g_mmZcOff = false;
+static ID3D11ShaderResourceView *g_mmUseSRV = NULL;   /* (what the room shows this frame - not owned) */
+static void MmZc_Release(void)
+{
+    for (int i = 0; i < 3; i++) { MmZcSlot *k = &g_mmZc[i];
+        if (k->srv) ID3D11ShaderResourceView_Release(k->srv); if (k->t11) ID3D11Texture2D_Release(k->t11);
+        if (k->q) IDirect3DQuery9_Release(k->q); if (k->surf) IDirect3DSurface9_Release(k->surf); if (k->tex) IDirect3DTexture9_Release(k->tex);
+        memset(k, 0, sizeof *k); }
+    g_mmZcNext = 0; g_mmUseSRV = NULL;
+}
+/* true = the picture went the zero-copy way (g_mmUseSRV set) */
+static bool MmZc_Frame(IDirect3DDevice9 *dev, IDirect3DSurface9 *bb)
+{
+    if (g_mmZcOff || g_zc != 1 || !g_d11) return false;
+    MmZcSlot *k = &g_mmZc[g_mmZcNext];
+    if (k->pending) { if (IDirect3DQuery9_GetData(k->q, NULL, 0, D3DGETDATA_FLUSH) != S_OK) return g_mmUseSRV != NULL; k->pending = false; }
+    if (!k->tex) {
+        HANDLE sh = NULL;
+        if (FAILED(IDirect3DDevice9_CreateTexture(dev, MM_W, MM_H, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &k->tex, &sh)) || !sh ||
+            FAILED(ID3D11Device_OpenSharedResource(g_d11, sh, &IID_ID3D11Texture2D, (void **)&k->t11)) || !k->t11 ||
+            FAILED(ID3D11Device_CreateShaderResourceView(g_d11, (ID3D11Resource *)k->t11, NULL, &k->srv)) ||
+            FAILED(IDirect3DDevice9_CreateQuery(dev, D3DQUERYTYPE_EVENT, &k->q))) {
+            Log("Menu screen: zero copy not possible here - CPU copy for it"); g_mmZcOff = true; MmZc_Release(); return false; }
+        IDirect3DTexture9_GetSurfaceLevel(k->tex, 0, &k->surf);
+    }
+    if (FAILED(IDirect3DDevice9_StretchRect(dev, bb, NULL, k->surf, NULL, D3DTEXF_LINEAR))) return g_mmUseSRV != NULL;
+    IDirect3DQuery9_Issue(k->q, D3DISSUE_END); k->pending = true; k->seq = ++g_mmZcSeq;
+    g_mmZcNext = (g_mmZcNext + 1) % 3;
+    MmZcSlot *best = NULL;
+    for (int i = 0; i < 3; i++) { MmZcSlot *c = &g_mmZc[i]; if (!c->srv || !c->seq) continue;
+        if (c->pending && IDirect3DQuery9_GetData(c->q, NULL, 0, 0) == S_OK) c->pending = false;
+        if (!c->pending && (!best || c->seq > best->seq)) best = c; }
+    if (best) g_mmUseSRV = best->srv;
+    return g_mmUseSRV != NULL;
+}
 static bool g_farFailed = false;
 static float g_scrC[3], g_scrFwd[3], g_scrRight[3], g_scrH;   /* screen: middle, facing direction (towards it), right */
 
@@ -4928,7 +5026,7 @@ static void Room_Draw(const RMesh *m, const float *vp, const float *model, float
     ID3D11DeviceContext_Draw(g_d11ctx, m->count, 0);
 }
 
-static void Far_Release9(void) { Release9(&g_mmRT); Release9(&g_mmSys); }
+static void Far_Release9(void) { Release9(&g_mmRT); Release9(&g_mmSys); MmZc_Release(); }
 
 static void SaveBackbuffer(IDirect3DDevice9 *dev, const char *name);
 static bool g_farActive2 = false;
@@ -5067,14 +5165,20 @@ static void Far_UiTick(void)
 static bool Far_Frame(IDirect3DDevice9 *dev)
 {
     int pmNow = PipBoyMode();
-    bool pipUp = g_wristPip && (g_pipOpen || QpcMs() < g_pipExpectUntil || pmNow == 2 || pmNow == 3 || pmNow == 5 || PipMenusVisible());
+    bool pipUp = PipDisplayEnabled() && (g_pipOpen || QpcMs() < g_pipExpectUntil || pmNow == 2 || pmNow == 3 || pmNow == 5 || PipMenusVisible());
     bool menuScreen = !g_inGameplay || (g_farGameMenus && IsMenuMode() && !pipUp && !g_liveMenuNow);
     bool want = g_farMenu && !g_flatMenus && menuScreen && g_vrSystem && g_vrCompositor && HeadsetDisplayActive();
     if (!want || !Room_Init()) {
         if (g_farActive2) { g_farActive2 = false; g_farActive = false; g_ptrOnScreen = false; Log("Menu screen: off (back in the world)"); }
         return false;
     }
-    /* 1. the game's picture -> screen texture */
+    /* 1. the game's picture -> screen texture (zero copy when it can; otherwise through the CPU) */
+    {   IDirect3DSurface9 *bb0 = NULL; bool zcDone = false;
+        if (g_zc == 1 && !g_mmZcOff && SUCCEEDED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb0))) {
+            zcDone = MmZc_Frame(dev, bb0); IDirect3DSurface9_Release(bb0); }
+        if (zcDone) goto mmHave;
+        if (!g_mmZcOff && g_zc == 1) return false;   /* (first shared picture still in flight) */
+    }
     if (!g_mmRT) IDirect3DDevice9_CreateRenderTarget(dev, MM_W, MM_H, D3DFMT_X8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &g_mmRT, NULL);
     if (!g_mmSys) IDirect3DDevice9_CreateOffscreenPlainSurface(dev, MM_W, MM_H, D3DFMT_X8R8G8B8, D3DPOOL_SYSTEMMEM, &g_mmSys, NULL);
     if (!g_mmTex11) {
@@ -5093,6 +5197,8 @@ static bool Far_Frame(IDirect3DDevice9 *dev)
         ID3D11DeviceContext_UpdateSubresource(g_d11ctx, (ID3D11Resource *)g_mmTex11, 0, NULL, lr.pBits, (UINT)lr.Pitch, 0);
         IDirect3DSurface9_UnlockRect(g_mmSys);
     }
+    g_mmUseSRV = g_mmSRV;
+mmHave:
     if (g_scrBuiltW != g_mmWidth || g_scrBuiltR != g_mmCurveR) Room_BuildScreen();
     if (g_mmPointer && !g_seqTried && g_seqWantAt == 0) g_seqWantAt = QpcMs() + 5000.0;   /* loaded later from the main loop, once the menu has settled */
     float mzX = g_seqN ? g_seqMuzzle[0] : GUN_MUZZLE_X, mzY = g_seqN ? g_seqMuzzle[1] : GUN_MUZZLE_Y, mzZ = g_seqN ? g_seqMuzzle[2] : 0.0f;
@@ -5197,7 +5303,7 @@ static bool Far_Frame(IDirect3DDevice9 *dev)
         ID3D11DeviceContext_OMSetRenderTargets(cx, 1, &g_rRTV[e], g_rDSV[e]);
         ID3D11DeviceContext_OMSetDepthStencilState(cx, g_rDSon, 0);
         ID3D11DeviceContext_OMSetBlendState(cx, NULL, NULL, 0xFFFFFFFF);
-        ID3D11DeviceContext_PSSetShaderResources(cx, 0, 1, &g_mmSRV);
+        ID3D11DeviceContext_PSSetShaderResources(cx, 0, 1, &g_mmUseSRV);
         Room_Draw(&g_meshFloor, vp, ident, 0, tWhite, eyePos);
         Room_Draw(&g_meshScreen, vp, scrM, 1, tWhite, eyePos);
         if (haveGun) {
@@ -5208,7 +5314,7 @@ static bool Far_Frame(IDirect3DDevice9 *dev)
                     if (g_seq[q].srv) { ID3D11DeviceContext_PSSetShaderResources(cx, 0, 1, &g_seq[q].srv); Room_Draw(&pm, vp, gunM, 3, tGun, eyePos); }
                     else Room_Draw(&pm, vp, gunM, 0, tUntex, eyePos);
                 }
-                ID3D11DeviceContext_PSSetShaderResources(cx, 0, 1, &g_mmSRV);
+                ID3D11DeviceContext_PSSetShaderResources(cx, 0, 1, &g_mmUseSRV);
             } else Room_Draw(&g_meshGun, vp, gunM, 0, tGun, eyePos);
             ID3D11DeviceContext_OMSetDepthStencilState(cx, g_rDSnoWrite, 0);
             ID3D11DeviceContext_OMSetBlendState(cx, g_rBlendAlpha, NULL, 0xFFFFFFFF);
@@ -5399,13 +5505,15 @@ static void PipOv_Release9(void)
 }
 
 /* Present: copy the Pip-Boy menu to the wrist screen. */
+static IDirect3DSurface9 *PipHud_LiveSurf(void);
+static bool PipHud_GetUV(float uv[4]);
 static void PipOv_Frame(IDirect3DDevice9 *dev)
 {
     g_pipOnBox = g_pipOnBoxIni; g_pipBoxFit = g_pipBoxFitIni; g_pipBoxLift = g_pipBoxLiftIni;
-    g_pipRTWatch = g_pipOnBoxIni && g_pipOpen && g_pipModeRaw == 3;
+    g_pipRTWatch = !g_pipHudMode && g_pipOnBoxIni && g_pipOpen && g_pipModeRaw == 3;
     if (!g_pipOpen && g_pipRTn) { for (int i = 0; i < g_pipRTn; i++) IDirect3DSurface9_Release(g_pipRTs[i]); g_pipRTn = 0; }
-    bool boxMode = g_pipOnBox && g_pipBoxOk;
-    bool want = (g_pipOvEnabled || boxMode) && g_wristPip && g_pipOpen && g_pipModeRaw == 3 && g_vrOverlay && g_vrSystem && g_d11 && !g_pipOvFailed;
+    bool boxMode = PipOnWrist() && g_pipOnBox && g_pipBoxOk;
+    bool want = (g_pipHudMode || g_pipOvEnabled || boxMode) && PipDisplayEnabled() && g_pipOpen && g_pipModeRaw == 3 && g_vrOverlay && g_vrSystem && g_d11 && !g_pipOvFailed;
     if (!want) { if (g_pipOvShown) { PipOv_Hide(); Log("Pip-Boy wrist screen: hidden"); } return; }
     if (!g_pipOv) {
         if (g_vrOverlay->CreateOverlay("fnvr.pipboy", "FNVR Pip-Boy", &g_pipOv) != EVROverlayError_VROverlayError_None) { g_pipOvFailed = true; Log("Pip-Boy wrist screen: no overlay"); return; }
@@ -5418,28 +5526,60 @@ static void PipOv_Frame(IDirect3DDevice9 *dev)
         if (!g_texVt[1]) g_texVt[1] = g_texVt[0];
         if (a) IDirect3DTexture9_Release(a); if (b) IDirect3DTexture9_Release(b);
     }
-    IDirect3DSurface9 *src = Pip_FindMenuSurf(dev);
+    IDirect3DSurface9 *src = g_pipHudMode ? PipHud_LiveSurf() : Pip_FindMenuSurf(dev);
     if (!src) return;
     D3DSURFACE_DESC d; IDirect3DSurface9_GetDesc(src, &d);
-    if (src != g_pipSrcTex || d.Width != g_pipW || d.Height != g_pipH) {
+    RECT srcRect = { 0, 0, (LONG)d.Width, (LONG)d.Height }; RECT *srcRectPtr = NULL;
+    UINT outW = d.Width, outH = d.Height;
+    if (g_pipHudMode) {
+        float uv[4];
+        if (PipHud_GetUV(uv)) {
+            float u0 = fminf(fmaxf(uv[0], 0.0f), 1.0f), v0 = fminf(fmaxf(uv[1], 0.0f), 1.0f);
+            float u1 = fminf(fmaxf(uv[2], 0.0f), 1.0f), v1 = fminf(fmaxf(uv[3], 0.0f), 1.0f);
+            srcRect.left = (LONG)(u0 * d.Width); srcRect.top = (LONG)(v0 * d.Height);
+            srcRect.right = (LONG)(u1 * d.Width); srcRect.bottom = (LONG)(v1 * d.Height);
+            if (srcRect.right - srcRect.left >= 32 && srcRect.bottom - srcRect.top >= 32) {
+                srcRectPtr = &srcRect; outW = (UINT)(srcRect.right - srcRect.left); outH = (UINT)(srcRect.bottom - srcRect.top);
+            } else { srcRect.left = srcRect.top = 0; srcRect.right = (LONG)d.Width; srcRect.bottom = (LONG)d.Height; }
+        }
+        UINT maxDim = outW > outH ? outW : outH;
+        if (maxDim > 2048) { float s = 2048.0f / (float)maxDim; outW = (UINT)(outW * s); outH = (UINT)(outH * s); }
+    }
+    if (src != g_pipSrcTex || outW != g_pipW || outH != g_pipH) {
         Release9(&g_pipRT); Release9(&g_pipSys);
         if (g_pipTex11) { ID3D11Texture2D_Release(g_pipTex11); g_pipTex11 = NULL; }
-        g_pipW = d.Width; g_pipH = d.Height; g_pipSrcTex = src;
+        g_pipW = outW; g_pipH = outH; g_pipSrcTex = src;
+        if (!OvZc_On()) {   /* (the CPU copy's pictures - not needed with zero copy) */
         IDirect3DDevice9_CreateRenderTarget(dev, g_pipW, g_pipH, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &g_pipRT, NULL);
         IDirect3DDevice9_CreateOffscreenPlainSurface(dev, g_pipW, g_pipH, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &g_pipSys, NULL);
         D3D11_TEXTURE2D_DESC td = { g_pipW, g_pipH, 1, 1, DXGI_FORMAT_B8G8R8A8_UNORM, { 1, 0 }, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
         ID3D11Device_CreateTexture2D(g_d11, &td, NULL, &g_pipTex11);
-        Log("Pip-Boy wrist screen: menu texture %ux%u (format %d) found", g_pipW, g_pipH, (int)d.Format);
+        }
+        Log("Pip-Boy %s: live menu texture %ux%u -> overlay image %ux%u (format %d)%s", g_pipHudMode ? "HUD" : "wrist screen", d.Width, d.Height, g_pipW, g_pipH, (int)d.Format, srcRectPtr ? " (cropped to screen shape)" : "");
         g_vrOverlay->SetOverlayWidthInMeters(g_pipOv, g_pipOvWidth);
     }
-    if (!g_pipRT || !g_pipSys || !g_pipTex11) return;
-    if (OvZc_Set(dev, &g_pipZc, src, NULL, g_pipW, g_pipH, D3DFMT_X8R8G8B8, g_pipOv, EColorSpace_ColorSpace_Auto, D3DTEXF_NONE)) goto pipPlaced;   /* (X8: opaque, as the CPU copy makes it) */
-    bool ok = SUCCEEDED(IDirect3DDevice9_StretchRect(dev, src, NULL, g_pipRT, NULL, D3DTEXF_NONE)) &&
+    if (OvZc_Set(dev, &g_pipZc, src, srcRectPtr, g_pipW, g_pipH, g_pipHudMode ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8, g_pipOv, EColorSpace_ColorSpace_Auto, g_pipHudMode ? D3DTEXF_LINEAR : D3DTEXF_NONE, g_pipHudMode ? g_pipHudBlackOpacity : -1.0f)) goto pipPlaced;   /* (wrist: X8, opaque; HUD: dark parts see-through, in the VR host) */
+    if (!g_pipRT || !g_pipSys || !g_pipTex11) {   /* (zero copy just stopped: the CPU copy's pictures, from the next frame) */
+        g_pipSrcTex = NULL; return; }
+    bool ok = SUCCEEDED(IDirect3DDevice9_StretchRect(dev, src, srcRectPtr, g_pipRT, NULL, g_pipHudMode ? D3DTEXF_LINEAR : D3DTEXF_NONE)) &&
               SUCCEEDED(IDirect3DDevice9_GetRenderTargetData(dev, g_pipRT, g_pipSys));
     if (!ok) { static int l = 0; if (l++ < 3) Log("Pip-Boy wrist screen: couldn't copy the menu"); return; }
     D3DLOCKED_RECT lr;
     if (SUCCEEDED(IDirect3DSurface9_LockRect(g_pipSys, &lr, NULL, 0))) {
-        for (UINT y = 0; y < g_pipH; y++) { uint32_t *row = (uint32_t *)((BYTE *)lr.pBits + y * lr.Pitch); for (UINT x = 0; x < g_pipW; x++) row[x] |= 0xFF000000u; }
+        if (g_pipHudMode) {
+            for (UINT y = 0; y < g_pipH; y++) {
+                uint32_t *row = (uint32_t *)((BYTE *)lr.pBits + y * lr.Pitch);
+                for (UINT x = 0; x < g_pipW; x++) {
+                    uint32_t c = row[x]; int r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+                    int peak = r > g ? r : g; if (b > peak) peak = b;
+                    float ink = fminf(fmaxf((peak - 8.0f) / 40.0f, 0.0f), 1.0f);
+                    float alpha = g_pipHudBlackOpacity + (1.0f - g_pipHudBlackOpacity) * ink;
+                    row[x] = (c & 0x00FFFFFFu) | ((uint32_t)(alpha * 255.0f + 0.5f) << 24);
+                }
+            }
+        } else {
+            for (UINT y = 0; y < g_pipH; y++) { uint32_t *row = (uint32_t *)((BYTE *)lr.pBits + y * lr.Pitch); for (UINT x = 0; x < g_pipW; x++) row[x] |= 0xFF000000u; }
+        }
         ID3D11DeviceContext_UpdateSubresource(g_d11ctx, (ID3D11Resource *)g_pipTex11, 0, NULL, lr.pBits, (UINT)lr.Pitch, 0);
         { static int snaps = 0; static double nextSnap = 0;
           if (snaps < 3 && QpcMs() > nextSnap) { nextSnap = QpcMs() + 2000.0; char nm[48]; snprintf(nm, sizeof nm, "FNVR_pipmenu_%d.bmp", snaps++); SaveBMP(nm, (const BYTE *)lr.pBits, lr.Pitch, g_pipW, g_pipH); Log("Pip-Boy menu: saved %s", nm); } }
@@ -5453,6 +5593,19 @@ pipPlaced: ;
         g_vrOverlay->SetOverlayWidthInMeters(g_pipOv, g_pipBoxWidthM);
         g_vrOverlay->SetOverlayTransformAbsolute(g_pipOv, ETrackingUniverseOrigin_TrackingUniverseStanding, &g_pipBoxPose);
         if (!g_pipOvShown) { g_vrOverlay->ShowOverlay(g_pipOv); g_pipOvShown = true; Log("Pip-Boy menu: shown over the Pip-Boy's screen box (%.3f m wide)", g_pipBoxWidthM); }
+        return;
+    }
+    if (g_pipHudMode) {
+        g_vrOverlay->SetOverlayWidthInMeters(g_pipOv, g_pipHudWidth);
+        HmdMatrix34_t m; memset(&m, 0, sizeof m);
+        m.m[0][0] = 1.0f; m.m[1][1] = 1.0f; m.m[2][2] = 1.0f;
+        m.m[1][3] = g_pipHudUp; m.m[2][3] = -g_pipHudDistance;
+        g_vrOverlay->SetOverlayTransformTrackedDeviceRelative(g_pipOv, 0, &m);
+        if (!g_pipOvShown) {
+            g_vrOverlay->ShowOverlay(g_pipOv); g_pipOvShown = true;
+            if (g_pOn) *(uint32_t *)(g_pOn + 0x30) |= 1u;
+            Log("Pip-Boy HUD: shown on HMD (%.2f m wide, %.2f m away)", g_pipHudWidth, g_pipHudDistance);
+        }
         return;
     }
     /* on the back of the left wrist: across the forearm, facing out of the back of the hand */
@@ -5559,7 +5712,7 @@ static void PipText_Find(IDirect3DDevice9 *dev)
 {
     if (dev) return;   /* not needed: the menu is the Pip-Boy screen shape */
     static double openAt = 0; static int runs = 0, level = 0; static char *parent = NULL;
-    bool up = g_pipOpen && g_pipModeRaw == 3 && g_wristPip;
+    bool up = g_pipOpen && g_pipModeRaw == 3 && PipOnWrist();
     if (!up) {
         if (g_tfStep >= 0 && g_tfStep < g_tfN) *(uint32_t *)(g_tfCand[g_tfStep] + 0x30) &= ~1u;
         if (g_tfStep >= -1) { g_tfStep = -2; Log("Pip-Boy menu search: stopped (Pip-Boy closed)"); }
@@ -7448,6 +7601,20 @@ static bool Geo_UVFrame(char *geo, float O[3], float U[3], float V[3], float uvr
     return V3Len(U) > 1e-4f && V3Len(V) > 1e-4f && umax - umin > 0.01f && vmax - vmin > 0.01f;
 }
 
+/* HUD mode uses the actual menu geometry's UV bounds, not the wrist-only cached screen bounds. */
+static bool PipHud_GetUV(float uv[4])
+{
+    char *im = *(char **)0x011D8A80;
+    char *pm = Rd(im, 0x178) ? *(char **)(im + 0x174) : NULL;
+    char *menu = Rd(pm, 8) ? *(char **)(pm + 4) : NULL;
+    float O[3], U[3], V[3], bounds[4];
+    if (!IsNiObj(menu) || !Geo_UVFrame(menu, O, U, V, bounds)) return false;
+    if (bounds[0] < -0.1f || bounds[1] < -0.1f || bounds[2] > 1.1f || bounds[3] > 1.1f ||
+        bounds[2] - bounds[0] < 0.05f || bounds[3] - bounds[1] < 0.05f) return false;
+    memcpy(uv, bounds, sizeof bounds);
+    return true;
+}
+
 /* Put the screen rectangle (world centre, world axes, world size) into the twist bone's frame. */
 static void PipScr_SetFromWorld(char *tw, const float cw[3], const float rw[3], const float uw[3], float w, float h)
 {
@@ -7578,7 +7745,7 @@ static float g_handW[2][3]; static bool g_handWOk[2];   /* (set further down, ea
 static void PipScr_Prepare(char *player, char *cam)
 {
     g_pipQuad.ok = false;
-    if (!g_pipScrOn || !g_wristPip || !g_pipOpen || g_pipModeRaw != 3 || !cam || !player || !g_bbW) return;
+    if (!g_pipScrOn || !PipOnWrist() || !g_pipOpen || g_pipModeRaw != 3 || !cam || !player || !g_bbW) return;
     char *node = *(char **)(player + PLAYER_NODE_1ST_PERSON);
     if (!node) return;
     static uint32_t ptGen = 0;
@@ -7757,6 +7924,11 @@ static bool g_pmAlpha[PM_SLOTS]; static bool g_pmLockAlpha = false;   /* the men
 static int g_pmLock = -1; static UINT g_pmLockW, g_pmLockH; static int g_pmLockRank; static IDirect3DSurface9 *g_pmLockSurf, *g_pmCopySrc[PM_SLOTS];   /* the menu picture, once recognised */
 static unsigned g_pmCalls[3];
 static IDirect3DSurface9 *g_pmSmall, *g_pmSys;   /* for looking at a candidate on the CPU */
+static IDirect3DSurface9 *PipHud_LiveSurf(void)
+{
+    if (!g_pipHudMode || !g_pipOpen || g_pipModeRaw != 3 || !g_pmCopySurf[0] || g_pmCopyN <= 0 || QpcMs() - g_pmCopyAt > 300.0) return NULL;
+    return g_pmCopySurf[0];
+}
 static void PM_Release(void)
 {
     for (int i = 0; i < PM_SLOTS; i++) {
@@ -7768,7 +7940,8 @@ static void PM_Release(void)
     if (g_pmSys) IDirect3DSurface9_Release(g_pmSys); g_pmSys = NULL;
     g_pmCopyN = 0;
 }
-static bool PM_Wanted(void) { return g_pipOpen && g_pipModeRaw == 3 && g_pipScrOn && g_wristPip && g_hookedDevice; }
+static bool PM_Wanted(void) { return g_pipOpen && g_pipModeRaw == 3 && g_pipScrOn && PipOnWrist() && g_hookedDevice; }
+static bool PM_CaptureWanted(void) { return g_pipOpen && g_pipModeRaw == 3 && (g_pipHudMode || (g_pipScrOn && PipOnWrist())) && g_hookedDevice; }
 static bool PM_Candidate(IDirect3DSurface9 *sf, D3DSURFACE_DESC *d)
 {
     if (FAILED(IDirect3DSurface9_GetDesc(sf, d))) return false;
@@ -7799,7 +7972,7 @@ static struct { IDirect3DSurface9 *sf; UINT w, h; int rank, slot, window; } g_pm
 static void PM_CopySurf(IDirect3DSurface9 *sf)
 {
     IDirect3DDevice9 *dev = g_hookedDevice;
-    if (!dev || !sf || sf == g_uiSurf || !PM_Wanted()) return;
+    if (!dev || !sf || sf == g_uiSurf || !PM_CaptureWanted()) return;
     if (g_pmCapFrame != g_frameId) { g_pmCapFrame = g_frameId; g_pmFrameN = 0; g_pmSeenN = 0; }
     int e = -1; for (int j = 0; j < g_pmSeenN; j++) if (g_pmSeen[j].sf == sf) e = j;
     if (e >= 0 && g_pmSeen[e].window != g_pmWindow) return;   /* reused later in the frame for something else */
@@ -7824,7 +7997,7 @@ static void PM_CopySurf(IDirect3DSurface9 *sf)
 }
 static void PM_Capture(void)
 {
-    if (g_hookedDevice && PM_Wanted()) {
+    if (g_hookedDevice && PM_CaptureWanted()) {
         IDirect3DSurface9 *cur = NULL;   /* (what's being drawn into right now counts too) */
         if (SUCCEEDED(IDirect3DDevice9_GetRenderTarget(g_hookedDevice, 0, &cur)) && cur) { PM_Record(cur); IDirect3DSurface9_Release(cur); }
         for (int i = 0; i < g_pmRecN; i++) PM_CopySurf(g_pmRec[i]);
@@ -7834,7 +8007,7 @@ static void PM_Capture(void)
 }
 static void PM_Begin(int k)
 {
-    if (!PM_Wanted()) return;
+    if (!PM_CaptureWanted()) return;
     g_pmCalls[k]++;
     if (g_pmDepth == 0) g_pmWindow++;
     g_pmDepth++;
@@ -7848,7 +8021,7 @@ static void PM_End(void)
     g_pmDepth--;
 }
 static int g_pmActive[3];   /* (which wrapped steps are inside a PM_Begin) */
-void PM_Before0(void) { if (g_trOn) { Tr_Flush(); Log("TRACE   [Pip-Boy draw step begins]"); } g_pmActive[0] = PM_Wanted(); if (g_pmActive[0]) PM_Begin(0); }
+void PM_Before0(void) { if (g_trOn) { Tr_Flush(); Log("TRACE   [Pip-Boy draw step begins]"); } g_pmActive[0] = PM_CaptureWanted(); if (g_pmActive[0]) PM_Begin(0); }
 /* The finished Pip-Boy screen picture: the game draws the menu into a full-size picture during its Pip-Boy
    draw step, then runs its screen effect into a second one - that second one is what is being drawn into
    when the step ends, in paused and running mode alike. It is copied right there, every frame. */
@@ -7873,7 +8046,7 @@ static void PM_TakeFinal(void)
     IDirect3DSurface9_Release(cur);
 }
 void PM_After0(void)  { if (g_trOn) { Tr_Flush(); Log("TRACE   [Pip-Boy draw step ends]"); } if (g_pmActive[0]) { g_pmActive[0] = 0; PM_End(); PM_TakeFinal(); } }
-void PM_Before1(void) { g_pmActive[1] = PM_Wanted(); if (g_pmActive[1]) PM_Begin(1); }
+void PM_Before1(void) { g_pmActive[1] = PM_CaptureWanted(); if (g_pmActive[1]) PM_Begin(1); }
 void PM_After1(void)  { if (g_pmActive[1]) { g_pmActive[1] = 0; PM_End(); } }
 static void InstallPipMenuCapture(void)
 {
@@ -8174,7 +8347,7 @@ static void PipScr_Draw(IDirect3DDevice9 *dev)
        doesn't always run the parts of the frame where FNVR normally does it) - so the menu is drawn on
        every single frame instead of only now and then. */
     static unsigned stFrames = 0, stDrawn = 0, stRedo = 0, stNoSpot = 0, stNoTex = 0; static double stAt = 0;
-    bool openNow = g_pipOpen && g_pipModeRaw == 3 && g_pipScrOn && g_wristPip;
+    bool openNow = g_pipOpen && g_pipModeRaw == 3 && g_pipScrOn && PipOnWrist();
     if (openNow) {
         stFrames++;
         if (!(g_pipQuad.ok && QpcMs() - g_pipQuad.at < 30.0)) {
@@ -8421,7 +8594,7 @@ static void PipScreen_Offset(char *firstPerson)
     }
     char *im = *(char **)0x011D8A80; char *pm = Rd(im, 0x178) ? *(char **)(im + 0x174) : NULL;
     char *menu = Rd(pm, 8) ? *(char **)(pm + 4) : NULL; if (!IsNiObj(menu)) menu = NULL;
-    bool open = g_pipOpen && g_pipModeRaw == 3 && g_wristPip;
+    bool open = g_pipOpen && g_pipModeRaw == 3 && PipOnWrist();
     bool live = g_pipWorldDraw && g_pipRealTime;   /* the live world drawn behind: the menu only shows with its own dark screen */
     bool hideGame = open && g_pipScrOn && g_pipScrDrawing;
     {   /* the game's own size for its menu shape, taken before FNVR ever changes it */
@@ -8594,8 +8767,8 @@ static bool Arms_Apply(char *player, char *cam)
 
     /* The Pip-Boy animation moves the whole first-person body (shoulders, spine, arms). Turn it off: while
        the Pip-Boy is up, hold every bone in the pose it had just before, then place the arm from your hand. */
-    g_pipLockNow = g_pipLock && g_wristPip && g_pipOpen && (g_pipModeRaw == 2 || g_pipModeRaw == 3 || g_pipModeRaw == 5);
-    if (g_pipNoAnim && !g_pipLockNow) {
+    g_pipLockNow = g_pipLock && PipOnWrist() && g_pipOpen && (g_pipModeRaw == 2 || g_pipModeRaw == 3 || g_pipModeRaw == 5);
+    if ((g_pipNoAnim || g_pipHudMode) && !g_pipLockNow) {
         #define POSE_MAX 512
         static char *pn[POSE_MAX]; static float ps[POSE_MAX][13]; static int pc = 0; static char *pfor = NULL; static bool phave = false;
         static uint32_t pGen = 0;
@@ -8692,7 +8865,7 @@ static bool Arms_Apply(char *player, char *cam)
             }
         }
     }
-    g_pipLockNow = g_pipLock && g_wristPip && g_pipOpen && (g_pipModeRaw == 2 || g_pipModeRaw == 3 || g_pipModeRaw == 5);
+    g_pipLockNow = g_pipLock && PipOnWrist() && g_pipOpen && (g_pipModeRaw == 2 || g_pipModeRaw == 3 || g_pipModeRaw == 5);
     g_lhOk = false;
     for (int s = 0; s < 2; s++) {
         int hnd = s;   /* side 0 = left arm = left controller */
@@ -15817,7 +15990,7 @@ static void InstallRenderHook(void)
 static bool g_pipInstant = true;
 static void InstallInstantPipBoy(void)
 {
-    if (!g_pipInstant || !g_wristPip) { Log("Instant Pip-Boy: off"); return; }
+    if (!g_pipInstant || !PipDisplayEnabled()) { Log("Instant Pip-Boy: off"); return; }
     static const BYTE openExp[6] = { 0x0F, 0x85, 0x03, 0x02, 0x00, 0x00 };   /* jne (open animation not finished) */
     static const BYTE closeExp[2] = { 0x75, 0x63 };                           /* jne (close animation still playing) */
     BYTE *po = (BYTE *)0x0070F0AC, *pc = (BYTE *)0x0070F3E4;
@@ -15839,7 +16012,7 @@ static RealTimeCheck_t o_RealTimeCheck = (RealTimeCheck_t)0x00701450;
 static uint8_t __attribute__((thiscall)) Hook_RealTimeCheck(void *self, int slot)
 {
     uint8_t r = o_RealTimeCheck(self, slot);
-    if (!r && g_pipRealTime && g_wristPip) {
+    if (!r && g_pipRealTime && PipDisplayEnabled()) {
         int m = PipBoyMode();
         if (m == 2 || m == 3 || m == 5) return 1;
     }
@@ -15861,7 +16034,7 @@ static uint8_t __cdecl Hook_AfterMenuFlag(void)
     g_menuFlagCleared = false;
     static double open3 = 0;
     if (PipBoyMode() == 3) { if (!open3) open3 = QpcMs(); } else open3 = 0;
-    bool pipWant = g_pipRealTime && g_wristPip && open3 != 0;
+    bool pipWant = g_pipRealTime && PipDisplayEnabled() && open3 != 0;
     bool liveMenu = !pipWant && PipBoyMode() == 0 && g_inGameplay && LiveMenu_Check();
     {   /* a live menu fading out: stay live a moment longer, so leaving a conversation doesn't flash the flat menu screen */
         static double lastLive = 0;
@@ -17189,6 +17362,7 @@ static int Hook_InsnLen(const BYTE *p)
     if (b == 0x81 && p[1] == 0xEC) return 6;
     if (b == 0x6A) return 2;
     if (b == 0x68) return 5;
+    if (b == 0xA1) return 5;
     if (b == 0x64 && p[1] == 0xA1) return 6;
     return 0;
 }
@@ -17430,7 +17604,7 @@ static const char *const g_setPageName[SP_COUNT] = { "FNVR SETTINGS", "BODY & PR
                                                      "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC", "ADVANCED: HEADSET & CONTROLS" };
 enum { ST_BOOL, ST_FLOAT, ST_INT, ST_PAGE, ST_ACTION, ST_SIGN, ST_PROFILE, ST_INFO, ST_CHOICE, ST_RES };
 enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16, SF_MELEE = 32, SF_HOLM = 64 };
-enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP, SA_REQ };
+enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_PIP_GLUE, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP, SA_REQ };
 /* ---- Setup check: is everything FNVVRMC needs actually loaded? (shown first on the startup screen, and in the log) ---- */
 static char g_reqLabel[96] = "Setup check", g_reqDesc[700] = "Checking what's installed...";
 static int  g_reqMissing = 0;
@@ -17546,7 +17720,7 @@ static const SetOpt g_setOpts[] = {
     { SP_ADV, ST_BOOL, "Finger tracking", "Controls", "bFingerTracking", &g_fingerTracking, 0, 0, 0, 0, 0, 0, "Fingers follow your fingers on the controller." },
     { SP_ADV, ST_BOOL, "Left trigger = bullet time", "Controls", "bLeftTriggerBulletTime", &g_ltBullet, 0, 0, 0, 0, 0, 0, "The left trigger presses the bullet-time key (needs a bullet-time mod). While dual wielding: squeeze the left grip, then pull the trigger." },
     { SP_MAIN, ST_PAGE, "Body & profiles", 0, 0, 0, 0, 0, 0, 0, 0, SP_BODY, "Your height and arm reach, so the world and your arms fit you. Up to four people, each with their own." },
-    { SP_MAIN, ST_PAGE, "Pip-Boy", 0, 0, 0, 0, 0, 0, 0, 0, SP_PIP, "The Pip-Boy on your wrist: its screen, how it opens, how your forearm turns." },
+    { SP_MAIN, ST_PAGE, "Pip-Boy", 0, 0, 0, 0, 0, 0, 0, 0, SP_PIP, "Pip-Boy display: wrist mode or a head-locked HUD, plus screen settings." },
     { SP_MAIN, ST_PAGE, "Controls", 0, 0, 0, 0, 0, 0, 0, 0, SP_CONTROLS, "Motion controls, aiming, melee swings, buttons and fingers." },
     { SP_MAIN, ST_PAGE, "Holsters & gestures", 0, 0, 0, 0, 0, 0, 0, 0, SP_SPOTS, "Where the hip and shoulder holsters and the chest (pause menu) grab are on your body." },
     { SP_MAIN, ST_PAGE, "Hands & objects", 0, 0, 0, 0, 0, 0, 0, 0, SP_HANDS, "Picking things up, throwing, pushing, climbing." },
@@ -17576,16 +17750,22 @@ static const SetOpt g_setOpts[] = {
     { SP_BODY, ST_BOOL, "Left-handed", 0, 0, &g_leftHanded, 0, 0, 0, 0, SF_PROFILE, 0, "Swap hands: the left hand aims and shoots, the right stick moves." },
     { SP_BODY, ST_INFO, "World size now", 0, 0, &g_unitsPerMeter, 0, 0, 0, "%.1f units/m", 0, 0, "The world size in use right now (game units per real metre)." },
 
-    { SP_PIP, ST_BOOL, "Pip-Boy on your wrist", "Controls", "bWristPipBoy", &g_wristPip, 0, 0, 0, 0, 0, 0, "Raise your left wrist to your face to open the Pip-Boy on your arm. OFF: the game's normal flat Pip-Boy." },
-    { SP_PIP, ST_BOOL, "Left Y opens the Pip-Boy", "Controls", "bPipBoyButtonY", &g_pipYOpen, 0, 0, 0, 0, 0, 0, "ON: tap left Y to open or close the Pip-Boy (as well as raising your wrist). Not while a gun is in your left hand - then Y reloads it." },
+    { SP_PIP, ST_BOOL, "Pip-Boy on your wrist", "Controls", "bWristPipBoy", &g_wristPip, 0, 0, 0, 0, 0, 0, "Wrist mode: raise your left wrist to open the Pip-Boy. Ignored while HUD mode is on." },
+    { SP_PIP, ST_BOOL, "Pip-Boy HUD mode (Y button)", "Controls", "bPipBoyHudMode", &g_pipHudMode, 0, 0, 0, 0, 0, 0, "ON: left Y opens the transparent HMD-locked Pip-Boy; while it is open, left Y sends the menu's Y action. Use B to back out/close." },
+    { SP_PIP, ST_BOOL, "Left Y opens the Pip-Boy (wrist mode)", "Controls", "bPipBoyButtonY", &g_pipYOpen, 0, 0, 0, 0, 0, 0, "ON: tap left Y to open or close the Pip-Boy (as well as raising your wrist). Not while a gun is in your left hand - then Y reloads it." },
     { SP_PIP, ST_BOOL, "Y Pip-Boy: menu in front of you", "PipScreen", "bYMenuInFront", &g_pipYFront, 0, 0, 0, 0, 0, 0, "ON: a Pip-Boy opened with Y shows its menu floating in front of you, like trading and containers, and stays open until you close it. OFF: on your wrist." },
     { SP_PIP, ST_BOOL, "Hold still while it's open", "Controls", "bPipBoyHoldStill", &g_pipNoMove, 0, 0, 0, 0, 0, 0, "ON: you don't walk or run while the Pip-Boy is open (the world still runs). OFF: you can move with it open." },
+    { SP_PIP, ST_ACTION, "Glue HUD to HMD (center it)", 0, 0, 0, 0, 0, 0, 0, 0, SA_PIP_GLUE, "Enable HUD mode and center the Pip-Boy at FNVR's normal HUD distance, with a compact screen width." },
+    { SP_PIP, ST_FLOAT, "HUD distance", "PipHud", "fDistance", &g_pipHudDistance, 0.25f, 3.0f, 0.05f, "%.2f m", 0, 0, "Distance of the head-locked Pip-Boy." },
+    { SP_PIP, ST_FLOAT, "HUD width", "PipHud", "fWidth", &g_pipHudWidth, 0.15f, 1.5f, 0.05f, "%.2f m", 0, 0, "Width of the head-locked Pip-Boy; height follows the menu image aspect ratio." },
+    { SP_PIP, ST_FLOAT, "HUD vertical offset", "PipHud", "fVerticalOffset", &g_pipHudUp, -0.5f, 0.5f, 0.02f, "%.2f m", 0, 0, "Raise or lower the head-locked Pip-Boy." },
+    { SP_PIP, ST_FLOAT, "HUD black background opacity", "PipHud", "fBlackOpacity", &g_pipHudBlackOpacity, 0.0f, 1.0f, 0.05f, "%.2f", 0, 0, "Opacity of dark background pixels: 0 transparent, 1 opaque." },
     { SP_PIP, ST_BOOL, "Menu drawn on the screen", "PipScreen", "bDrawMenu", &g_pipScrOn, 0, 0, 0, 0, 0, 0, "FNVR draws the Pip-Boy menu right on the Pip-Boy 2000's screen, without the dark box around it." },
     { SP_PIP, ST_BOOL, "Black box: Pip-Boy screen box", "PipScreen", "bShowScreenBox", &g_pipBoxShow, 0, 0, 0, 0, 0, 0, "The dark screen box of the Pip-Boy model. OFF hides it (the menu may need it to show - try both)." },
     { SP_PIP, ST_BOOL, "Black box: menu background", "PipScreen", "bMenuBackground", &g_pipMenuBg, 0, 0, 0, 0, 0, 0, "The dark background behind the menu itself. OFF: only the glowing menu shows (may not show over the live world)." },
     { SP_PIP, ST_FLOAT, "Screen brightness", "PipScreen", "fBrightness", &g_pipScrBright, 0.3f, 3.0f, 0.1f, "%.1f", 0, 0, "How bright the menu glows on the Pip-Boy screen." },
-    { SP_PIP, ST_ACTION, "Adjust screen position", 0, 0, 0, 0, 0, 0, 0, 0, SA_PIP_ADJUST, "Open your Pip-Boy, then click the LEFT stick: left stick moves the menu, right stick sizes it, A switches to tilting, B saves." },
-    { SP_PIP, ST_ACTION, "Reset screen position", 0, 0, 0, 0, 0, 0, 0, 0, SA_PIP_RESET, "Forget your adjusted spot and put the menu back on the 2000's glass automatically." },
+    { SP_PIP, ST_ACTION, "Adjust screen position", 0, 0, 0, 0, 0, 0, 0, 0, SA_PIP_ADJUST, "Wrist mode only: click the LEFT stick to adjust the screen; HUD mode uses the distance/width controls." },
+    { SP_PIP, ST_ACTION, "Reset screen position", 0, 0, 0, 0, 0, 0, 0, 0, SA_PIP_RESET, "Wrist mode only: reset the screen spot to the 2000's glass." },
     { SP_PIP, ST_BOOL, "World keeps running", "Controls", "bPipBoyRealTime", &g_pipRealTime, 0, 0, 0, 0, 0, 0, "ON: the world doesn't pause while you look at your Pip-Boy (like Fallout 4 VR)." },
     { SP_PIP, ST_BOOL, "Live world behind the Pip-Boy", "Controls", "bPipBoyLiveWorld", &g_pipWorldDraw, 0, 0, 0, 0, 0, 0, "ON: the world keeps being drawn while the Pip-Boy is open (needs 'World keeps running'). Turn OFF if it stutters or the menu stops updating." },
     { SP_HUD, ST_BOOL, "Quick-loot window controls", "Controls", "bLootMenuControls", &g_lootControls, 0, 0, 0, 0, 0, 0, "While the quick-loot window is up: right A takes the item, right stick scrolls, right B takes all, right grip opens the full loot menu." },
@@ -18008,6 +18188,19 @@ static void Set_Activate(int optIdx, int part)
             else Set_Toast("Open your Pip-Boy, then click the LEFT stick to adjust its screen");
             break;
         case SA_PIP_RESET: PipScr_Forget(); Set_Toast("Pip-Boy screen: back to the automatic spot"); break;
+        case SA_PIP_GLUE: {
+            g_pipHudMode = true;
+            g_pipHudDistance = fminf(fmaxf(g_uiDist, 0.25f), 3.0f);
+            g_pipHudWidth = fminf(fmaxf(g_pipHudDistance * 0.9f, 0.15f), 1.5f);
+            g_pipHudUp = -0.02f * g_pipHudDistance / 0.45f;
+            SaveInt("Controls", "bPipBoyHudMode", 1);
+            IniFW("PipHud", "fDistance", g_pipHudDistance, "%.3f");
+            IniFW("PipHud", "fWidth", g_pipHudWidth, "%.3f");
+            IniFW("PipHud", "fVerticalOffset", g_pipHudUp, "%.3f");
+            g_setDirty = true;
+            Set_Toast("Pip-Boy HUD centered in front of your HMD at a compact size");
+            Log("Pip-Boy HUD: glued to HMD at %.2f m, width %.2f m, vertical %.2f m", g_pipHudDistance, g_pipHudWidth, g_pipHudUp);
+            break; }
         case SA_GFX_APPLY: { int w, h; Gfx_Target(&w, &h); char m[128];
             if (Gfx_Apply()) snprintf(m, sizeof m, "Saved %dx%d - restart the game to use it", w, h); else snprintf(m, sizeof m, "Already running at %dx%d", w, h);
             Set_Toast(m); break; }

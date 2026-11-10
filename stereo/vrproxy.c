@@ -226,7 +226,7 @@ static EVROverlayError CT O_SetOverlayTexture(VROverlayHandle_t h, struct Textur
     if (!t) return (EVROverlayError)err;
     BEGIN
     if (!Tex_Share(t->handle, t->eType, t->eColorSpace, &it)) { END return (EVROverlayError)err; }
-    memcpy(in, &h, 8); memcpy(in + 8, &it, sizeof it);
+    memcpy(in, &h, 8); memcpy(in + 8, &it, sizeof it); { uint32_t z = 0; memcpy(in + 8 + sizeof it, &z, 4); }
     if (Call(O_TEXTURE, 3000)) memcpy(&err, out, 4);
     END
 fail: return (EVROverlayError)err;
@@ -311,6 +311,20 @@ __declspec(dllexport) uint32_t FNVRStereo_SetOverlayShared9(uint64_t overlay, ui
     IpcTex it; memset(&it, 0, sizeof it); it.shared = handle; it.type = ETextureType_TextureType_DirectX; it.colorSpace = colorSpace; it.w = w; it.h = h;
     EnterCriticalSection(&g_cs);
     memcpy(g_ipc->in, &overlay, 8); memcpy(g_ipc->in + 8, &it, sizeof it);
+    { uint32_t z = 0; memcpy(g_ipc->in + 8 + sizeof it, &z, 4); }
+    if (Call(O_TEXTURE, 2000)) memcpy(&err, g_ipc->out, 4);
+    LeaveCriticalSection(&g_cs);
+    return (uint32_t)err;
+}
+/* the same, with its dark parts made see-through in the host (opacity: how solid the darkest parts stay) */
+__declspec(dllexport) uint32_t FNVRStereo_SetOverlayShared9Ink(uint64_t overlay, uint64_t handle, uint32_t w, uint32_t h, int colorSpace, float opacity)
+{
+    int32_t err = EVROverlayError_VROverlayError_InvalidTexture;
+    if (!g_ipc || g_dead || !handle) return (uint32_t)err;
+    IpcTex it; memset(&it, 0, sizeof it); it.shared = handle; it.type = ETextureType_TextureType_DirectX; it.colorSpace = colorSpace; it.w = w; it.h = h;
+    EnterCriticalSection(&g_cs);
+    uint32_t magic = 0x214B4E49u;
+    memcpy(g_ipc->in, &overlay, 8); memcpy(g_ipc->in + 8, &it, sizeof it); memcpy(g_ipc->in + 8 + sizeof it, &magic, 4); memcpy(g_ipc->in + 12 + sizeof it, &opacity, 4);
     if (Call(O_TEXTURE, 2000)) memcpy(&err, g_ipc->out, 4);
     LeaveCriticalSection(&g_cs);
     return (uint32_t)err;
