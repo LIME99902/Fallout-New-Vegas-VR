@@ -154,7 +154,7 @@ static IDirect3DDevice9 *GetGameDevice(void)
 /* ======================================================================= */
 
 static FILE *g_log = NULL;
-static volatile LONG g_inMainLoopWork = 0;   /* what FNVR is doing on the main thread (watchdog) */
+static volatile LONG g_inMainLoopWork = 0; static volatile LONG g_rawPresents = 0, g_rawPresentsNested = 0;   /* what FNVR is doing on the main thread (watchdog) */
 static HMODULE g_selfModule = NULL;
 static bool g_gameOk = false;
 static char g_pluginDir[MAX_PATH] = "";   /* ...\Data\NVSE\plugins\ with trailing slash */
@@ -554,7 +554,7 @@ static bool LiveMenu_Check(void)
     const volatile bool *v = (const volatile bool *)0x011F308F;
     bool any = false;
     for (int id = 1001; id <= 1090; id++) {
-        if (!v[id] || id == 1004 /* HUD */) continue;
+        if (!v[id] || id == 1004 /* HUD */ || id > 1084 /* (menus added by other mods - HUD editors and the like - aren't menus you're in) */) continue;
         bool live = false;
         for (unsigned k = 0; k < sizeof g_liveMenuIds / sizeof g_liveMenuIds[0]; k++) if (g_liveMenuIds[k] == id) live = true;
         if (id == 1001 && g_liveMsgBoxes && MsgBox_Buttons() == 1) live = true;   /* (a message with only OK: A presses it) */
@@ -2843,6 +2843,7 @@ static void VR_Tick(void)
                 if (SUCCEEDED(IDirect3DDevice9_QueryInterface(g_hookedDevice, &iidEx, (void **)&ex)) && ex) { ds = IDirect3DDevice9Ex_CheckDeviceState(ex, NULL); IDirect3DDevice9Ex_Release(ex); }
                 HWND fg = GetForegroundWindow(); char fgT[80] = ""; if (fg) GetWindowTextA(fg, fgT, sizeof fgT);
                 D3DDEVICE_CREATION_PARAMETERS cp; memset(&cp, 0, sizeof cp); IDirect3DDevice9_GetCreationParameters(g_hookedDevice, &cp);
+                Log("No frames shown: the game called Present %ld times (%ld while FNVR was still in the last one), FNVR work stage %ld", (long)InterlockedExchange(&g_rawPresents, 0), (long)InterlockedExchange(&g_rawPresentsNested, 0), (long)g_inMainLoopWork);
                 Log("No frames shown: device check %08lX, device state %08lX, window in front: \"%s\"%s%s", (unsigned long)tc, (unsigned long)ds, fgT,
                     fg == cp.hFocusWindow ? " (the game)" : " (NOT the game)", IsIconic(cp.hFocusWindow) ? ", game window minimised" : "");
             }
@@ -16120,7 +16121,7 @@ static uint8_t __cdecl Hook_AfterMenuFlag(void)
     }
     {   /* (which menus are up, and why they are / aren't live - once each time that changes) */
         static uint32_t lastSig = 0; uint32_t sig = 0; const volatile bool *mv = (const volatile bool *)0x011F308F; char ml[160] = "";
-        for (int id = 1001; id <= 1090; id++) if (mv[id] && id != 1004) { sig = sig * 31 + (uint32_t)id; char t[8]; snprintf(t, sizeof t, " %d", id); strncat(ml, t, sizeof ml - strlen(ml) - 1); }
+        for (int id = 1001; id <= 1090; id++) if (mv[id] && id != 1004 && id <= 1084) { sig = sig * 31 + (uint32_t)id; char t[8]; snprintf(t, sizeof t, " %d", id); strncat(ml, t, sizeof ml - strlen(ml) - 1); }
         sig ^= (uint32_t)liveMenu << 31;
         if (sig != lastSig && ml[0]) { lastSig = sig; static int nl = 0; if (nl++ < 40) Log("Live menus check: menus%s - %s (Pip-Boy want %d, Pip-Boy mode %d, in game %d, live menus setting %d, another menu blocks %d: menu %d)", ml, liveMenu ? "LIVE" : "not live", (int)pipWant, PipBoyMode(), (int)g_inGameplay, (int)g_liveMenus, (int)g_liveBlocked, g_liveBlockId); }
         if (!ml[0]) lastSig = 0;
@@ -18821,7 +18822,8 @@ static bool g_loggedPresentPath = false;
 
 static HRESULT STDMETHODCALLTYPE Hook_DevPresent(IDirect3DDevice9 *dev, const RECT *a, const RECT *b, HWND w, const RGNDATA *r)
 {
-    if (g_inPresent) return o_DevPresent(dev, a, b, w, r);
+    InterlockedIncrement(&g_rawPresents);
+    if (g_inPresent) { InterlockedIncrement(&g_rawPresentsNested); return o_DevPresent(dev, a, b, w, r); }
     g_inPresent = true;
     if (!g_loggedPresentPath) { g_loggedPresentPath = true; Log("Frames are presented through IDirect3DDevice9::Present"); }
     InterlockedExchange(&g_inMainLoopWork, 2);
