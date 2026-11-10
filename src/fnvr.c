@@ -18822,10 +18822,11 @@ static SwapPresent_t o_SwapPresent = NULL;
 static IDirect3DDevice9 *g_hookedDevice = NULL;
 static bool g_loggedPresentPath = false;
 
+static DevPresent_t g_presentTrue = NULL;   /* (Windows' own Present - for a call that comes back round to FNVR) */
 static HRESULT STDMETHODCALLTYPE Hook_DevPresent(IDirect3DDevice9 *dev, const RECT *a, const RECT *b, HWND w, const RGNDATA *r)
 {
     InterlockedIncrement(&g_rawPresents);
-    if (g_inPresent) { InterlockedIncrement(&g_rawPresentsNested); return o_DevPresent(dev, a, b, w, r); }
+    if (g_inPresent) { InterlockedIncrement(&g_rawPresentsNested); return (g_presentTrue ? g_presentTrue : o_DevPresent)(dev, a, b, w, r); }
     g_inPresent = true;
     if (!g_loggedPresentPath) { g_loggedPresentPath = true; Log("Frames are presented through IDirect3DDevice9::Present"); }
     InterlockedExchange(&g_inMainLoopWork, 2);
@@ -18876,6 +18877,7 @@ static void *PatchVtable(void **vtbl, int index, void *hook)
 }
 
 /* FNVR's own entries in the device's function table, checked every frame (D3D9_CheckHooks) */
+static bool Mod_IsD3D9(const void *p);
 typedef struct { int slot; void *hook; void **orig; } DevHookRec;
 static DevHookRec g_devHooks[12]; static int g_devHookN = 0; static void **g_devVt = NULL;
 static void *g_scHook = NULL; static void **g_scVt = NULL;
@@ -18912,6 +18914,7 @@ static void InstallD3D9Hooks(void)
         IDirect3DSwapChain9_Release(sc);
     }
     g_devVt = vtbl; g_devHookN = 0;
+    if (o_DevPresent && Mod_IsD3D9((void *)o_DevPresent)) g_presentTrue = o_DevPresent;
     DevHook_Note(16, (void *)Hook_DevReset, (void **)&o_DevReset); DevHook_Note(17, (void *)Hook_DevPresent, (void **)&o_DevPresent);
     DevHook_Note(43, (void *)Hook_DevClear, (void **)&o_DevClear); DevHook_Note(37, (void *)Hook_SetRT, (void **)&o_SetRT);
     DevHook_Note(65, (void *)Hook_SetTex, (void **)&o_SetTex); DevHook_Note(81, (void *)Hook_DP, (void **)&o_DP);
@@ -18950,7 +18953,15 @@ static void D3D9_CheckHooks(void)
         DevHookRec *h = &g_devHooks[i]; void *cur = vt[h->slot];
         if (cur == h->hook) continue;
         char c[96]; DescribeAddress((DWORD)(uintptr_t)cur, c, sizeof c);
-        if (!Mod_IsD3D9(cur)) { static uint32_t told = 0; if (!(told & (1u << i)) && logs++ < 12) { told |= 1u << i; Log("D3D9: device function %d now leads to %s (another program's hook) - left alone", h->slot, c); } continue; }
+        if (!Mod_IsD3D9(cur)) {
+            if (h->slot == 17 && g_presentTrue) {   /* Present: FNVR goes back on top, calling the other program's hook (a loop back into FNVR goes straight to Windows' own) */
+                *h->orig = cur; PatchVtable(vt, h->slot, h->hook);
+                if (logs++ < 12) Log("D3D9: Present now led to %s (another program's hook) - FNVR's hook put back on top of it", c);
+                continue;
+            }
+            static uint32_t told = 0; if (!(told & (1u << i)) && logs++ < 12) { told |= 1u << i; Log("D3D9: device function %d now leads to %s (another program's hook) - left alone", h->slot, c); }
+            continue;
+        }
         *h->orig = cur; PatchVtable(vt, h->slot, h->hook);
         if (logs++ < 12) Log("D3D9: device function %d had been put back to %s - FNVR's hook put back", h->slot, c);
     }
@@ -19293,6 +19304,9 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface *nvse)
 {
     Log("NVSEPlugin_Load called");
     LoadSettings();
+    {   /* (the text helper FNVR uses for the other hand's readout, loaded now: loading it later, mid-game, made overlay programs
+           that watch for graphics libraries hook the game's Direct3D device again - which threw FNVR's hooks out) */
+        HMODULE dx = LoadLibraryA("d3dx9_43.dll"); Log("Text helper d3dx9_43.dll %s", dx ? "loaded early" : "not found (the other hand's readout will be off)"); }
     if (g_motionControls) { InstallXInputHook(); LoadGameBindings(); }
     StartWatchdog();
     g_handle = nvse->GetPluginHandle();
