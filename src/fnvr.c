@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.9 (alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.10 (tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -531,7 +531,7 @@ static int   g_pipPulse = 0;          /* (unused) */
 static double g_pipPressUntil = 0;    /* wrist gesture: hold a button until this time */
 static double g_pipExpectUntil = 0;   /* the Pip-Boy was just asked to open: don't flash the flat screen */
 static WORD  g_pipPressMask = 0;
-static bool  g_pipYOpen = false;       /* [Controls] bPipBoyButtonY: left Y opens / closes the Pip-Boy */
+static bool  g_pipYOpen = true;        /* [Controls] bPipBoyButtonY: left Y opens / closes the Pip-Boy (on as standard) */
 static bool  g_pipYFront = true;       /* [PipScreen] bYMenuInFront: opened with Y, the menu floats in front of you (like trading) */
 static bool  g_pipNoMove = true;       /* [Controls] bPipBoyHoldStill: you don't walk while the Pip-Boy is open */
 static bool  g_pipByY = false;         /* (this Pip-Boy was opened with Y) */
@@ -792,7 +792,7 @@ static void LoadSettings(void)
     g_handCollision = GetPrivateProfileIntA("Grab", "bHandCollision", 1, g_iniPath) != 0;
     g_climbEnabled = GetPrivateProfileIntA("Grab", "bClimbing", 1, g_iniPath) != 0;
     g_wristPip = GetPrivateProfileIntA("Controls", "bWristPipBoy", 1, g_iniPath) != 0;
-    g_pipYOpen = GetPrivateProfileIntA("Controls", "bPipBoyButtonY", 0, g_iniPath) != 0;
+    g_pipYOpen = GetPrivateProfileIntA("Controls", "bPipBoyButtonY", 1, g_iniPath) != 0;
     g_pipYFront = GetPrivateProfileIntA("PipScreen", "bYMenuInFront", 1, g_iniPath) != 0;
     g_pipNoMove = GetPrivateProfileIntA("Controls", "bPipBoyHoldStill", 1, g_iniPath) != 0;
 g_pipHudMode = GetPrivateProfileIntA("Controls", "bPipBoyHudMode", 0, g_iniPath) != 0;
@@ -2172,6 +2172,12 @@ static void Controllers_Poll(bool menu)
             g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = t + 1800.0; used = true;
             Log("Pip-Boy: left Y held - switching the Pip-Boy light");
         }
+        if (!lY && yP && !used && t - yAt < 600.0 && !(can && g_pipYOpen) && !g_pipHudMode) {   /* (a tap that won't open it: say why, once per reason) */
+            const char *why = !g_pipYOpen ? "\"Left Y opens the Pip-Boy\" is switched off" : !g_inGameplay ? "no game loaded" : !g_wristPip ? "the wrist Pip-Boy is switched off" :
+                              (g_lg.on && !g_lg.melee) ? "a gun is in your left hand (Y reloads it)" : g_setOpen ? "the FNVR menu is open" : (g_lootShown && g_lootControls) ? "the quick-loot window is up" :
+                              g_pipPressMask ? "a Pip-Boy press is already going" : "a game menu is open";
+            static const char *lastWhy = NULL; if (why != lastWhy) { lastWhy = why; Log("Pip-Boy: left Y tapped - not opening (%s)", why); }
+        }
         if (can && !lY && yP && !used && t - yAt < 600.0 && g_pipYOpen) {
             if (!g_pipOpen && g_pipModeRaw == 0) {
                 g_pipPressMask = g_bindMask[BIND_PIPBOY]; g_pipPressUntil = t + 250.0; g_pipExpectUntil = t + 1000.0; g_pipByY = true;
@@ -2183,6 +2189,7 @@ static void Controllers_Poll(bool menu)
                 }
                 Log("Pip-Boy: left Y - opening%s", g_pipYFront ? " (menu in front of you)" : "");
             } else if (g_pipOpen && g_pipModeRaw == 3) { g_pipPressMask = XB_B; g_pipPressUntil = t + 150.0; Log("Pip-Boy: left Y - closing"); }
+            else Log("Pip-Boy: left Y tapped while the Pip-Boy is still opening or closing (mode %d) - ignored", g_pipModeRaw);
             used = true;
         }
         yP = lY;
@@ -5586,6 +5593,7 @@ static void PipOv_Release9(void)
 
 /* Present: copy the Pip-Boy menu to the wrist screen. */
 static IDirect3DSurface9 *PipHud_LiveSurf(void);
+static int g_pmCopyN; static double g_pmCopyAt; static unsigned g_pmCalls[3];   /* (the Pip-Boy menu capture - with it, further down) */
 static bool PipHud_GetUV(float uv[4]);
 static void PipOv_Frame(IDirect3DDevice9 *dev)
 {
@@ -5607,6 +5615,12 @@ static void PipOv_Frame(IDirect3DDevice9 *dev)
         if (a) IDirect3DTexture9_Release(a); if (b) IDirect3DTexture9_Release(b);
     }
     IDirect3DSurface9 *src = g_pipHudMode ? PipHud_LiveSurf() : Pip_FindMenuSurf(dev);
+    {   static double noPicSince = 0; static int said = 0;
+        if (src || !g_pipHudMode) noPicSince = 0;
+        else if (!noPicSince) noPicSince = QpcMs();
+        else if (QpcMs() - noPicSince > 2000.0 && said < 5) { said++; noPicSince = QpcMs() + 8000.0;
+            Log("Pip-Boy HUD: open for 2 s but no menu picture to show (pictures taken %d, last %.0f ms ago, draw step called %u times)", g_pmCopyN, g_pmCopyAt > 0 ? QpcMs() - g_pmCopyAt : -1.0, g_pmCalls[0]); }
+    }
     if (!src) return;
     D3DSURFACE_DESC d; IDirect3DSurface9_GetDesc(src, &d);
     RECT srcRect = { 0, 0, (LONG)d.Width, (LONG)d.Height }; RECT *srcRectPtr = NULL;
@@ -18141,7 +18155,7 @@ static const SetOpt g_setOpts[] = {
 
     { SP_PIP, ST_BOOL, "Pip-Boy on your wrist", "Controls", "bWristPipBoy", &g_wristPip, 0, 0, 0, 0, 0, 0, "Wrist mode: raise your left wrist to open the Pip-Boy. Ignored while HUD mode is on." },
     { SP_PIP, ST_BOOL, "Pip-Boy HUD mode (Y button)", "Controls", "bPipBoyHudMode", &g_pipHudMode, 0, 0, 0, 0, 0, 0, "ON: left Y opens the transparent HMD-locked Pip-Boy; while it is open, left Y sends the menu's Y action. Use B to back out/close." },
-    { SP_PIP, ST_BOOL, "Left Y opens the Pip-Boy (wrist mode)", "Controls", "bPipBoyButtonY", &g_pipYOpen, 0, 0, 0, 0, 0, 0, "ON: tap left Y to open or close the Pip-Boy (as well as raising your wrist). Not while a gun is in your left hand - then Y reloads it." },
+    { SP_PIP, ST_BOOL, "Left Y opens the Pip-Boy (wrist mode)", "Controls", "bPipBoyButtonY", &g_pipYOpen, 0, 0, 0, 0, 0, 0, "ON (standard): tap left Y to open or close the Pip-Boy (as well as raising your wrist) - with \"menu in front of you\" on, the menu floats in front of your face. Hold Y for the Pip-Boy light. Not while a gun is in your left hand - then Y reloads it." },
     { SP_PIP, ST_BOOL, "Y Pip-Boy: menu in front of you", "PipScreen", "bYMenuInFront", &g_pipYFront, 0, 0, 0, 0, 0, 0, "ON: a Pip-Boy opened with Y shows its menu floating in front of you, like trading and containers, and stays open until you close it. OFF: on your wrist." },
     { SP_PIP, ST_BOOL, "Hold still while it's open", "Controls", "bPipBoyHoldStill", &g_pipNoMove, 0, 0, 0, 0, 0, 0, "ON: you don't walk or run while the Pip-Boy is open (the world still runs). OFF: you can move with it open." },
     { SP_PIP, ST_ACTION, "Glue HUD to HMD (center it)", 0, 0, 0, 0, 0, 0, 0, 0, SA_PIP_GLUE, "Enable HUD mode and center the Pip-Boy at FNVR's normal HUD distance, with a compact screen width." },

@@ -59,6 +59,8 @@ With **Play style: Seated** (setup screen or Body & profiles):
 | Let go of a stimpak without stabbing | It goes back into your inventory |
 | Left X | Pause menu too |
 | Raise your left wrist to your face | Open the Pip-Boy. Lower it to close |
+| Tap left Y | Open the Pip-Boy with its menu floating in front of your face. Tap again to close |
+| Hold left Y | Pip-Boy light on/off |
 
 You feel a short buzz when your hand enters a holster or chest spot.
 
@@ -83,6 +85,7 @@ All of this is set under Settings → Movement & comfort:
 | Right A | Select |
 | Right B | Back |
 | Left X | The Pip-Boy's X action (e.g. drop) |
+| Left Y | Close the Pip-Boy |
 | Left grip / right grip | The Pip-Boy's left / right bumper buttons |
 | Left stick | Scroll / move the cursor |
 | Right stick | The game's right stick: moves the map cursor (pick a fast-travel spot), scrolls |
