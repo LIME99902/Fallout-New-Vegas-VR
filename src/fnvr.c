@@ -12227,6 +12227,7 @@ typedef struct {
     bool itemRestOk[5]; M3 itemRel[5]; float itemMid[5][3];
     double shotAt; bool lockBack;            /* (the last shot; fired empty - the slide stays back until it's worked) */
     double openAt; char *shellN[8]; int shellCnt;   /* (opened: the empty cases thrown out) */
+    char *bulN[8]; int bulIdx[8], bulCnt;          /* (the live rounds in the cylinder / breech, by their number) */
 } MRGun;
 static struct {
     MRGun g[2];                 /* 0 = the gun hand's gun, 1 = the other hand's gun */
@@ -12718,8 +12719,14 @@ static void MR_PartsWalk(char *n, int depth, MRGun *G)
         else if (!G->leverNode && strstr(lo, "lever")) G->leverNode = n;
         else if (!G->barrelNode && strstr(lo, "barrel")) G->barrelNode = n;
         else if (!G->itemNode[MRI_SPEED] && (strstr(lo, "speed") || strstr(lo, "loader"))) G->itemNode[MRI_SPEED] = n;
-        else if (!G->itemNode[MRI_SHELL] && strstr(lo, "shell") && !strstr(lo, "casing")) { G->itemNode[MRI_SHELL] = n; if (G->shellCnt < 8) G->shellN[G->shellCnt++] = n; }
-        else if ((strstr(lo, "shell") || strstr(lo, "casing")) && G->shellCnt < 8 && !strchr(lo, ':')) G->shellN[G->shellCnt++] = n;
+        else if (!G->itemNode[MRI_SHELL] && strstr(lo, "shell") && !strstr(lo, "casing")) G->itemNode[MRI_SHELL] = n;
+        if (!strchr(lo, ':') && !strstr(lo, "speed") && !strstr(lo, "loader")) {   /* (the cases and rounds sitting in the gun, each its own part) */
+            const char *dg = lo + strlen(lo); while (dg > lo && dg[-1] >= '0' && dg[-1] <= '9') dg--;
+            int num = *dg ? atoi(dg) : 0;
+            if ((strstr(lo, "shell") || strstr(lo, "casing")) && G->shellCnt < 8) G->shellN[G->shellCnt++] = n;
+            else if ((strstr(lo, "bullet") || strstr(lo, "round") || strstr(lo, "cartridge")) && G->bulCnt < 8) { G->bulIdx[G->bulCnt] = num ? num : G->bulCnt + 1; G->bulN[G->bulCnt++] = n; }
+        }
+        if (0) {}
         else if (!G->itemNode[MRI_ROUND] && (strstr(lo, "grenade") || strstr(lo, "rocket") || strstr(lo, "missile") || strstr(lo, "bullet") || strstr(lo, "cartridge") || strstr(lo, "nuke") || strstr(lo, "projectile"))) G->itemNode[MRI_ROUND] = n;
     }
     if (!AsNode(n)) return;
@@ -12896,7 +12903,7 @@ static void MR_VisualGun(int g, char *top)
     MRGun *G = &g_mr.g[g];
     if (!g_mrOn || !G->base || !top || G->cls == MRC_NONE) return;
     if (G->magFor != top) {
-        G->magFor = top; G->magNode = G->cylNode = G->slideNode = G->pumpNode = G->leverNode = G->barrelNode = NULL; memset(G->itemNode, 0, sizeof G->itemNode); G->shellCnt = 0;
+        G->magFor = top; G->magNode = G->cylNode = G->slideNode = G->pumpNode = G->leverNode = G->barrelNode = NULL; memset(G->itemNode, 0, sizeof G->itemNode); G->shellCnt = 0; G->bulCnt = 0;
         memset(G->itemRestOk, 0, sizeof G->itemRestOk); G->magMidOk = false; G->magOffOk = false; G->insOk = false; G->since = QpcMs();
         MR_PartsWalk(top, 0, G);
         Log("Reload: %s gun model parts - magazine %s, cylinder %s, slide/bolt %s, pump %s, lever %s, barrel %s, speedloader %s, shell %s, round %s", g ? "other hand's" : "gun hand's",
@@ -12977,19 +12984,24 @@ static void MR_VisualGun(int g, char *top)
         if (b) MR_Turn(b, sd, piv, -45.0f);
         if (c && !cUnderB) MR_Turn(c, sd, piv, -45.0f);
     }
-    /* opening a break-open gun throws the empty cases up and back; until it's loaded again none are shown */
-    if ((G->cls == MRC_TOPBREAK || G->cls == MRC_BREAK) && G->st == MRS_OPEN && G->stored <= 0) {
-        float ft = (float)((now - G->openAt) / 1000.0);
-        for (int k = 0; k < G->shellCnt; k++) { char *s = G->shellN[k]; if (!MR_Ok(s)) continue;
-            if (ft >= 0 && ft < 0.45f) { const float *St = (const float *)(s + NIAV_WORLD_TRANSLATE); M3 Ws; memcpy(Ws, s + NIAV_WORLD_ROTATE, sizeof Ws);
-                float org[3]; for (int i = 0; i < 3; i++) org[i] = St[i] - fw[i] * (1.2f * ft * U) + up[i] * (1.4f * ft * U) + sd[i] * (0.15f * (float)(k - G->shellCnt / 2) * ft * U);
-                org[2] -= 0.5f * 9.8f * ft * ft * U; MR_Move(s, org, Ws); }
-            else MR_Hide(s); }
-    }
     /* a break-action's barrels tip down while open */
     if (G->cls == MRC_BREAK && G->st == MRS_OPEN && MR_Ok(G->barrelNode)) {
         float piv[3]; memcpy(piv, G->barrelNode + NIAV_WORLD_TRANSLATE, 12);
         MR_Turn(G->barrelNode, sd, piv, -35.0f);
+    }
+    /* opening it throws the empty cases out (a revolver's drop out of the back of the swung-out cylinder, a break-open gun's
+       are kicked up and back) - the holes stay empty; the rounds you load fill them, one hole per round */
+    if ((G->cls == MRC_REVOLVER || G->cls == MRC_TOPBREAK || G->cls == MRC_BREAK) && G->st == MRS_OPEN) {
+        float ft = (float)((now - G->openAt) / 1000.0); bool rev = G->cls == MRC_REVOLVER;
+        for (int k = 0; k < G->shellCnt; k++) { char *s = G->shellN[k]; if (!MR_Ok(s)) continue;
+            if (ft >= 0 && ft < 0.5f) { const float *St = (const float *)(s + NIAV_WORLD_TRANSLATE); M3 Ws; memcpy(Ws, s + NIAV_WORLD_ROTATE, sizeof Ws);
+                float org[3], spread = 0.12f * (float)(k - G->shellCnt / 2);
+                for (int i = 0; i < 3; i++) org[i] = rev ? St[i] - fw[i] * (0.9f * ft * U) + sd[i] * (spread * ft * U)
+                                                         : St[i] - fw[i] * (1.2f * ft * U) + up[i] * (1.4f * ft * U) + sd[i] * (spread * ft * U);
+                org[2] -= 0.5f * 9.8f * ft * ft * U; MR_Show(s); MR_Move(s, org, Ws); }
+            else MR_Hide(s); }
+        for (int k = 0; k < G->bulCnt; k++) { char *b = G->bulN[k]; if (!MR_Ok(b)) continue;
+            if (G->bulIdx[k] <= G->stored) MR_Show(b); else MR_Hide(b); }
     }
 }
 /* ---- The ammo pouches as real game models -----------------------------------------------------------------------------
