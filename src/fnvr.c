@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.5 (Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.6 (top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -291,7 +291,7 @@ static void Gun_Palm(int h, float *palm); static char *LG_Root(char *ref); stati
 static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket */
 static bool  g_mrPocket2 = true;   /* [Reload] bSecondPocket: an ammo pocket on both hips */
 static float g_mrPocketSide = 0.15f, g_mrPocketDown = 0.62f, g_mrPocketFwd = 0.20f, g_mrPocketR = 0.13f, g_mrLoadR = 0.10f;
-static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static bool MR_HandBusy(int h); static bool MR_AnyBusy(void); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
+static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bool *lY); static bool MR_HandBusy(int h); static bool MR_HandWanted(int h); static bool MR_AnyBusy(void); static void MR_Tick(void); static void MR_Visual(void); static void MR_VisualRestore(void);
 static bool g_pfGameSwing = true;   /* [Weapons] bPowerFistGameSwing */
 static bool g_mfOn = true; static float g_mfScale = 1.0f;   /* [Weapons] bMuzzleLight / fMuzzleLight */
 static void *g_pf1Right = NULL;   /* (the power fist last seen on the gun hand) */
@@ -2053,7 +2053,7 @@ static void Controllers_Poll(bool menu)
         if (!menu && (grabMode[amH] || g_holding[amH] || g_climb[amH])) rGrip = false;      /* grabbing/climbing, not activating */
         {   /* holsters: at the hip / over the shoulder the gun-hand grip holsters or draws instead of activating */
             static bool hPrev = false; static int zPrev = 0;
-            int zone = (!menu && g_inGameplay && !g_pipOpen && !grabMode[amH] && !g_holding[amH] && !g_climb[amH] && !MR_HandBusy(amH)) ? Holster_Zone() : 0;   /* (not while reaching into an ammo pocket) */
+            int zone = (!menu && g_inGameplay && !g_pipOpen && !grabMode[amH] && !g_holding[amH] && !g_climb[amH] && !MR_HandBusy(amH) && !MR_HandWanted(amH)) ? Holster_Zone() : 0;   /* (not while reaching into an ammo pocket) */
             if (zone && zone != zPrev) Holster_Buzz(600);
             zPrev = zone;
             if (zone) { if (rGripRaw && !hPrev) Holster_Use(zone); rGrip = false; }
@@ -6333,7 +6333,7 @@ static FireWeapon_t o_FireWeapon = NULL;
 static unsigned g_shotsRedirected = 0;
 static bool Barrel_Aim(float *h, float *p);
 
-static bool g_scopeSighting; static bool g_brlShot = false;   /* (this shot goes out along the drawn barrel) */
+static bool g_scopeSighting; static bool g_brlShot = false; static double g_mrShot0At = 0;   /* (the gun hand's gun fired - its slide cycles) */   /* (this shot goes out along the drawn barrel) */
 static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unusedEdx, void *actor)
 {
     (void)unusedEdx;
@@ -6411,7 +6411,7 @@ static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unused
         g_brlShot = brl;
         o_FireWeapon(weapon, actor);
         g_brlShot = false;
-        {   int wt = *(BYTE *)((char *)weapon + 0xF4); if (wt >= 3 && wt <= 9) Mf_Shot(1, weapon, -1.0f); }
+        {   int wt = *(BYTE *)((char *)weapon + 0xF4); if (wt >= 3 && wt <= 9) { Mf_Shot(1, weapon, -1.0f); g_mrShot0At = QpcMs(); } }
         for (int i = 0; i < nap; i++) memcpy(ap[i].p, ap[i].old, 12);
         if (camTurned) memcpy(cam + NIAV_WORLD_ROTATE, camSave, sizeof camSave);
         spr[0] = sp0; spr[1] = sp1;
@@ -12208,10 +12208,10 @@ static void Lighter_Restore(void)
    to your left pocket and it's reloaded.
    The game's own reload is switched off while this is on. [Reload] bManualReload, fPocketSide/Down/Forward/Radius,
    fLoadRadius; a weapon's kind can be set by hand: [ReloadTypes] <form id>=mag|cell|box|revolver|tube|break|single */
-enum { MRC_NONE = 0, MRC_MAG, MRC_CELL, MRC_BOX, MRC_REVOLVER, MRC_TUBE, MRC_BREAK, MRC_SINGLE };
+enum { MRC_NONE = 0, MRC_MAG, MRC_CELL, MRC_BOX, MRC_REVOLVER, MRC_TUBE, MRC_BREAK, MRC_SINGLE, MRC_TOPBREAK };
 enum { MRS_READY = 0, MRS_MAGOUT, MRS_OPEN, MRS_RACK };
 enum { MRI_NONE = 0, MRI_MAG, MRI_SPEED, MRI_SHELL, MRI_ROUND };
-static const char *const g_mrClsName[] = { "none", "magazine", "energy cell", "ammo box", "revolver", "tube (shell by shell)", "break-action", "single-shot" };
+static const char *const g_mrClsName[] = { "none", "magazine", "energy cell", "ammo box", "revolver", "tube (shell by shell)", "break-action", "single-shot", "top-break revolver" };
 typedef struct {
     void *base; int cls, st, clip;
     int stored;          /* rounds kept while the gun can't fire (cylinder / breech open, or waiting for the slide) */
@@ -12225,6 +12225,8 @@ typedef struct {
     char *cylNode, *slideNode, *pumpNode, *leverNode, *barrelNode, *itemNode[5];   /* (moving parts; shells / speedloader / round parts by item kind) */
     double since; bool insOk; float insOff[3];     /* where things go in, measured on the gun's own shape (gun hand's controller frame, m) */
     bool itemRestOk[5]; M3 itemRel[5]; float itemMid[5][3];
+    double shotAt; bool lockBack;            /* (the last shot; fired empty - the slide stays back until it's worked) */
+    double openAt; char *shellN[8]; int shellCnt;   /* (opened: the empty cases thrown out) */
 } MRGun;
 static struct {
     MRGun g[2];                 /* 0 = the gun hand's gun, 1 = the other hand's gun */
@@ -12232,6 +12234,7 @@ static struct {
     bool rack; int rackGun, rackHand; float rackStart, rackPull; bool rackBack;
     bool oldMag; int oldMagHand, oldMagGun;   /* (the magazine pulled out by hand, still in that hand) */
     bool gripRaw[2], gripPrev[2], eatGrip[2];
+    bool holdEat[2];            /* (a grip used for reloading stays the reload's until you let go - it never grabs or draws) */
     bool btn[2], btnPrev[2];    /* B (gun hand's gun), Y (other hand's gun) */
     bool inPocket[2], nearGun[2];
     int rounds0, inv0;          /* gun hand's gun: rounds in it, ammo carried (main loop, polled) */
@@ -12253,14 +12256,16 @@ static int MR_Classify(void *base, bool hasCyl)
     if (t < 3 || t > 9) return MRC_NONE;
     {   char key[16], v[32]; snprintf(key, sizeof key, "%08X", *(uint32_t *)(w + 0x0C));
         GetPrivateProfileStringA("ReloadTypes", key, "", v, sizeof v, g_iniPath);
-        static const char *const nm[] = { "", "mag", "cell", "box", "revolver", "tube", "break", "single" };
-        for (int i = 1; i <= 7; i++) if (v[0] && !_stricmp(v, nm[i])) return i; }
+        static const char *const nm[] = { "", "mag", "cell", "box", "revolver", "tube", "break", "single", "topbreak" };
+        for (int i = 1; i <= 8; i++) if (v[0] && !_stricmp(v, nm[i])) return i; }
     char lo[80] = ""; const char *n = *(const char **)(w + 0x34);
     if (n && !IsBadStringPtrA(n, 64)) { snprintf(lo, sizeof lo, "%s", n); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c); }
     static const char *const brk[] = { "sawed", "caravan", "double-barrel", "double barrel", "dinner bell", "big boomer", "single shotgun", NULL };
     static const char *const tube[] = { "shotgun", "lever", "repeater", "brush gun", "trail carbine", "medicine stick", "longue carabine", "cowboy", NULL };
+    static const char *const topb[] = { "schofield", "top-break", "top break", "topbreak", "webley", "break-top", NULL };
     static const char *const rev[] = { "revolver", "magnum", "sequoia", "police pistol", "lucky", "blackhawk", NULL };
     if (MR_Has(lo, brk)) return MRC_BREAK;
+    if (t >= 3 && t <= 6 && MR_Has(lo, topb)) return MRC_TOPBREAK;
     if (t >= 3 && t <= 6 && (hasCyl || MR_Has(lo, rev))) return MRC_REVOLVER;
     if (MR_Has(lo, tube) && !strstr(lo, "riot") && !strstr(lo, "auto")) return MRC_TUBE;
     if (clip <= 1) return MRC_SINGLE;
@@ -12316,7 +12321,7 @@ static void MR_InsertPoint(int g, float *out)
         float fw = 0.10f, up = 0.0f;
         switch (G->cls) {
         case MRC_MAG: case MRC_CELL: fw = pistol ? 0.00f : 0.12f; up = pistol ? -0.10f : -0.08f; break;
-        case MRC_REVOLVER: fw = 0.06f; up = 0.03f; break;
+        case MRC_REVOLVER: case MRC_TOPBREAK: fw = 0.06f; up = 0.03f; break;
         case MRC_TUBE: fw = 0.12f; up = -0.04f; break;
         case MRC_BREAK: fw = 0.10f; up = 0.03f; break;
         case MRC_SINGLE: fw = 0.10f; up = 0.02f; break;
@@ -12382,7 +12387,7 @@ static void MR_Eject(int g)   /* B / Y: the magazine out, or the gun opened */
     MRGun *G = &g_mr.g[g]; int h = MR_GunHand(g); int r = MR_Rounds(g);
     switch (G->cls) {
     case MRC_MAG: case MRC_CELL: case MRC_BOX:
-        if (G->st == MRS_RACK) { MR_Buzz(h, 400); MR_Hint(4, "Pull the bolt back with your other hand and let go"); return; }   /* (the bolt is worked by hand now) */
+        if (G->st == MRS_RACK) { MR_Buzz(h, 400); MR_Hint(4, "Grab the slide, pull it back a little and let go"); return; }   /* (the bolt is worked by hand now) */
         if (G->st != MRS_READY) return;
         {   int keep = (G->cls == MRC_MAG && MR_Ballistic(G) && r > 0) ? 1 : 0;   /* (a round stays in the chamber) */
             if (g == 1 && r - keep > 0 && g_mrScr[MRS_GIVE]) g_scriptIntf->CallFunctionAlt(g_mrScr[MRS_GIVE], GetPlayer(), 2, g_lg.base, r - keep);
@@ -12391,11 +12396,14 @@ static void MR_Eject(int g)   /* B / Y: the magazine out, or the gun opened */
         MR_Buzz(h, 2000);
         MR_Hint(1, g_mr.quick[g] ? "Magazine out - touch the gun to your left pocket" : "Magazine out - take a new one from your left pocket (grip)");
         break;
-    case MRC_REVOLVER: case MRC_BREAK:
-        if (G->st == MRS_READY) { G->stored = r; MR_SetRounds(g, 0); G->st = MRS_OPEN; MR_Buzz(h, 2500);
-            MR_Hint(G->cls == MRC_REVOLVER ? 2 : 3, G->cls == MRC_REVOLVER ? "Cylinder open - speedloader from a pouch, then flick the gun to the right to close it" : "Breech open - shells from your left pocket, B to close"); }
+    case MRC_REVOLVER: case MRC_BREAK: case MRC_TOPBREAK:
+        if (G->st == MRS_READY) {
+            /* (a break-open gun throws the empty cases out as it opens; live rounds stay in) */
+            G->stored = r; MR_SetRounds(g, 0); G->st = MRS_OPEN; G->openAt = QpcMs(); MR_Buzz(h, 2500);
+            MR_Hint(G->cls == MRC_REVOLVER ? 2 : 3, G->cls == MRC_REVOLVER ? "Cylinder open - speedloader from a pouch, then flick the gun to the right to close it" :
+                    G->cls == MRC_TOPBREAK ? "Broken open, cases out - speedloader from a pouch, then flick the gun up to close it" : "Breech open - shells from a pouch, then flick the gun up to close it"); }
         else if (G->st == MRS_OPEN) { MR_SetRounds(g, G->stored); G->stored = 0; G->st = MRS_READY; MR_Buzz(h, 3000); MR_Sound(G->base);
-            Log("Reload: %s closed - %d rounds", G->cls == MRC_REVOLVER ? "cylinder" : "breech", MR_Rounds(g)); }
+            Log("Reload: %s closed with the button - %d rounds", G->cls == MRC_REVOLVER ? "cylinder" : "breech", MR_Rounds(g)); }
         break;
     case MRC_TUBE:
         if (G->st == MRS_RACK) { MR_SetRounds(g, G->stored); G->stored = 0; G->st = MRS_READY; MR_Buzz(h, 3000); MR_Sound(G->base); Log("Reload: pumped with the button - %d rounds", MR_Rounds(g)); }
@@ -12406,7 +12414,7 @@ static int MR_ItemFor(const MRGun *G)
 {
     switch (G->cls) {
     case MRC_MAG: case MRC_CELL: case MRC_BOX: return G->st == MRS_MAGOUT ? MRI_MAG : MRI_NONE;
-    case MRC_REVOLVER: return G->st == MRS_OPEN && G->stored < G->clip ? MRI_SPEED : MRI_NONE;
+    case MRC_REVOLVER: case MRC_TOPBREAK: return G->st == MRS_OPEN && G->stored < G->clip ? MRI_SPEED : MRI_NONE;
     case MRC_BREAK: return G->st == MRS_OPEN && G->stored < G->clip ? MRI_SHELL : MRI_NONE;
     case MRC_TUBE: { int g = G == &g_mr.g[0] ? 0 : 1; int have = G->st == MRS_RACK ? G->stored : MR_Rounds(g);
                      return (G->st == MRS_READY || G->st == MRS_RACK) && have < G->clip ? MRI_SHELL : MRI_NONE; }
@@ -12423,16 +12431,16 @@ static void MR_Load(int g, bool quick)
         bool chambered = r > 0 || !(G->cls == MRC_MAG && MR_Ballistic(G));
         int n = MR_Fill(g, 0, G->clip);
         if (n <= 0) { MR_Buzz(h, 500); MR_Hint(8, "No ammo for this gun"); return; }
-        if (chambered || quick) { MR_SetRounds(g, n); G->st = MRS_READY; }
-        else { G->stored = n; MR_SetRounds(g, 0); G->st = MRS_RACK; MR_Hint(4, "Magazine in - pull the bolt back with your other hand and let go"); }
+        if (chambered || quick) { MR_SetRounds(g, n); G->st = MRS_READY; G->lockBack = false; }
+        else { G->stored = n; MR_SetRounds(g, 0); G->st = MRS_RACK; MR_Hint(4, "Magazine in - grab the slide, pull it back a little and let go"); }
         Log("Reload: %s in - %d rounds%s", G->cls == MRC_MAG ? "magazine" : G->cls == MRC_CELL ? "cell" : "ammo box", n, G->st == MRS_RACK ? " (slide still to work)" : "");
         break; }
-    case MRC_REVOLVER: case MRC_BREAK: {
+    case MRC_REVOLVER: case MRC_BREAK: case MRC_TOPBREAK: {
         int n = MR_Fill(g, G->stored, G->clip);
         if (n == G->stored) { MR_Buzz(h, 500); MR_Hint(8, "No ammo for this gun"); return; }
         G->stored = n;
         if (quick) { MR_SetRounds(g, n); G->stored = 0; G->st = MRS_READY; }
-        Log("Reload: %d rounds in the %s", n, G->cls == MRC_REVOLVER ? "cylinder" : "breech");
+        Log("Reload: %d rounds in the %s", n, G->cls == MRC_BREAK ? "breech" : "cylinder");
         break; }
     case MRC_TUBE: {
         int have = G->st == MRS_RACK ? G->stored : r;
@@ -12469,7 +12477,7 @@ static bool __attribute__((fastcall)) Hook_PlayReload(void *actor, void *unusedE
         if (now - clickAt > 350.0) { clickAt = now; MR_Buzz(MR_GunHand(0), 400);
             if (g_mr.g[0].st == MRS_READY && g_mr.rounds0 <= 0) {
                 const MRGun *G = &g_mr.g[0];
-                MR_Hint(0, G->cls == MRC_REVOLVER ? "Empty - B opens the cylinder" : G->cls == MRC_BREAK ? "Empty - B breaks it open" :
+                MR_Hint(0, G->cls == MRC_REVOLVER ? "Empty - B opens the cylinder" : G->cls == MRC_BREAK || G->cls == MRC_TOPBREAK ? "Empty - B breaks it open" :
                            G->cls == MRC_TUBE || G->cls == MRC_SINGLE ? "Empty - load from your left pocket" : "Empty - B drops the magazine");
             } }
         static int bl = 0; if (bl++ < 5) Log("Reload: the game's own reload (anim %d) blocked - manual reloading", anim);
@@ -12489,7 +12497,7 @@ static bool __attribute__((fastcall)) Hook_PlayerReload(void *player, void *unus
         static double clickAt = 0; double now = QpcMs();
         if (now - clickAt > 350.0) { clickAt = now; MR_Buzz(MR_GunHand(0), 400);
             const MRGun *G = &g_mr.g[0];
-            if (G->st == MRS_READY) MR_Hint(0, G->cls == MRC_REVOLVER ? "Empty - B opens the cylinder" : G->cls == MRC_BREAK ? "Empty - B breaks it open" :
+            if (G->st == MRS_READY) MR_Hint(0, G->cls == MRC_REVOLVER ? "Empty - B opens the cylinder" : G->cls == MRC_BREAK || G->cls == MRC_TOPBREAK ? "Empty - B breaks it open" :
                                        G->cls == MRC_TUBE || G->cls == MRC_SINGLE ? "Empty - load from an ammo pocket" : "Empty - B drops the magazine"); }
         static int bl = 0; if (bl++ < 5) Log("Reload: the game's own reload (mode %d) blocked - manual reloading", mode);
         return false;
@@ -12522,13 +12530,13 @@ static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bo
     if (!g_mrOn || menu || !g_inGameplay || g_pipOpen || (g_lootShown && g_lootControls)) { g_mr.btn[0] = g_mr.btn[1] = false; return; }   /* (the quick-loot window has its own B / Y) */
     if (g_mr.g[0].cls != MRC_NONE) *rB = false;   /* (B is the gun hand's gun's magazine / cylinder button now) */
     if (g_mr.g[1].cls != MRC_NONE) *lY = false;
-    for (int h = 0; h < 2; h++) if (g_mr.eatGrip[h] || (g_mr.itemHand == h && g_mr.item) || (g_mr.rack && g_mr.rackHand == h)) gripNow[h] = false;
+    for (int h = 0; h < 2; h++) if (g_mr.eatGrip[h] || g_mr.holdEat[h] || (g_mr.itemHand == h && g_mr.item) || (g_mr.rack && g_mr.rackHand == h)) gripNow[h] = false;
 }
 
 /* ---- (main loop) the state of things, and the hands ---- */
 static void MR_Tick(void)
 {
-    if (!g_mrOn || !g_inGameplay) { memset(g_mr.eatGrip, 0, sizeof g_mr.eatGrip); g_mr.item = MRI_NONE; g_mr.rack = false; return; }
+    if (!g_mrOn || !g_inGameplay) { memset(g_mr.eatGrip, 0, sizeof g_mr.eatGrip); memset(g_mr.holdEat, 0, sizeof g_mr.holdEat); g_mr.item = MRI_NONE; g_mr.rack = false; return; }
     MR_Scripts();
     double now = QpcMs();
     int amH = g_leftHanded ? 0 : 1, mvH = 1 - amH;
@@ -12552,9 +12560,14 @@ static void MR_Tick(void)
         }
         if (G->base && G->cylNode && G->cls == MRC_MAG && G->st == MRS_READY) { G->cls = MRC_REVOLVER; Log("Reload: it has a cylinder - revolver reload"); }
     }
+    if (g_mr.g[0].base) g_mr.g[0].shotAt = g_mrShot0At;
+    if (g_mr.g[0].base && g_mrShot0At > 0 && now - g_mrShot0At < 200.0 && g_mr.pollAt - now > 60.0) g_mr.pollAt = now + 60.0;   /* (just fired: check the rounds soon) */
     if (g_mr.g[0].base && now > g_mr.pollAt) {   /* the gun hand's gun's rounds and your ammo for it */
         g_mr.pollAt = now + 150.0; double v = 0;
         if (g_mrScr[MRS_GETR] && Scr_Num(g_mrScr[MRS_GETR], g_mr.g[0].base, &v)) g_mr.rounds0 = (int)v;
+        {   MRGun *G0 = &g_mr.g[0];
+            if (G0->cls == MRC_MAG && G0->st == MRS_READY && g_mr.rounds0 <= 0 && G0->shotAt > 0 && now - G0->shotAt < 1500.0 && !G0->lockBack) { G0->lockBack = true; Log("Reload: last round fired - the slide locks back"); }
+            if (G0->st == MRS_READY && g_mr.rounds0 > 0) G0->lockBack = false; }
         if (g_mrScr[MRS_INV] && Scr_Num(g_mrScr[MRS_INV], g_mr.g[0].base, &v)) g_mr.inv0 = (int)v;
     }
     /* dual wielding: neither hand is free - the gun itself goes to the pocket */
@@ -12618,18 +12631,20 @@ static void MR_Tick(void)
                 if (V3Len(d) < r) { g_mr.item = MRI_NONE; MR_Load(g, false); }
             }
         }
-        /* a revolver with rounds in its open cylinder: a quick flick of the gun to its right snaps it shut */
-        if (G->cls == MRC_REVOLVER && G->st == MRS_OPEN && G->stored > 0 && !(g_mr.item && g_mr.itemGun == g) && g_vrHandOk[gh]) {
+        /* rounds in an open gun: a quick flick shuts it - a revolver's cylinder to the gun's right, a break-open gun (top-break
+           revolver, double-barrel / single shotgun) up */
+        if ((G->cls == MRC_REVOLVER || G->cls == MRC_TOPBREAK || G->cls == MRC_BREAK) && G->st == MRS_OPEN && G->stored > 0 && !(g_mr.item && g_mr.itemGun == g) && g_vrHandOk[gh]) {
             float f[3], u[3], fwC[3], upC[3], rt[3]; MR_GunAxes(f, u);
             for (int k = 0; k < 3; k++) { fwC[k] = g_vrHandRot[gh][k][0] * f[0] + g_vrHandRot[gh][k][1] * f[1] + g_vrHandRot[gh][k][2] * f[2];
                                           upC[k] = g_vrHandRot[gh][k][0] * u[0] + g_vrHandRot[gh][k][1] * u[1] + g_vrHandRot[gh][k][2] * u[2]; }
             V3Cross(rt, fwC, upC);   /* (the gun's right, VR space) */
-            float v = V3Dot(g_vrHandVel[gh], rt);
+            bool upF = G->cls != MRC_REVOLVER;
+            float v = V3Dot(g_vrHandVel[gh], upF ? upC : rt);
             static double since[2] = { 0, 0 };
             if (v > 0.9f) { if (!since[g]) since[g] = now; } else since[g] = 0;
             if (since[g] && now - since[g] > 20.0) {
                 since[g] = 0; MR_SetRounds(g, G->stored); G->stored = 0; G->st = MRS_READY; MR_Buzz(gh, 3000); MR_Sound(G->base);
-                Log("Reload: cylinder flicked shut (%.1f m/s to the right) - %d rounds", v, MR_Rounds(g));
+                Log("Reload: %s flicked shut (%.1f m/s %s) - %d rounds", G->cls == MRC_REVOLVER ? "cylinder" : G->cls == MRC_TOPBREAK ? "top-break" : "breech", v, upF ? "up" : "to the right", MR_Rounds(g));
             }
         }
         /* working the slide / pump / lever: grip near the gun, pull back */
@@ -12644,16 +12659,21 @@ static void MR_Tick(void)
             if (g_mr.rack && g_mr.rackGun == g) {
                 g_mr.rackPull = g_mr.rackStart - along;
                 bool handRack = G->cls != MRC_TUBE;   /* (a bolt or slide: back all the way, then let it go forward) */
-                if (handRack && g_mr.rackPull > 0.06f && !g_mr.rackBack) { g_mr.rackBack = true; MR_Buzz(fh, 1500); }
-                bool done = handRack ? g_mr.rackBack && (!g_mr.gripRaw[fh] || g_mr.rackPull < 0.015f) : g_mr.rackPull > 0.06f;
+                float need = G->lockBack || G->cls == MRC_MAG ? 0.02f : 0.06f;   /* (a slide locked back: pull it back a little and let go) */
+                if (handRack && g_mr.rackPull > need && !g_mr.rackBack) { g_mr.rackBack = true; MR_Buzz(fh, 1500); }
+                bool done = handRack ? g_mr.rackBack && (!g_mr.gripRaw[fh] || g_mr.rackPull < need * 0.25f) : g_mr.rackPull > 0.06f;
                 if (done) {
-                    g_mr.rack = false; g_mr.rackBack = false; MR_SetRounds(g, G->stored); G->stored = 0; G->st = MRS_READY;
+                    g_mr.rack = false; g_mr.rackBack = false; MR_SetRounds(g, G->stored); G->stored = 0; G->st = MRS_READY; G->lockBack = false;
                     MR_Buzz(fh, 3999); MR_Buzz(gh, 3000); MR_Sound(G->base); Log("Reload: %s worked - %d rounds", G->cls == MRC_TUBE ? "pump / lever" : "bolt (pulled back and let go)", MR_Rounds(g));
                 } else if (!g_mr.gripRaw[fh]) { g_mr.rack = false; g_mr.rackBack = false; }
             }
         }
     }
     if (g_mr.item && !g_mr.g[g_mr.itemGun].base) g_mr.item = MRI_NONE;
+    for (int h = 0; h < 2; h++) {
+        if (g_mr.eatGrip[h] || (g_mr.item && g_mr.itemHand == h) || (g_mr.rack && g_mr.rackHand == h) || (g_mr.oldMag && g_mr.oldMagHand == h)) { if (g_mr.gripRaw[h]) g_mr.holdEat[h] = true; }
+        if (!g_mr.gripRaw[h]) g_mr.holdEat[h] = false;
+    }
 }
 static double g_mrBusyAt = 0;
 static bool MR_AnyBusy(void)   /* (in the middle of reloading: a gun open or waiting, ammo in hand - or just now) */
@@ -12663,7 +12683,16 @@ static bool MR_AnyBusy(void)   /* (in the middle of reloading: a gun open or wai
     if (b) g_mrBusyAt = QpcMs();
     return b || QpcMs() - g_mrBusyAt < 1500.0;
 }
-static bool MR_HandBusy(int h) { return g_mrOn && h >= 0 && h < 2 && (g_mr.eatGrip[h] || (g_mr.item && g_mr.itemHand == h) || (g_mr.rack && g_mr.rackHand == h)); }
+static bool MR_HandBusy(int h) { return g_mrOn && h >= 0 && h < 2 && (g_mr.eatGrip[h] || g_mr.holdEat[h] || (g_mr.item && g_mr.itemHand == h) || (g_mr.rack && g_mr.rackHand == h)); }
+/* a gun is open / out of its magazine and waiting for this hand to bring something from a pouch: the hand's grip at the hip
+   is for the pouch then, not the holster */
+static bool MR_HandWanted(int h)
+{
+    if (!g_mrOn || h < 0 || h > 1) return false;
+    for (int g = 0; g < 2; g++) { const MRGun *G = &g_mr.g[g];
+        if (G->base && G->cls != MRC_NONE && !g_mr.quick[g] && 1 - MR_GunHand(g) == h && G->st != MRS_READY && MR_ItemFor(G) != MRI_NONE) return true; }
+    return false;
+}
 static void MR_LeftHud(char *out, size_t n)   /* (the other hand's HUD line while reloading) */
 {
     const MRGun *G = &g_mr.g[1];
@@ -12689,7 +12718,8 @@ static void MR_PartsWalk(char *n, int depth, MRGun *G)
         else if (!G->leverNode && strstr(lo, "lever")) G->leverNode = n;
         else if (!G->barrelNode && strstr(lo, "barrel")) G->barrelNode = n;
         else if (!G->itemNode[MRI_SPEED] && (strstr(lo, "speed") || strstr(lo, "loader"))) G->itemNode[MRI_SPEED] = n;
-        else if (!G->itemNode[MRI_SHELL] && strstr(lo, "shell") && !strstr(lo, "casing")) G->itemNode[MRI_SHELL] = n;
+        else if (!G->itemNode[MRI_SHELL] && strstr(lo, "shell") && !strstr(lo, "casing")) { G->itemNode[MRI_SHELL] = n; if (G->shellCnt < 8) G->shellN[G->shellCnt++] = n; }
+        else if ((strstr(lo, "shell") || strstr(lo, "casing")) && G->shellCnt < 8 && !strchr(lo, ':')) G->shellN[G->shellCnt++] = n;
         else if (!G->itemNode[MRI_ROUND] && (strstr(lo, "grenade") || strstr(lo, "rocket") || strstr(lo, "missile") || strstr(lo, "bullet") || strstr(lo, "cartridge") || strstr(lo, "nuke") || strstr(lo, "projectile"))) G->itemNode[MRI_ROUND] = n;
     }
     if (!AsNode(n)) return;
@@ -12708,7 +12738,7 @@ static void MR_PlaceNode(char *n, const float *org, M3 W)
     NodeUpdate(n);
 }
 /* every part moved or shown for one frame, put back right after drawing */
-#define MRV_MAX 12
+#define MRV_MAX 24
 static struct { char *n; float L[12]; bool moved, hid, shown; } g_mrVis[MRV_MAX]; static int g_mrVisN = 0;
 static bool MR_Ok(char *n) { return n && !IsBadReadPtr(n, 0xB0) && *(void **)n; }
 static int MR_Save(char *n)
@@ -12749,7 +12779,7 @@ static void MR_MeasureGun(int g, char *top)
     MRGun *G = &g_mr.g[g]; int h = MR_GunHand(g);
     float f[3], u[3]; MR_GunAxes(f, u);   /* (gun forward / up, controller frame) */
     float best[3] = { 0, 0, 0 }; bool ok = false;
-    if (G->cls == MRC_REVOLVER && MR_Ok(G->cylNode)) { float m[3], w[3]; MR_Mid(G->cylNode, m); MR_WorldOf(G->cylNode, m, w); MR_ToHand(h, w, best); ok = true; }
+    if ((G->cls == MRC_REVOLVER || G->cls == MRC_TOPBREAK) && MR_Ok(G->cylNode)) { float m[3], w[3]; MR_Mid(G->cylNode, m); MR_WorldOf(G->cylNode, m, w); MR_ToHand(h, w, best); ok = true; }
     else if (G->cls == MRC_BREAK && MR_Ok(G->barrelNode)) {   /* the breech: the back end of the barrels */
         g_lgPtN = 0; LG_PtsWalk(G->barrelNode, NULL, NULL, 0); float mn = 1e9f;
         for (int k = 0; k < g_lgPtN; k++) { float w[3], o[3]; MR_WorldOf(G->barrelNode, g_lgPts[k], w); MR_ToHand(h, w, o); float a = V3Dot(o, f); if (a < mn) { mn = a; memcpy(best, o, 12); } }
@@ -12866,7 +12896,7 @@ static void MR_VisualGun(int g, char *top)
     MRGun *G = &g_mr.g[g];
     if (!g_mrOn || !G->base || !top || G->cls == MRC_NONE) return;
     if (G->magFor != top) {
-        G->magFor = top; G->magNode = G->cylNode = G->slideNode = G->pumpNode = G->leverNode = G->barrelNode = NULL; memset(G->itemNode, 0, sizeof G->itemNode);
+        G->magFor = top; G->magNode = G->cylNode = G->slideNode = G->pumpNode = G->leverNode = G->barrelNode = NULL; memset(G->itemNode, 0, sizeof G->itemNode); G->shellCnt = 0;
         memset(G->itemRestOk, 0, sizeof G->itemRestOk); G->magMidOk = false; G->magOffOk = false; G->insOk = false; G->since = QpcMs();
         MR_PartsWalk(top, 0, G);
         Log("Reload: %s gun model parts - magazine %s, cylinder %s, slide/bolt %s, pump %s, lever %s, barrel %s, speedloader %s, shell %s, round %s", g ? "other hand's" : "gun hand's",
@@ -12917,7 +12947,12 @@ static void MR_VisualGun(int g, char *top)
     char *sl = G->cls == MRC_TUBE ? (G->pumpNode ? G->pumpNode : G->leverNode ? NULL : G->slideNode) : G->slideNode;
     if (MR_Ok(sl) && !(g == 1 && g_lgMotion && !racking)) {   /* (the other hand's gun already locks its slide back when empty) */
         float travel = sl == G->pumpNode ? 4.0f : sl == G->slideNode && G->t <= 4 ? 1.8f : 2.6f;
-        float e = racking ? (g_mr.rackBack && g_mr.gripRaw[g_mr.rackHand] ? fmaxf(pull, 1.0f) : pull) : 0.0f;   /* (forward while empty - it moves only when you pull it) */
+        float e = racking ? (g_mr.rackBack && g_mr.gripRaw[g_mr.rackHand] ? fmaxf(pull, 1.0f) : pull) : 0.0f;
+        if (!racking && G->cls == MRC_MAG) {
+            if (G->lockBack) e = 1.0f;   /* (fired empty: it stays back until it's worked) */
+            else if (G->shotAt > 0) { float ts = (float)(now - G->shotAt); if (ts < 110.0f) e = ts < 28.0f ? ts / 28.0f : 1.0f - (ts - 28.0f) / 82.0f; }   /* (each shot: all the way back and forward again) */
+        }
+        if (racking && G->lockBack) e = fmaxf(e, g_mr.gripRaw[g_mr.rackHand] ? 1.0f : 0.0f);
         MR_Slide(sl, fw, travel * e);
     }
     if (G->cls == MRC_TUBE && MR_Ok(G->leverNode) && racking) {   /* the lever swings down as you work it */
@@ -12932,6 +12967,24 @@ static void MR_VisualGun(int g, char *top)
         const float *Ct = (const float *)(G->cylNode + NIAV_WORLD_TRANSLATE);
         for (int i = 0; i < 3; i++) org[i] = Ct[i] + sd[i] * 2.2f;
         MR_Move(G->cylNode, org, Wc);
+    }
+    /* a top-break revolver: barrel and cylinder tip down together, about the front of the frame */
+    if (G->cls == MRC_TOPBREAK && G->st == MRS_OPEN && (MR_Ok(G->barrelNode) || MR_Ok(G->cylNode))) {
+        char *b = MR_Ok(G->barrelNode) ? G->barrelNode : NULL, *c = MR_Ok(G->cylNode) ? G->cylNode : NULL;
+        float piv[3]; memcpy(piv, (b ? b : c) + NIAV_WORLD_TRANSLATE, 12);
+        if (b) { float m[3], w[3]; MR_Mid(b, m); MR_WorldOf(b, m, w); for (int i = 0; i < 3; i++) piv[i] = w[i] - up[i] * 0.6f; }   /* (the hinge: under the barrel) */
+        bool cUnderB = false; if (b && c) for (char *a = *(char **)(c + NIAV_PARENT); a && !IsBadReadPtr(a, 0xB0); a = *(char **)(a + NIAV_PARENT)) if (a == b) { cUnderB = true; break; }
+        if (b) MR_Turn(b, sd, piv, -45.0f);
+        if (c && !cUnderB) MR_Turn(c, sd, piv, -45.0f);
+    }
+    /* opening a break-open gun throws the empty cases up and back; until it's loaded again none are shown */
+    if ((G->cls == MRC_TOPBREAK || G->cls == MRC_BREAK) && G->st == MRS_OPEN && G->stored <= 0) {
+        float ft = (float)((now - G->openAt) / 1000.0);
+        for (int k = 0; k < G->shellCnt; k++) { char *s = G->shellN[k]; if (!MR_Ok(s)) continue;
+            if (ft >= 0 && ft < 0.45f) { const float *St = (const float *)(s + NIAV_WORLD_TRANSLATE); M3 Ws; memcpy(Ws, s + NIAV_WORLD_ROTATE, sizeof Ws);
+                float org[3]; for (int i = 0; i < 3; i++) org[i] = St[i] - fw[i] * (1.2f * ft * U) + up[i] * (1.4f * ft * U) + sd[i] * (0.15f * (float)(k - G->shellCnt / 2) * ft * U);
+                org[2] -= 0.5f * 9.8f * ft * ft * U; MR_Move(s, org, Ws); }
+            else MR_Hide(s); }
     }
     /* a break-action's barrels tip down while open */
     if (G->cls == MRC_BREAK && G->st == MRS_OPEN && MR_Ok(G->barrelNode)) {
@@ -13551,7 +13604,7 @@ static void LG_Input(bool menu, bool gripNow, bool gripEdge, float trig, bool *l
     g_lgGrip = gripNow;
     if (gripEdge && !g_lg.on && !g_holding[mvH]) {
         if (g_lgCand) { g_lg.pickRef = g_lgCand; g_lg.pickId = *(uint32_t *)(g_lgCand + 0x0C); g_lg.pickReq = true; g_lg.passRounds = -1; *lGrip = false; }
-        else { int z = Holster_OffZone();
+        else { int z = (MR_HandWanted(mvH) || MR_HandBusy(mvH)) ? 0 : Holster_OffZone();   /* (not while a reload waits for this hand's pouch) */
             if (z && !g_lgHol.drawReq && (g_holster[z] || g_holsterId[z])) { g_lgHol.drawReq = z; *lGrip = false; } }
     }
     if (g_lg.on || g_lg.pickReq) *lGrip = false;   /* (no VATS) */
