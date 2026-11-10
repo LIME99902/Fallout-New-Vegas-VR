@@ -223,6 +223,9 @@ static HRESULT WINAPI H_CreateDevice(IDirect3D9 *d3d, UINT ad, D3DDEVTYPE type, 
         D3DDISPLAYMODEEX m; memset(&m, 0, sizeof m); m.Size = sizeof m;
         if (pp && !pp->Windowed) { m.Width = pp->BackBufferWidth; m.Height = pp->BackBufferHeight; m.RefreshRate = pp->FullScreen_RefreshRateInHz; m.Format = pp->BackBufferFormat; m.ScanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE; }
         IDirect3DDevice9Ex *dev = NULL;
+        /* (a "pure" device can't be asked what's currently set - FNVR's own drawing saves and puts back the game's settings
+           that way; DXVK answers anyway, Windows' own Direct3D doesn't, and the game was left drawing with nothing bound) */
+        if (fl & D3DCREATE_PUREDEVICE) { fl &= ~(DWORD)D3DCREATE_PUREDEVICE; Log("device made without the 'pure device' flag, so its settings can be read back"); }
         HRESULT hr = IDirect3D9Ex_CreateDeviceEx(ex, ad, type, wnd, fl, pp, (pp && !pp->Windowed) ? &m : NULL, &dev);
         IDirect3D9Ex_Release(ex);
         if (SUCCEEDED(hr) && dev) {

@@ -544,7 +544,7 @@ static void Hud_Load(void);
 static volatile bool g_liveMenuNow = false;
 static const int g_liveMenuIds[] = { /* (1001 message boxes: not live - their OK buttons need the game's normal menu mode) */ 1008 /* container */, 1009 /* dialogue */, 1016 /* how many */, 1035 /* repair */,
                                      1053 /* barter */, 1058 /* repair services */, 1061 /* weapon mods */, 1075 /* companion wheel */, 1077 /* crafting */ };
-static bool g_liveBlocked = false;   /* (another, non-live menu is up) */
+static bool g_liveBlocked = false; static int g_liveBlockId = 0;   /* (another, non-live menu is up) */
 static bool MsgBox_PressFirst(void); static int MsgBox_Buttons(void);   /* (a pop-up message's buttons: one OK button = it can stay live) */
 static bool g_liveMsgBoxes = true;  /* [Display] bLiveMessages: pop-ups with just an OK (reputation, notes) stay live too */
 static bool LiveMenu_Check(void)
@@ -558,7 +558,7 @@ static bool LiveMenu_Check(void)
         bool live = false;
         for (unsigned k = 0; k < sizeof g_liveMenuIds / sizeof g_liveMenuIds[0]; k++) if (g_liveMenuIds[k] == id) live = true;
         if (id == 1001 && g_liveMsgBoxes && MsgBox_Buttons() == 1) live = true;   /* (a message with only OK: A presses it) */
-        if (!live) { g_liveBlocked = true; return false; }   /* another menu is up too (pause menu, loading, lockpicking...): the game's normal way */
+        if (!live) { g_liveBlocked = true; g_liveBlockId = id; return false; }   /* another menu is up too (pause menu, loading, lockpicking...): the game's normal way */
         any = true;
     }
     return any;
@@ -16122,7 +16122,7 @@ static uint8_t __cdecl Hook_AfterMenuFlag(void)
         static uint32_t lastSig = 0; uint32_t sig = 0; const volatile bool *mv = (const volatile bool *)0x011F308F; char ml[160] = "";
         for (int id = 1001; id <= 1090; id++) if (mv[id] && id != 1004) { sig = sig * 31 + (uint32_t)id; char t[8]; snprintf(t, sizeof t, " %d", id); strncat(ml, t, sizeof ml - strlen(ml) - 1); }
         sig ^= (uint32_t)liveMenu << 31;
-        if (sig != lastSig && ml[0]) { lastSig = sig; static int nl = 0; if (nl++ < 40) Log("Live menus check: menus%s - %s (Pip-Boy want %d, Pip-Boy mode %d, in game %d, live menus setting %d, another menu blocks %d)", ml, liveMenu ? "LIVE" : "not live", (int)pipWant, PipBoyMode(), (int)g_inGameplay, (int)g_liveMenus, (int)g_liveBlocked); }
+        if (sig != lastSig && ml[0]) { lastSig = sig; static int nl = 0; if (nl++ < 40) Log("Live menus check: menus%s - %s (Pip-Boy want %d, Pip-Boy mode %d, in game %d, live menus setting %d, another menu blocks %d: menu %d)", ml, liveMenu ? "LIVE" : "not live", (int)pipWant, PipBoyMode(), (int)g_inGameplay, (int)g_liveMenus, (int)g_liveBlocked, g_liveBlockId); }
         if (!ml[0]) lastSig = 0;
     }
     if (liveMenu != g_liveMenuNow) { g_liveMenuNow = liveMenu; Log("Live menus: %s", liveMenu ? "a menu is up - the world keeps running, you stay in it" : "menu closed"); }
