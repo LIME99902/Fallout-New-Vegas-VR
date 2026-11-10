@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.8 (full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.9 (alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -5990,7 +5990,7 @@ static void Display_WaitForNextFrame(void)
 typedef void (__attribute__((thiscall)) *DoRenderFrame_t)(void *osGlobals, void *renderer, uint32_t a, uint32_t b);
 static DoRenderFrame_t o_DoRenderFrame = NULL;
 static bool g_loggedStereoActive = false;
-static bool g_loggedStereoCheck = false;
+
 
 /* Right before drawing, make sure the camera uses exactly the headset-filling FOV. Other mods ease the
    FOV back toward their own value every frame; fixing it here keeps every drawn frame identical. */
@@ -16059,7 +16059,10 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
     g_renderCallsSinceLog++;
     uintptr_t ret = (uintptr_t)__builtin_return_address(0);
     if (ret == 0x008721A9) g_renderCallsResize++; else if (ret == 0x00879179) g_renderCallsMain++; else g_renderCallsOther = ret;
-    bool doStereo = g_stereo && !g_stereoFull && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11;
+    /* (alternating eyes used to take a separate short path here that skipped all of FNVR's frame work - the hands, the
+       Pip-Boy screen, the pictures of the menus - so 3D broke the Pip-Boy and the live menus. Both 3D views now go
+       through the same frame work as 2D, below.) */
+    const bool doStereo = false;
     if (g_inGameplay && !g_menuCached && cam && player) {   /* the character's standing eye height: the most common height above its feet */
         static unsigned hist[201]; static double histAt = 0;
         float e = ((const float *)(cam + NIAV_WORLD_TRANSLATE))[2] - ((const float *)((char *)player + 0x30))[2];
@@ -16144,7 +16147,8 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         Trk_Update(); BT_Tick();
         g_capCount = 0; g_inRenderFrame = true;
         g_lgdWant = grabVis && g_lgWithArms && g_lgPlaced && cam; g_lgdCam = cam;   /* (fingers behind the other hand's gun hidden this frame) */
-        bool full = g_stereoFull && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11 && !((const volatile bool *)0x011F308F)[1007];
+        bool stereoOk = (g_stereoFull || g_stereo) && g_inGameplay && !g_menuCached && dev && cam && player && g_vrCompositor && !g_displayFailed && g_d11 && !((const volatile bool *)0x011F308F)[1007];
+        bool full = stereoOk && g_stereoFull, alt = stereoOk && !g_stereoFull && g_stereo;
         {   /* the Pip-Boy: 3D once it's fully open and settled; one picture while it opens or closes (drawing the opening
                twice stalls the game) and while other menus are up */
             static double pipSteadySince = 0; static bool pipBad = false;
@@ -16152,7 +16156,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             if (!pipSteady) pipSteadySince = 0; else if (!pipSteadySince) pipSteadySince = QpcMs();
             bool pipOk = pipSteady && !pipBad && QpcMs() - pipSteadySince > 700.0;
             bool quiet = !g_pipOpen && !g_wristUp && g_pipModeRaw == 0 && PipBoyMode() == 0 && QpcMs() > g_pipExpectUntil + 300.0 && !g_liveMenuNow && !IsMenuMode();
-            if (!(pipOk || quiet)) full = false;
+            if (!(pipOk || quiet)) full = alt = false;   /* (menus, conversations, the Pip-Boy opening or closing: one picture for both eyes) */
             g_fullPipNow = full && pipSteady;
             if (g_fullPipSlow) { g_fullPipSlow = false; if (!pipBad) { pipBad = true; Log("Full 3D: drawing the open Pip-Boy twice was too slow - one picture while it's open from now on"); } }
         }
@@ -16203,6 +16207,47 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             g_stereoCapturedThisFrame = ok0;
             {   static int fl = 0; static double nl = 0;
                 if (QpcMs() > nl) { nl = QpcMs() + 10000.0; if (fl++ < 30) Log("Full 3D: left eye drawn in %.1f ms, right eye %.1f ms (%s)", te[0], te[1], ok0 && ok1 ? "both captured" : "capture failed"); } }
+        } else if (alt) {
+            /* Alternating eyes: one picture a frame, from the left and the right eye in turn, with the same frame work as
+               full 3D (hands, Pip-Boy screen, scope, rope, outlines); the headset shows each eye's newest picture */
+            float *T = (float *)(cam + NIAV_WORLD_TRANSLATE), *L = (float *)(cam + NIAV_LOCAL_TRANSLATE);
+            char *parent = *(char **)(cam + NIAV_PARENT);
+            const float *Cw = (const float *)(cam + NIAV_WORLD_ROTATE);
+            float rgt[3] = { Cw[2], Cw[5], Cw[8] }; float rl = V3Len(rgt);
+            if (!(rl > 0.5f)) { float hd = *PlayerRotZ(player); rgt[0] = cosf(hd); rgt[1] = -sinf(hd); rgt[2] = 0; rl = 1.0f; }
+            for (int k = 0; k < 3; k++) rgt[k] /= rl;
+            float savedT[3] = { T[0], T[1], T[2] }, savedL[3] = { L[0], L[1], L[2] };
+            float half = 0.5f * g_ipdMeters * g_unitsPerMeter;
+            int aimEye = g_leftHanded ? 0 : 1, eye = g_aerEye & 1;
+            bool ropeOn = g_rope.on;
+            float side = eye == 0 ? -1.0f : 1.0f, w[3], l[3];
+            for (int k = 0; k < 3; k++) w[k] = rgt[k] * side * half;
+            memcpy(l, w, sizeof l);
+            if (parent) {
+                const float *R = (const float *)(parent + NIAV_WORLD_ROTATE); float sc = *(const float *)(parent + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
+                for (int k = 0; k < 3; k++) l[k] = (R[0 * 3 + k] * w[0] + R[1 * 3 + k] * w[1] + R[2 * 3 + k] * w[2]) / sc;
+            }
+            for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }
+            if (armsDone && grabVis) {
+                if (eye == aimEye && QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam); else { g_scope.active = false; g_capWant = false; }
+                PipScr_Prepare((char *)player, cam);
+            }
+            Lgd_FrameBegin();
+            o_DoRenderFrame(osGlobals, renderer, a, b);
+            Lgd_FrameEnd();
+            for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }   /* (in case the game moved it while drawing) */
+            if (eye == aimEye) Scope_Draw(dev); else g_scope.active = false;
+            PipScr_Draw(dev);
+            g_rope.on = ropeOn; Rope_Draw(dev);
+            Ol_Collect(cam); Ol_Draw(dev);
+            bool ok = Capture_Eye(dev, 0);
+            for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
+            if (ok && g_fillSlot) g_fillSlot->targetEye = eye;
+            g_aerDrewEye = ok ? eye : -1;
+            g_aerEye ^= 1;
+            g_stereoCapturedThisFrame = ok;
+            if (ok) g_stereoFramesSinceLog++;
+            if (!g_loggedStereoActive) { g_loggedStereoActive = true; Log("Alternating eyes: on, with the full frame work - eye separation %.2f game units (IPD %.1f mm x %.1f units/m)", half * 2.0f, g_ipdMeters * 1000.0f, g_unitsPerMeter); }
         } else { Lgd_FrameBegin(); o_DoRenderFrame(osGlobals, renderer, a, b); Lgd_FrameEnd(); if (grabVis) Ol_Collect(cam); }
         g_inRenderFrame = false; g_lgdWant = false;
         t4 = QpcMs(); g_tGame += t4 - t3;
@@ -16227,52 +16272,6 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         }
         return;
     }
-    if (!g_loggedStereoActive) {
-        g_loggedStereoActive = true;
-        Log("Stereo rendering active: eye separation %.2f game units (IPD %.1f mm x %.1f units/m)",
-            g_ipdMeters * g_unitsPerMeter, g_ipdMeters * 1000.0f, g_unitsPerMeter);
-    }
-
-    /* Eyes sit left/right of the camera along its horizontal right vector. */
-    float heading = *PlayerRotZ(player);                    /* + = clockwise from north (+Y) */
-    float rx = cosf(heading), ry = -sinf(heading);
-    float half = 0.5f * g_ipdMeters * g_unitsPerMeter;
-
-    /* Alternate-eye rendering: each frame draws exactly once, from the left or right eye in turn.
-       (Drawing twice per frame overloads the game - its per-frame bookkeeping isn't built for it.)
-       The camera is moved in world space and in its parent's (local) space, so the offset survives
-       if the game re-derives the camera's world position while drawing. */
-    float *T = (float *)(cam + NIAV_WORLD_TRANSLATE);
-    float *L = (float *)(cam + NIAV_LOCAL_TRANSLATE);
-    char *parent = *(char **)(cam + NIAV_PARENT);
-    float savedT[3] = { T[0], T[1], T[2] }, savedL[3] = { L[0], L[1], L[2] };
-    int eye = g_aerEye;
-    float side = eye == 0 ? -1.0f : 1.0f;
-    float w[3] = { rx * side * half, ry * side * half, 0.0f };   /* world-space offset */
-    float l[3] = { w[0], w[1], w[2] };
-    if (parent) {
-        /* local = R_parent^T * world / scale_parent */
-        const float *R = (const float *)(parent + NIAV_WORLD_ROTATE);   /* row-major 3x3 */
-        float sc = *(const float *)(parent + NIAV_WORLD_SCALE);
-        if (!(sc > 0.0001f)) sc = 1.0f;
-        for (int k = 0; k < 3; k++) l[k] = (R[0 * 3 + k] * w[0] + R[1 * 3 + k] * w[1] + R[2 * 3 + k] * w[2]) / sc;
-    }
-    for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }
-    float expect[3] = { T[0], T[1], T[2] };
-    o_DoRenderFrame(osGlobals, renderer, a, b);
-    if (!g_loggedStereoCheck) {
-        g_loggedStereoCheck = true;
-        float d = fabsf(T[0] - expect[0]) + fabsf(T[1] - expect[1]) + fabsf(T[2] - expect[2]);
-        Log("Stereo check: camera %s while drawing (moved %.3f units; parent %p)",
-            d > 0.01f ? "position was CHANGED by the game" : "position kept", d, (void *)parent);
-    }
-    bool ok = Capture_Eye(dev, 0);
-    if (ok && g_fillSlot) g_fillSlot->targetEye = eye;
-    g_aerDrewEye = ok ? eye : -1;
-    for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
-    g_aerEye ^= 1;
-    g_stereoCapturedThisFrame = ok;
-    if (ok) g_stereoFramesSinceLog++;
 }
 
 static void InstallRenderHook(void)
