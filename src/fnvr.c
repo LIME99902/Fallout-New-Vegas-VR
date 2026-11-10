@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.3 (zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.4 (grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -217,6 +217,7 @@ static bool  g_fastAer = true; static int g_aerDrewEye = -1;   /* (the eye this 
    refresh the newest picture goes to the headset (SteamVR fills in between when the game is slower). */
 static int   g_renderScaleSel = 0, g_sharpenSel = 0;   /* [Display] iRenderScale (100|85|75|66|50 %), iSharpen (off|low|medium|high) */
 static const int g_renderScaleOf[5] = { 100, 85, 75, 66, 50 }; static const float g_sharpenOf[4] = { 0.0f, 0.35f, 0.65f, 1.0f };
+static bool  g_grabPeople = true;   /* [Grab] bGrabPeople */
 static bool  g_vrClock = true;   /* [Clock] bVRClock: FNVR runs the game clock */
 static int   g_fpsMode = 0; static const int g_fpsOf[6] = { 0, 120, 90, 60, 30, -1 };
 static bool  g_syncNow = true;   /* (this frame goes to the headset) */
@@ -672,6 +673,7 @@ static void LoadSettings(void)
     g_fastAer = GetPrivateProfileIntA("Stereo", "bFastAlternate", 1, g_iniPath) != 0;
     g_renderScaleSel = GetPrivateProfileIntA("Display", "iRenderScale", 0, g_iniPath); if (g_renderScaleSel < 0 || g_renderScaleSel > 4) g_renderScaleSel = 0;
     g_sharpenSel = GetPrivateProfileIntA("Display", "iSharpen", 0, g_iniPath); if (g_sharpenSel < 0 || g_sharpenSel > 3) g_sharpenSel = 0;
+    g_grabPeople = GetPrivateProfileIntA("Grab", "bGrabPeople", 1, g_iniPath) != 0;
     g_fpsMode = GetPrivateProfileIntA("Stereo", "iFrameRate", 0, g_iniPath); if (g_fpsMode < 0 || g_fpsMode > 5) g_fpsMode = 0;
     g_motionControls = GetPrivateProfileIntA("Controls", "bMotionControls", 1, g_iniPath) != 0;
     g_handAim = GetPrivateProfileIntA("Controls", "bHandAim", 1, g_iniPath) != 0;
@@ -6075,6 +6077,71 @@ static void *HookExport(HMODULE m, const char *name, void *hook)
     return tramp;
 }
 
+
+/* ---- The sky with your head's movement --------------------------------------------------------------------------------
+   FNVR moves the camera for leaning, crouching and each eye, but the game draws its sky dome around where the camera was
+   before that - so the (not infinitely far) dome slid against the world when you leaned, and each eye saw it at a
+   slightly different spot. Each time the game sets up a sky piece for drawing (SkyShader::SetupGeometry), the piece is
+   moved by exactly the camera's offset for that upload and put back after; nothing else moves.
+   (Approach from a FNVVRMC contributor.) [Display] bSkyFollowsHead */
+#define SKY_SETUP_ADDR 0x00B89D80
+#define RENDER_PASS_GEOM 0x011F91E0
+static bool g_skyFix = true; static char *g_skyCam = NULL; static float g_skyBase[3];
+static char *g_skyGeom; static float g_skyGeomT[3]; static bool g_skyMoved;
+static void *o_SkySetup; static uint32_t g_skyRet;
+static void __cdecl Sky_Pre(void)
+{
+    g_skyMoved = false;
+    char *cam = g_skyCam; if (!cam) return;
+    char *geom = *(char **)RENDER_PASS_GEOM; if (!geom || IsBadReadPtr(geom, 0x9C)) return;
+    const float *ct = (const float *)(cam + NIAV_WORLD_TRANSLATE); float off[3];
+    for (int i = 0; i < 3; i++) off[i] = ct[i] - g_skyBase[i];
+    if (fabsf(off[0]) + fabsf(off[1]) + fabsf(off[2]) < 0.01f || V3Len(off) > 500.0f) return;
+    float *gt = (float *)(geom + NIAV_WORLD_TRANSLATE);
+    memcpy(g_skyGeomT, gt, 12); for (int i = 0; i < 3; i++) gt[i] += off[i];
+    g_skyGeom = geom; g_skyMoved = true;
+}
+static void __cdecl Sky_Post(void)
+{
+    if (g_skyMoved && g_skyGeom) memcpy(g_skyGeom + NIAV_WORLD_TRANSLATE, g_skyGeomT, 12);
+    g_skyMoved = false;
+}
+/* (calls the original with the game's own arguments, whatever they are, then puts the piece back) */
+__attribute__((naked)) static void Sky_Stub(void)
+{
+    __asm__ volatile(
+        "pushal\n\t"
+        "call %P0\n\t"
+        "popal\n\t"
+        "popl %1\n\t"
+        "pushl $1f\n\t"
+        "jmp *%2\n"
+        "1:\n\t"
+        "pushl %%eax\n\t"
+        "pushl %%edx\n\t"
+        "call %P3\n\t"
+        "popl %%edx\n\t"
+        "popl %%eax\n\t"
+        "jmp *%1\n\t"
+        : : "i"(Sky_Pre), "m"(g_skyRet), "m"(o_SkySetup), "i"(Sky_Post));
+}
+static void Sky_Install(void)
+{
+    g_skyFix = GetPrivateProfileIntA("Display", "bSkyFollowsHead", 1, g_iniPath) != 0;
+    if (!g_skyFix) { Log("Sky: as the game draws it ([Display] bSkyFollowsHead=0)"); return; }
+    BYTE *fn = (BYTE *)SKY_SETUP_ADDR;
+    int len = fn[0] == 0xE9 ? 5 : PrologueLen(fn);
+    if (!len) { Log("Sky: unexpected code at %08X (%02X %02X %02X %02X %02X %02X) - sky left as is", SKY_SETUP_ADDR, fn[0], fn[1], fn[2], fn[3], fn[4], fn[5]); g_skyFix = false; return; }
+    BYTE *tr = (BYTE *)VirtualAlloc(NULL, 64, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE); if (!tr) return;
+    if (fn[0] == 0xE9) { uintptr_t tg = (uintptr_t)fn + 5 + *(int32_t *)(fn + 1); tr[0] = 0xE9; *(int32_t *)(tr + 1) = (int32_t)(tg - ((uintptr_t)tr + 5)); }
+    else { memcpy(tr, fn, len); tr[len] = 0xE9; *(int32_t *)(tr + len + 1) = (int32_t)(((uintptr_t)fn + len) - ((uintptr_t)tr + len + 5)); }
+    FlushInstructionCache(GetCurrentProcess(), tr, 64);
+    o_SkySetup = tr;
+    DWORD old; VirtualProtect(fn, len, PAGE_EXECUTE_READWRITE, &old);
+    fn[0] = 0xE9; *(int32_t *)(fn + 1) = (int32_t)((uintptr_t)Sky_Stub - ((uintptr_t)fn + 5)); for (int i = 5; i < len; i++) fn[i] = 0x90;
+    VirtualProtect(fn, len, old, &old); FlushInstructionCache(GetCurrentProcess(), fn, len);
+    Log("Sky: moves with your head and each eye (sky setup at %08X hooked)", SKY_SETUP_ADDR);
+}
 static void InstallShaderCache(void)
 {
     static bool done = false;
@@ -15111,6 +15178,118 @@ static void Stim_Update(float dt, bool noWeapon)
     wasIn = in;
     if (!noWeapon && g_holding[h]) Grab_Hold(h, dt);   /* (with a gun out the normal holding below doesn't run) */
 }
+
+/* ---- Grabbing people and dragging bodies ----------------------------------------------------------------------------------
+   Squeeze the grip on a body (dead, or knocked down) and you hold the part you grabbed - an arm, a leg, the head, the
+   chest - and can drag the whole body around by it; let go and it drops (or flies, if you swing it). Grab a living
+   person and yank (a quick pull or shove) and they're knocked off their feet - then you're holding them like a body.
+   [Grab] bGrabPeople (on). */
+typedef struct { char *ref; uint32_t id; char *rb; bool live; double at; } DragHold;
+static DragHold g_drag[2];
+static char *g_dragActors[24]; static int g_dragActorN = 0;
+typedef void (__attribute__((thiscall)) *HkActivate_t2)(char *rb);
+/* the physics part of an actor's body nearest to p (any collision object on its skeleton) */
+static char *Drag_Nearest(char *node, const float *p, float *best, int depth, char *bestRb)
+{
+    if (!node || depth > 40 || IsBadReadPtr(node, 0xB0)) return bestRb;
+    char *co = *(char **)(node + 0x1C);
+    if (co && !IsBadReadPtr(co, 0x14)) {
+        char *wo = *(char **)(co + 0x10);
+        if (wo && !IsBadReadPtr(wo, 0x10) && (*(uint32_t *)wo == VTBL_BHKRIGIDBODY || *(uint32_t *)wo == VTBL_BHKRIGIDBODYT)) {
+            char *rb = *(char **)(wo + 0x08);
+            if (rb && !IsBadReadPtr(rb, 0x1D0)) {
+                float c[3], d[3]; BodyCom(rb, c); V3Sub(d, c, p); float l = V3Len(d);
+                if (l < *best) { *best = l; bestRb = rb; RbWo_Note(rb, wo); }
+            }
+        }
+    }
+    if (!AsNode(node)) return bestRb;
+    char **kids = *(char ***)(node + 0xA0); unsigned n = *(uint16_t *)(node + 0xA6);
+    for (unsigned i = 0; kids && i < n && i < 64; i++) bestRb = Drag_Nearest(kids[i], p, best, depth + 1, bestRb);
+    return bestRb;
+}
+static bool Drag_Dynamic(char *rb) { BYTE mt = *(BYTE *)(rb + 0xE8); return mt == 1 || mt == 2 || mt == 3 || mt == 6; }   /* (not keyframed: ragdolled) */
+static char *Drag_Root(char *ref) { char *rs = *(char **)(ref + 0x64); return rs && !IsBadReadPtr(rs, 0x18) ? *(char **)(rs + 0x14) : NULL; }
+static void Drag_Scan(char *player)
+{
+    g_dragActorN = 0;
+    char *cells[16]; int nCells = 0; char *pc = *(char **)(player + 0x40); if (pc) cells[nCells++] = pc;
+    if (pc && !(*(BYTE *)(pc + 0x24) & 1)) {
+        char *tes = *(char **)TES_PTR_ADDR; char *gca = tes ? *(char **)(tes + 0x08) : NULL;
+        if (gca) { uint32_t n = *(uint32_t *)(gca + 0x0C); char **gc = *(char ***)(gca + 0x10);
+            if (gc && n > 0 && n <= 11) for (uint32_t i = 0; i < n * n && nCells < 16; i++) if (gc[i] && gc[i] != pc) cells[nCells++] = gc[i]; }
+    }
+    for (int c = 0; c < nCells; c++)
+        for (char **node = (char **)(cells[c] + 0xAC); node && g_dragActorN < 24; node = (char **)node[1]) {
+            char *ref = node[0];
+            if (!ref || ref == player) continue;
+            BYTE t = *(BYTE *)(ref + 0x04); if (t != 0x3B && t != 0x3C) continue;   /* (people and creatures) */
+            if (*(uint32_t *)(ref + 0x08) & (0x20 | 0x800)) continue;
+            const float *rp = (const float *)(ref + 0x30); bool close = false;
+            for (int h = 0; h < 2; h++) if (g_handWOk[h]) { float d[3]; V3Sub(d, rp, g_handW[h]); if (V3Dot(d, d) < 220.0f * 220.0f) close = true; }
+            if (close) g_dragActors[g_dragActorN++] = ref;
+        }
+}
+static void *g_dragPushScr; static bool g_dragPushTried;
+static void Drag_Push(char *ref, int force)
+{
+    if (!g_dragPushTried) { g_dragPushTried = true; if (g_scriptIntf && g_scriptIntf->CompileScript) g_dragPushScr = g_scriptIntf->CompileScript("ref rWho\nint iF\nBegin Function { rWho, iF }\nrWho.PushActorAway player iF\nEnd\n");
+        Log("Grab people: knock-down %s", g_dragPushScr ? "ready" : "FAILED"); }
+    if (g_dragPushScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_dragPushScr, GetPlayer(), 2, ref, force);
+}
+static void Drag_Update(char *player, float dt, bool noWeapon)
+{
+    static unsigned tick = 0; if ((tick++ % 6) == 0) Drag_Scan(player);
+    static bool prevWant[2];
+    for (int h = 0; h < 2; h++) {
+        DragHold *d = &g_drag[h];
+        bool edge = g_grabWant[h] && !prevWant[h]; prevWant[h] = g_grabWant[h];
+        bool want = g_grabPeople && noWeapon && g_grabWant[h] && g_handWOk[h] && !g_holding[h];
+        if (d->ref && (!want || LookupForm(d->id) != (void *)d->ref)) {   /* let go */
+            if (d->rb && !IsBadReadPtr(d->rb, 0x1D0)) { float *lv = (float *)(d->rb + 0x1B0); float l = V3Len(lv); if (l > 60.0f) for (int i = 0; i < 3; i++) lv[i] *= 60.0f / l; }
+            Log("Grab people: %s hand let go of %08X", h ? "right" : "left", d->id); memset(d, 0, sizeof *d); continue;
+        }
+        float palm[3]; Gun_Palm(h, palm);
+        if (!d->ref) {
+            if (!want || g_grabCand[h] || g_grabBlock[h]) continue;   /* (a loose object in reach wins) */
+            if (!edge) continue;
+            float best = 14.0f; char *bestRb = NULL, *bestRef = NULL;   /* (within about 20 cm of a body part) */
+            for (int a = 0; a < g_dragActorN; a++) {
+                char *ref = g_dragActors[a]; if (LookupForm(*(uint32_t *)(ref + 0x0C)) != (void *)ref) continue;
+                float b = best; char *rb = Drag_Nearest(Drag_Root(ref), palm, &b, 0, NULL);
+                if (rb && b < best) { best = b; bestRb = rb; bestRef = ref; }
+            }
+            if (!bestRb) continue;
+            d->ref = bestRef; d->id = *(uint32_t *)(bestRef + 0x0C); d->rb = bestRb; d->live = !Drag_Dynamic(bestRb); d->at = QpcMs();
+            if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 2500);
+            Log("Grab people: %s hand took hold of %08X (%s, %.0f units from the palm)", h ? "right" : "left", d->id, d->live ? "standing - yank to knock them down" : "a body - drag it", best);
+            continue;
+        }
+        /* holding */
+        if (d->live) {
+            if (g_handSpeed[h] > 1.5f) {   /* a yank or a shove: off their feet */
+                int f = (int)fminf(fmaxf(g_handSpeed[h] * 2.0f, 2.0f), 10.0f);
+                Drag_Push(d->ref, f); d->live = false; d->rb = NULL; d->at = QpcMs();
+                if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
+                Log("Grab people: %08X knocked down (%.1f m/s, force %d)", d->id, g_handSpeed[h], f);
+            }
+            continue;
+        }
+        if (!d->rb || !Drag_Dynamic(d->rb)) {   /* (knocked down a moment ago: the body part nearest the hand, once it's loose) */
+            if (QpcMs() - d->at > 2500.0) { memset(d, 0, sizeof *d); continue; }
+            float b = 30.0f; char *rb = Drag_Nearest(Drag_Root(d->ref), palm, &b, 0, NULL);
+            if (!rb || !Drag_Dynamic(rb)) continue;
+            d->rb = rb;
+        }
+        float c[3], err[3]; BodyCom(d->rb, c); V3Sub(err, palm, c);
+        float v[3]; for (int i = 0; i < 3; i++) v[i] = err[i] * 14.0f / HK_TO_GAME;
+        float vl = V3Len(v); if (vl > 80.0f) for (int i = 0; i < 3; i++) v[i] *= 80.0f / vl;
+        float *lv = (float *)(d->rb + 0x1B0); for (int i = 0; i < 3; i++) lv[i] = v[i]; lv[3] = 0;
+        ((HkActivate_t2)HK_ACTIVATE_ADDR)(d->rb);
+        g_fingerCurl[h][0] = g_fingerCurl[h][1] = g_fingerCurl[h][2] = 0.75f;
+        (void)dt;
+    }
+}
 static void Grab_Update(char *player, char *cam)
 {
     LARGE_INTEGER now, fq; QueryPerformanceCounter(&now); QueryPerformanceFrequency(&fq);
@@ -15149,12 +15328,13 @@ static void Grab_Update(char *player, char *cam)
     if (!Grapple_Busy()) Momentum_Update(player, dt);
     Stim_Update(dt, noWeapon);
     if (!noWeapon) for (int h = 0; h < 2; h++) if (g_holding[h] && g_held[h].gripHold && h != g_stimHand) Grab_Hold(h, dt);   /* (the other hand's gun: held with a gun out too) */
-    if (!g_grabEnabled || !noWeapon) { g_grabCand[0] = g_grabCand[1] = NULL; return; }
+    if (!g_grabEnabled || !noWeapon) { g_grabCand[0] = g_grabCand[1] = NULL; Drag_Update(player, dt, false); return; }
     for (int h = 0; h < 2; h++) if (!g_grabWant[h]) g_grabBlock[h] = false;
     for (int h = 0; h < 2; h++)
         if (!g_holding[h] && g_grabWant[h] && !g_grabBlock[h] && g_grabCand[h] && g_handWOk[h] && Near_ValidRef(g_grabCand[h])) Grab_Start(h, g_grabCand[h]);
     for (int h = 0; h < 2; h++) if (g_holding[h]) Grab_Hold(h, dt);
     Grab_FindCandidates();
+    Drag_Update(player, dt, noWeapon);
 }
 
 
@@ -15411,6 +15591,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             physQuiet = QpcMs() < quietUntil;
         }
         if (g_inGameplay && cam && player && !g_menuCached && g_bodyValid) {
+            if (g_skyFix) { memcpy(g_skyBase, cam + NIAV_WORLD_TRANSLATE, 12); g_skyCam = cam; }
             HeadOffset_Apply((char *)player, cam);
             t1 = QpcMs(); g_tHead += t1 - t0;
             g_weaponOutThisFrame = PlayerWeaponOut();
@@ -15522,6 +15703,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         if (grabVis) { MR_VisualRestore(); LG_VisualRestore(); Grab_VisualRestore(); }
         if (armsDone) Arms_Restore();
         HeadOffset_Restore();
+        g_skyCam = NULL;
         t5 = QpcMs(); g_tArms += t5 - t4;
         g_tFrames++;
         {
@@ -17456,6 +17638,7 @@ static const SetOpt g_setOpts[] = {
     { SP_HANDS, ST_BOOL, "Pick up weapons by the grip", "Grab", "bGrabWeapons", &g_gunGrab, 0, 0, 0, 0, 0, 0, "ON: with your gun hand empty, squeeze its grip with your hand on a weapon's grip (a buzz tells you you're on it) to pick it up and hold it ready. It stays while you squeeze; let go to drop it, or let go mid-throw to throw it. Big guns: pick one up with your other hand first, then take the grip - keep the other hand on it to hold it with both." },
     { SP_HANDS, ST_BOOL, "Keep weapons in hand", "Grab", "bKeepWeaponsInHand", &g_keepWeapons, 0, 0, 0, 0, 0, 0, "ON: letting go of the grip never drops a weapon in either hand - it only leaves your hand if you throw it (let go while swinging your hand) or let go at a holster. OFF: letting go of the grip drops it." },
     { SP_HANDS, ST_FLOAT, "Weapon throw speed", "Grab", "fWeaponThrowSpeed", &g_keepThrowSpeed, 0.5f, 10.0f, 0.1f, "%.1f m/s", 0, 0, "With Keep weapons in hand: how fast your hand must be moving as you let go of the grip for the weapon to be thrown." },
+    { SP_HANDS, ST_BOOL, "Grab people and bodies", "Grab", "bGrabPeople", &g_grabPeople, 0, 0, 0, 0, 0, 0, "ON: squeeze the grip on a body to hold the arm, leg or head you grabbed and drag it around; let go to drop it. Grab someone standing and yank or shove to knock them off their feet." },
     { SP_HANDS, ST_BOOL, "Dual wield", "Grab", "bDualWield", &g_dualOn, 0, 0, 0, 0, 0, 0, "ON: take a gun or melee weapon lying in the world by its grip with your other hand (or pick one in the Pip-Boy with the LEFT trigger) and fire it with that hand's trigger until it's empty. To reload, put your gun-hand weapon away, take the gun by its grip with your gun hand, reload as usual, then hand it back: hold it with your other hand and let go with your gun hand." },
     { SP_HUD, ST_BOOL, "Other hand's weapon readout", "Display", "bLeftHud", &g_lhudShow, 0, 0, 0, 0, 0, 0, "Shows the weapon in your other hand at the left of your view: its name, rounds in it / rounds you carry, and its condition." },
     { SP_HUD, ST_FLOAT, "Readout: across", "Display", "fLeftHudX", &g_lhudX, 0.0f, 0.9f, 0.01f, "%.2f", 0, 0, "Where the other hand's readout sits, from the left edge of the picture (0) to the right (0.9)." },
@@ -18673,6 +18856,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         Req_Check();   /* (is everything FNVVRMC needs loaded?) */
         Clock_Install();
         InstallShaderCache();
+        Sky_Install();
         InstallD3D9Hooks();
         InstallRenderHook();
         if (g_motionControls) InstallXInputThunkHook();
