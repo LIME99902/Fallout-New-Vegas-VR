@@ -2835,6 +2835,18 @@ static void VR_Tick(void)
             yaw * RAD2DEG, pitch * RAD2DEG, pz * RAD2DEG, px * RAD2DEG, (int)menu,
             g_trackingEnabled ? "on" : "off",
             g_ticksSinceLog / secs, g_presentsSinceLog / secs, g_submitsSinceLog / secs, g_stereoFramesSinceLog / secs, g_renderCallsSinceLog, g_renderCallsResize, g_renderCallsMain, (unsigned)g_renderCallsOther, g_capWaitsSinceLog, g_xinputCalls, (int)g_padActive * 10 + *(BYTE *)GAMEPAD_CONNECTED);
+        if (g_presentsSinceLog == 0 && g_ticksSinceLog > 0 && g_hookedDevice) {   /* (the game runs but shows nothing: why) */
+            static int sl = 0;
+            if (sl++ < 6) {
+                HRESULT tc = IDirect3DDevice9_TestCooperativeLevel(g_hookedDevice), ds = 0;
+                IDirect3DDevice9Ex *ex = NULL; static const GUID iidEx = { 0xb18b10ce, 0x2649, 0x405a, { 0x87, 0x0f, 0x95, 0xf7, 0x77, 0xd4, 0x31, 0x3a } };
+                if (SUCCEEDED(IDirect3DDevice9_QueryInterface(g_hookedDevice, &iidEx, (void **)&ex)) && ex) { ds = IDirect3DDevice9Ex_CheckDeviceState(ex, NULL); IDirect3DDevice9Ex_Release(ex); }
+                HWND fg = GetForegroundWindow(); char fgT[80] = ""; if (fg) GetWindowTextA(fg, fgT, sizeof fgT);
+                D3DDEVICE_CREATION_PARAMETERS cp; memset(&cp, 0, sizeof cp); IDirect3DDevice9_GetCreationParameters(g_hookedDevice, &cp);
+                Log("No frames shown: device check %08lX, device state %08lX, window in front: \"%s\"%s%s", (unsigned long)tc, (unsigned long)ds, fgT,
+                    fg == cp.hFocusWindow ? " (the game)" : " (NOT the game)", IsIconic(cp.hFocusWindow) ? ", game window minimised" : "");
+            }
+        }
         {   /* address-space use: the game is 32-bit, so running out of it crashes inside the game */
             MEMORYSTATUSEX ms; ms.dwLength = sizeof ms;
             size_t largest = 0;
@@ -18800,6 +18812,7 @@ static HRESULT STDMETHODCALLTYPE Hook_DevPresent(IDirect3DDevice9 *dev, const RE
     Display_Frame(dev);
     InterlockedExchange(&g_inMainLoopWork, 3);
     HRESULT hr = o_DevPresent(dev, a, b, w, r);
+    if (hr != D3D_OK) { static int pl = 0; static HRESULT lastHr = 0; if (pl < 12 && hr != lastHr) { pl++; lastHr = hr; Log("Present returned %08lX", (unsigned long)hr); } }
     InterlockedExchange(&g_inMainLoopWork, 4);
     Display_WaitForNextFrame();
     InterlockedExchange(&g_inMainLoopWork, 0);
