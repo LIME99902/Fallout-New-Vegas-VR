@@ -16118,6 +16118,13 @@ static uint8_t __cdecl Hook_AfterMenuFlag(void)
         if (liveMenu) lastLive = QpcMs();
         else if (g_liveMenuNow && !g_liveBlocked && !pipWant && QpcMs() - lastLive < 800.0 && IsMenuMode()) liveMenu = true;   /* (only while the game is still in its menu state) */
     }
+    {   /* (which menus are up, and why they are / aren't live - once each time that changes) */
+        static uint32_t lastSig = 0; uint32_t sig = 0; const volatile bool *mv = (const volatile bool *)0x011F308F; char ml[160] = "";
+        for (int id = 1001; id <= 1090; id++) if (mv[id] && id != 1004) { sig = sig * 31 + (uint32_t)id; char t[8]; snprintf(t, sizeof t, " %d", id); strncat(ml, t, sizeof ml - strlen(ml) - 1); }
+        sig ^= (uint32_t)liveMenu << 31;
+        if (sig != lastSig && ml[0]) { lastSig = sig; static int nl = 0; if (nl++ < 40) Log("Live menus check: menus%s - %s (Pip-Boy want %d, Pip-Boy mode %d, in game %d, live menus setting %d, another menu blocks %d)", ml, liveMenu ? "LIVE" : "not live", (int)pipWant, PipBoyMode(), (int)g_inGameplay, (int)g_liveMenus, (int)g_liveBlocked); }
+        if (!ml[0]) lastSig = 0;
+    }
     if (liveMenu != g_liveMenuNow) { g_liveMenuNow = liveMenu; Log("Live menus: %s", liveMenu ? "a menu is up - the world keeps running, you stay in it" : "menu closed"); }
     bool want = pipWant || liveMenu;
     if (liveMenu && !pipWant && !g_liveDlgWorld && !g_dlgCamStuck) {   /* only a conversation up: the game runs it its own way (the world pauses as in the base game) */
@@ -16337,7 +16344,16 @@ static void Vc_Phrase(char *out, size_t cap, char words[][32], int k)
 static int Vc_MakePhrases(int mode, char opt[][VC_TXT], int n, char ph[][VC_TXT], int *rule)
 {
     int np = 0;
-    if (mode == 1) { for (int i = 0; g_vcGreetings[i] && np < VC_MAXPH; i++) { snprintf(ph[np], VC_TXT, "%s", g_vcGreetings[i]); rule[np++] = 1; } return np; }
+    if (mode == 1) {
+        for (int i = 0; g_vcGreetings[i] && np < VC_MAXPH; i++) { snprintf(ph[np], VC_TXT, "%s", g_vcGreetings[i]); rule[np++] = 1; }
+        /* a greeting with a name or a friendly word after it ("howdy doc", "howdy pete", "hey partner") - whoever you're looking at */
+        static const char *const gw[] = { "howdy", "hey", "hello", NULL };
+        static const char *const nm[] = { "doc", "pete", "partner", "friend", "pal", "buddy", "stranger", "folks", "mister", "sir", "boss",
+            "sheriff", "ranger", "soldier", "trooper", "sergeant", "sarge", "captain", "chief", "kid", "sunny", "trudy", "chet", "ringo", "boone",
+            "cass", "veronica", "arcade", "raul", "lily", "victor", "benny", "joe", NULL };
+        for (int g = 0; gw[g]; g++) for (int k = 0; nm[k] && np < VC_MAXPH; k++) { snprintf(ph[np], VC_TXT, "%s %s", gw[g], nm[k]); rule[np++] = 1; }
+        return np;
+    }
     if (mode != 2) return 0;
     static char cand[VC_MAXOPT][10][VC_TXT]; int cn[VC_MAXOPT] = { 0 };
     for (int i = 0; i < n; i++) {
