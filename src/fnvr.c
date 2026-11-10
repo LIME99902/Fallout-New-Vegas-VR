@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.0 (FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.1 (game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -212,6 +212,12 @@ static bool  g_stereoFull = false;
 /* Fast alternate eyes: the headset waits only after the right eye, so the left-eye frame runs straight on - a pair of
    eyes per headset refresh (90+ pairs a second at 90 Hz) instead of one eye. [Stereo] bFastAlternate */
 static bool  g_fastAer = true; static int g_aerDrewEye = -1;   /* (the eye this frame drew, -1 none) */
+/* Game frame rate vs. the headset: [Stereo] iFrameRate - 0 unlimited, 1 120, 2 90, 3 60, 4 30, 5 match the headset (wait every
+   refresh, the old way). Except in 5, the game isn't tied to the headset: it draws as fast as allowed, and once per headset
+   refresh the newest picture goes to the headset (SteamVR fills in between when the game is slower). */
+static int   g_fpsMode = 0; static const int g_fpsOf[6] = { 0, 120, 90, 60, 30, -1 };
+static bool  g_syncNow = true;   /* (this frame goes to the headset) */
+static double g_lastSyncAt = 0, g_frameStartAt = 0;
 static bool  g_fullPipNow = false, g_fullPipSlow = false;   /* full 3D with the Pip-Boy open; it was too slow once */   /* INI [Stereo] bFullStereo: both eyes drawn every frame (real 3D, twice the drawing) */
 static float g_unitsPerMeter = 70.0f;   /* game units per real-world meter (world scale) */
 static float g_menuScreenFov = 90.0f;
@@ -661,6 +667,7 @@ static void LoadSettings(void)
     g_stereo = GetPrivateProfileIntA("Stereo", "bStereo", 0, g_iniPath) != 0;
     g_stereoFull = GetPrivateProfileIntA("Stereo", "bFullStereo", 0, g_iniPath) != 0;
     g_fastAer = GetPrivateProfileIntA("Stereo", "bFastAlternate", 1, g_iniPath) != 0;
+    g_fpsMode = GetPrivateProfileIntA("Stereo", "iFrameRate", 0, g_iniPath); if (g_fpsMode < 0 || g_fpsMode > 5) g_fpsMode = 0;
     g_motionControls = GetPrivateProfileIntA("Controls", "bMotionControls", 1, g_iniPath) != 0;
     g_handAim = GetPrivateProfileIntA("Controls", "bHandAim", 1, g_iniPath) != 0;
     g_leftHanded = GetPrivateProfileIntA("Controls", "bLeftHanded", 0, g_iniPath) != 0;
@@ -3616,7 +3623,15 @@ static void Capture_FinishAndSubmit_(IDirect3DDevice9 *dev)
         }
     }
     Capture_Collect(!g_asyncCapture);
-    if (g_fastAer && g_aerDrewEye == 0) return;   /* (fast alternate: the pair goes to the headset after the right eye) */
+    if (g_fpsOf[g_fpsMode] >= 0 && g_vrSystem && g_inGameplay) {   /* free running: only when a headset refresh is due */
+        static float hz = 0; if (hz < 1) { hz = g_vrSystem->GetFloatTrackedDeviceProperty(0, ETrackedDeviceProperty_Prop_DisplayFrequency_Float, NULL); if (hz < 1) hz = 90; }
+        double period = 1000.0 / hz, now = QpcMs();
+        g_syncNow = g_lastSyncAt <= 0 || now - g_lastSyncAt >= period - 2.0;
+        if (!g_syncNow) return;
+    } else {
+        g_syncNow = true;
+        if (g_fastAer && g_aerDrewEye == 0) { g_syncNow = false; return; }   /* (fast alternate: the pair goes to the headset after the right eye) */
+    }
     Display_Submit();
 }
 
@@ -5592,28 +5607,48 @@ static void Display_Frame_(IDirect3DDevice9 *dev)
 }
 
 /* After presenting: block until SteamVR is ready for the next frame and get its predicted pose. */
+/* the frame rate cap (free running): wait out the rest of this frame's time */
+static void Pace_Limit(void)
+{
+    int fps = g_fpsOf[g_fpsMode]; double now = QpcMs();
+    if (fps > 0 && g_frameStartAt > 0) {
+        double until = g_frameStartAt + 1000.0 / fps;
+        if (until - now > 2.0) Sleep((DWORD)(until - now - 1.5));
+        while (QpcMs() < until) YieldProcessor();
+    }
+    g_frameStartAt = QpcMs();
+    {   static double rep = 0, n = 0, s = 0; n++; if (rep <= 0) rep = now; if (now - rep > 5000.0) {
+            Log("Frame rate: game %.0f frames a second (%s), headset refreshes get the newest picture", n * 1000.0 / (now - rep),
+                fps > 0 ? (fps == 120 ? "capped at 120" : fps == 90 ? "capped at 90" : fps == 60 ? "capped at 60" : "capped at 30") : "unlimited");
+            rep = now; n = 0; (void)s; } }
+}
 static void Display_WaitForNextFrame(void)
 {
     if (!HeadsetDisplayActive()) return;
     TrackedDevicePose_t poses[16];
     static double lastEnd = 0;
     int drew = g_aerDrewEye; g_aerDrewEye = -1;
-    if (g_fastAer && drew == 0 && g_vrSystem) {   /* fast alternate: the left eye's frame doesn't wait - the right eye draws at once */
+    bool freeRun = g_fpsOf[g_fpsMode] >= 0 && g_inGameplay && !g_farActive2;   /* (not the menu room: it sends its own pictures every frame) */
+    bool syncThis = g_syncNow; g_syncNow = true;   /* (a frame that never decided waits, as before) */
+    if (freeRun && syncThis) {   /* this frame went to the headset: wait for its refresh as usual (short - it was due) */ }
+    else if (freeRun || (g_fastAer && drew == 0)) if (g_vrSystem) {   /* fast alternate: the left eye's frame doesn't wait - the right eye draws at once */
         static float hz = 0, v2p = 0.011f; static int got = 0;
         if (!got++) { hz = g_vrSystem->GetFloatTrackedDeviceProperty(0, ETrackedDeviceProperty_Prop_DisplayFrequency_Float, NULL);
                       float v = g_vrSystem->GetFloatTrackedDeviceProperty(0, ETrackedDeviceProperty_Prop_SecondsFromVsyncToPhotons_Float, NULL); if (v > 0 && v < 0.05f) v2p = v;
-                      Log("Fast alternate eyes: on - the headset waits once per pair of eyes (%.0f Hz, %.1f ms vsync to photons)", hz, v2p * 1000.0f); }
+                      Log("%s (%.0f Hz headset, %.1f ms vsync to photons)", freeRun ? "Frame rate: the game runs free of the headset - the newest picture goes to each refresh" : "Fast alternate eyes: on - the headset waits once per pair of eyes", hz, v2p * 1000.0f); }
         float frame = hz > 1 ? 1.0f / hz : 1.0f / 90.0f, since = 0; uint64_t fc = 0;
         if (!g_vrSystem->GetTimeSinceLastVsync || !g_vrSystem->GetTimeSinceLastVsync(&since, &fc)) since = 0;
-        float predict = (frame - since) + frame + v2p;   /* (this pair shows at the refresh after the right eye is done) */
+        float predict = (frame - since) + (freeRun ? 0.0f : frame) + v2p;   /* (shown at the next refresh - for an alternating pair, the one after the right eye) */
         if (predict < 0) predict = 0; if (predict > 0.1f) predict = 0.1f;
         g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, predict, poses, 16);
         memcpy(g_waitPoses, poses, sizeof poses); g_waitPose = poses[0]; g_haveWaitPose = poses[0].bPoseIsValid;
+        Pace_Limit();
         return;
     }
     double w0 = QpcMs();
     EVRCompositorError ce = g_vrCompositor->WaitGetPoses(poses, 16, NULL, 0);
     double w1 = QpcMs();
+    g_lastSyncAt = w1;
     {   /* how long each frame takes vs. how long it waits for the headset */
         static double sumWork = 0, sumWait = 0, maxWork = 0, rep = 0; static int n = 0;
         if (lastEnd > 0) { double work = w0 - lastEnd; sumWork += work; if (work > maxWork) maxWork = work; sumWait += w1 - w0; n++; }
@@ -5639,6 +5674,7 @@ static void Display_WaitForNextFrame(void)
         if (errCount++ < 10) Log("WaitGetPoses returned compositor error %d", (int)ce);
         g_haveWaitPose = false;
     }
+    if (freeRun) Pace_Limit();
 }
 
 /* ---- Stereo: render each frame twice, once per eye ------------------------- */
@@ -17157,16 +17193,17 @@ static int  g_reqMissing = 0;
    so FNVR raises it (once; NVTF reads it at start, so the game needs one restart). [Stereo] bAdjustNVTF */
 static void NVTF_Check(void)
 {
-    if (!g_stereo || g_stereoFull || !g_fastAer) return;
+    bool aer = g_stereo && !g_stereoFull && g_fastAer;
+    if (g_fpsOf[g_fpsMode] < 0 && !aer) return;
     char ini[MAX_PATH]; snprintf(ini, sizeof ini, "%sNVTF.ini", g_pluginDir);
     if (GetFileAttributesA(ini) == INVALID_FILE_ATTRIBUTES) { Log("Fast alternate eyes: NVTF.ini not found - can't check the game clock's frame limit"); return; }
     int fix = GetPrivateProfileIntA("GTC", "bFPSFix", 0, ini), tol = GetPrivateProfileIntA("FPSFix", "iMaxFPSTolerance", 59, ini);
     if (!fix) { Log("Fast alternate eyes: NVTF's frame-time fix is off - the game clock follows real time as it is"); return; }
-    if (tol >= 200) { Log("Fast alternate eyes: NVTF allows %d frames a second - fine", tol); return; }
+    if (tol >= 480) { Log("Frame rate: NVTF follows real time up to %d frames a second - fine", tol); return; }
     if (!GetPrivateProfileIntA("Stereo", "bAdjustNVTF", 1, g_iniPath)) { Log("Fast alternate eyes: NVTF's iMaxFPSTolerance is %d - above that many frames a second the game runs in fast motion (raise it to 240 in NVTF.ini)", tol); return; }
-    WritePrivateProfileStringA("FPSFix", "iMaxFPSTolerance", "240", ini);
+    WritePrivateProfileStringA("FPSFix", "iMaxFPSTolerance", "500", ini);
     char was[16]; snprintf(was, sizeof was, "%d", tol); WritePrivateProfileStringA("FPSFix", "iMaxFPSTolerance_BeforeFNVR", was, ini);
-    Log("Fast alternate eyes: NVTF's iMaxFPSTolerance raised from %d to 240 (the game clock now follows real time up to 240 frames a second) - restart the game once for it to apply", tol);
+    Log("Frame rate: NVTF's iMaxFPSTolerance raised from %d to 500 (the game clock now follows real time up to 500 frames a second) - restart the game once for it to apply", tol);
 }
 static void Req_Check(void)
 {
@@ -17344,6 +17381,7 @@ static const SetOpt g_setOpts[] = {
 
     { SP_DISPLAY, ST_BOOL, "US units (feet & inches)", "Display", "bUSUnits", &g_imperial, 0, 0, 0, 0, 0, 0, "ON: heights, reaches and distances in this panel are shown in feet and inches (speeds in mph) instead of metres." },
     { SP_DISPLAY, ST_BOOL, "Game in the headset", "Display", "bHeadsetDisplay", &g_headsetDisplay, 0, 0, 0, 0, SF_RESTART, 0, "OFF: head tracking only, the game stays on the monitor. Takes effect after a restart." },
+    { SP_DISPLAY, ST_CHOICE, "Game frame rate", "Stereo", "iFrameRate", &g_fpsMode, 0, 5, 1, "Unlimited|120|90|60|30|Match the headset (old way)", 0, 0, "How many frames a second the game may draw. The game no longer waits for the headset: it draws as fast as this allows and each headset refresh gets the newest picture (SteamVR fills in when the game is slower). Unlimited = as fast as your PC can. Match the headset = wait for every refresh, as before." },
     { SP_DISPLAY, ST_BOOL, "Full 3D (both eyes every frame)", "Stereo", "bFullStereo", &g_stereoFull, 0, 0, 0, 0, 0, 0, "ON: real 3D - the world is drawn twice every frame, once from each eye, so near things (your hands, guns, the Pip-Boy) have true depth. Costs about twice the drawing time. Overrides the alternating mode below." },
     { SP_DISPLAY, ST_BOOL, "3D depth (experimental)", "Stereo", "bStereo", &g_stereo, 0, 0, 0, 0, 0, 0, "ON: real 3D depth - the game is drawn from your left and right eye in turn (each eye gets a new picture every other frame, so fast movement can shimmer). OFF: the same picture in both eyes. Ctrl+F10 toggles it too." },
     { SP_DISPLAY, ST_BOOL, "Match headset field of view", "Display", "bMatchHeadsetFOV", &g_matchHeadsetFov, 0, 0, 0, 0, SF_FOV, 0, "Widen the game's view so it fills your headset (F9 toggles it too)." },
