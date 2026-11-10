@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.10 (tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.11 (the other hand's power fist is worn on that forearm - the exact mirror image of how the gun hand's sits on its forearm, drawn with your arms, your own hand and fingers moving inside it; its swing plays the weapon's swing sound and fires its piston; tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -275,6 +275,11 @@ static struct {
 } g_gun;
 static void Gun_Input(bool menu, bool gripNow, bool gripEdge, bool offGrip, bool *rGrip);
 static bool  g_dualOn = true;         /* [Grab] bDualWield */
+/* the other hand's power fist worn on that forearm: the mirror image of how the gun hand's sits on its forearm bone (measured
+   while one is worn there - [Arms] sFistOnForearm / sFistOnBone), drawn with your arms so your own hand and fingers move inside
+   it. [Weapons] bOtherFistOnForearm, iOtherFistMirrorAxis (the bone axis the mirror image flips: 0 X, 1 Y, 2 Z) */
+static bool  g_pfOnArm = true; static int g_pfMirrorAxis = 2;
+static float g_fistFA[13]; static bool g_fistFAok = false; static int g_fistFAn = 0; static char g_fistFABone[48] = "";
 static int g_pf1Flip = 1;   /* [Grab] iOtherFistFlip: which way the other hand's first-person power fist is mirrored (1 across the hand's side, 2 across its top, 0 as the gun hand) */
 static float g_lgTilt = 0.0f, g_lgFwdCm = 0.0f, g_lgUpCm = 0.0f;   /* [Grab] fOtherHandTilt / fOtherHandForward / fOtherHandUp */
 static bool  g_lgWithArms = true;     /* [Grab] bOtherHandWithArms: fingers behind the other hand's weapon are hidden by it */
@@ -733,6 +738,8 @@ static void LoadSettings(void)
     g_mfOn = GetPrivateProfileIntA("Weapons", "bMuzzleLight", 1, g_iniPath) != 0;
     g_liveMsgBoxes = GetPrivateProfileIntA("Display", "bLiveMessages", 1, g_iniPath) != 0;
     g_pfGameSwing = GetPrivateProfileIntA("Weapons", "bPowerFistGameSwing", 1, g_iniPath) != 0;
+    g_pfOnArm = GetPrivateProfileIntA("Weapons", "bOtherFistOnForearm", 1, g_iniPath) != 0;
+    g_pfMirrorAxis = GetPrivateProfileIntA("Weapons", "iOtherFistMirrorAxis", 2, g_iniPath); if (g_pfMirrorAxis < 0 || g_pfMirrorAxis > 2) g_pfMirrorAxis = 2;
     { char b[32]; GetPrivateProfileStringA("Weapons", "fMuzzleLight", "1.0", b, sizeof b, g_iniPath); g_mfScale = fminf(fmaxf((float)atof(b), 0.1f), 3.0f); }
     g_mrPocket2 = GetPrivateProfileIntA("Reload", "bSecondPocket", 1, g_iniPath) != 0;
     { char rb[32]; struct { const char *k; float *v; const char *d; } rk[5] = { { "fPocketSide", &g_mrPocketSide, "0.15" }, { "fPocketDown", &g_mrPocketDown, "0.62" },
@@ -1568,6 +1575,27 @@ static void Melee_Update(bool menu)
     }
 }
 
+/* the other hand's melee weapon swung fast: the weapon's own swing sound, and a power fist's piston punches out - what the
+   game's attack does for the gun hand (the blow itself, its impact sound and damage come from where it lands) */
+static void LeftMelee_Swing(bool menu)
+{
+    static double last = 0;
+    int off = g_leftHanded ? 1 : 0;
+    if (menu || !g_inGameplay || !g_lg.on || !g_lg.melee || !g_lg.base || IsBadReadPtr((char *)g_lg.base + 0xF4, 1) || !g_vrHandOk[off] || !g_scriptIntf) return;
+    double now = QpcMs();
+    if (g_handSpeed[off] <= g_swingSpeed || now - last < 450.0) return;
+    last = now;
+    int lt = *(BYTE *)((char *)g_lg.base + 0xF4);
+    if (lt == 0) Pf_Blow(off);
+    static void *p2 = NULL, *p3 = NULL; static bool t = false;
+    if (!t) { t = true; p2 = g_scriptIntf->CompileScript("ref rSnd\nBegin Function { rSnd }\nPlaySound rSnd\nEnd\n"); p3 = g_scriptIntf->CompileScript("ref rSnd\nBegin Function { rSnd }\nplayer.PlaySound3D rSnd\nEnd\n"); }
+    void *player = GetPlayer();
+    if (player && g_scriptIntf->CallFunctionAlt) {
+        if (g_lg.snd2 && p2) g_scriptIntf->CallFunctionAlt(p2, player, 1, g_lg.snd2);
+        else if (g_lg.snd3 && p3) g_scriptIntf->CallFunctionAlt(p3, player, 1, g_lg.snd3);
+    }
+    static int n = 0; if (n++ < 6) Log("Other hand: %s swung (%.1f m/s)%s", lt == 0 ? "power fist" : "melee weapon", g_handSpeed[off], g_lg.snd2 || g_lg.snd3 ? " - its swing sound" : " - no swing sound found on the weapon");
+}
 static void *LookupForm(uint32_t id);
 static void ExtractYawPitch(const HmdMatrix34_t *mat, float *yaw, float *pitch);
 static float V3Len(const float *v);
@@ -1974,6 +2002,7 @@ static void Controllers_Poll(bool menu)
         ltP = lt;
     }
     Melee_Update(menu);
+    LeftMelee_Swing(menu);
     if (!menu && g_meleeSwings && !g_meleeTrigger) {   /* melee weapons and fists attack by swinging, not with the trigger -
                                                          except automatic ones (chainsaw, Ripper, Industrial Hand...), which run while it's held */
         int wt = PlayerWeaponType();
@@ -11743,6 +11772,12 @@ static void RG_Load(void)
         while (got < 135 && *p) { char *e; float x = strtof(p, &e); if (e == p) break; v[got++] = x; p = e; }
         r->fok = got == 135;
     }
+    {   char buf[400]; GetPrivateProfileStringA("Arms", "sFistOnForearm", "", buf, sizeof buf, g_iniPath);
+        int got = 0; char *p = buf; while (got < 13 && *p) { char *e; float x = strtof(p, &e); if (e == p) break; g_fistFA[got++] = x; p = e; }
+        GetPrivateProfileStringA("Arms", "sFistOnBone", "", g_fistFABone, sizeof g_fistFABone, g_iniPath);
+        g_fistFAok = got == 13 && !_strnicmp(g_fistFABone, "Bip01 R ", 8);
+        if (g_fistFAok) Log("Power fist: how it sits on the gun hand's forearm is known (%s) - the other hand's is its mirror image", g_fistFABone);
+    }
 }
 static void RG_Save(int c)
 {
@@ -11794,6 +11829,36 @@ static void RG_Capture(void)
     int c = RG_Class(t);
     RGrip *r = &g_rg[c];
     if (c == 2) { g_pf1Right = PlayerWeaponForm(); Mdl_Dump("gun hand's power fist (first person)", g_weaponNode); char *pr = *(char **)(g_weaponNode + NIAV_PARENT); if (pr) Mdl_Dump("gun hand's power fist: its parent", pr); }
+    if (c == 2) {   /* ...and how it sits on the forearm bone it hangs from (the other hand's is the mirror image of this) */
+        char *par = *(char **)(g_weaponNode + NIAV_PARENT), *mr = NULL;
+        {   char **kids = *(char ***)(g_weaponNode + 0xA0); unsigned kc = *(uint16_t *)(g_weaponNode + 0xA6);
+            for (unsigned i = 0; kids && i < kc && i < 16 && !mr; i++) if (kids[i] && !IsBadReadPtr(kids[i], 0xB0) && AsNode(kids[i])) mr = kids[i]; }
+        const char *pn = par && !IsBadReadPtr(par, 0x10) ? *(const char **)(par + 0x08) : NULL;
+        if (mr && pn && !IsBadStringPtrA(pn, 64) && !_strnicmp(pn, "Bip01 R ", 8) && strlen(pn) < sizeof g_fistFABone) {
+            const float *Rp = (const float *)(par + NIAV_WORLD_ROTATE), *Tp = (const float *)(par + NIAV_WORLD_TRANSLATE);
+            const float *Rm = (const float *)(mr + NIAV_WORLD_ROTATE), *Tm = (const float *)(mr + NIAV_WORLD_TRANSLATE);
+            float sp = *(const float *)(par + NIAV_WORLD_SCALE), sm = *(const float *)(mr + NIAV_WORLD_SCALE); if (!(sp > 1e-4f)) sp = 1.0f;
+            float Rl[9], Tl[3], d[3]; V3Sub(d, Tm, Tp);
+            for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) Rl[i * 3 + j] = Rp[0 * 3 + i] * Rm[0 * 3 + j] + Rp[1 * 3 + i] * Rm[1 * 3 + j] + Rp[2 * 3 + i] * Rm[2 * 3 + j];
+            for (int i = 0; i < 3; i++) Tl[i] = (Rp[0 * 3 + i] * d[0] + Rp[1 * 3 + i] * d[1] + Rp[2 * 3 + i] * d[2]) / sp;
+            if (V3Len(Tl) < 60.0f) {
+                if (!g_fistFAn || _stricmp(g_fistFABone, pn)) { memcpy(g_fistFA, Rl, 36); memcpy(g_fistFA + 9, Tl, 12); g_fistFAn = 0; snprintf(g_fistFABone, sizeof g_fistFABone, "%s", pn); }
+                else { float kf = g_fistFAn < 30 ? 0.25f : 0.03f; for (int i = 0; i < 9; i++) g_fistFA[i] += (Rl[i] - g_fistFA[i]) * kf; for (int i = 0; i < 3; i++) g_fistFA[9 + i] += (Tl[i] - g_fistFA[9 + i]) * kf; }
+                g_fistFA[12] = sm > 1e-4f ? sm / sp : 1.0f;
+                for (int j = 0; j < 3; j++) {   /* (a clean turn: columns unit and square to each other) */
+                    for (int q = 0; q < j; q++) { float dd = g_fistFA[j] * g_fistFA[q] + g_fistFA[3 + j] * g_fistFA[3 + q] + g_fistFA[6 + j] * g_fistFA[6 + q]; for (int i = 0; i < 3; i++) g_fistFA[i * 3 + j] -= dd * g_fistFA[i * 3 + q]; }
+                    float L = sqrtf(g_fistFA[j] * g_fistFA[j] + g_fistFA[3 + j] * g_fistFA[3 + j] + g_fistFA[6 + j] * g_fistFA[6 + j]); if (L > 1e-4f) for (int i = 0; i < 3; i++) g_fistFA[i * 3 + j] /= L;
+                }
+                g_fistFAn++;
+                if (g_fistFAn == 30 || g_fistFAn % 600 == 0) {
+                    char b[400]; size_t L = 0; for (int i = 0; i < 13; i++) L += (size_t)snprintf(b + L, sizeof b - L, "%s%.5f", i ? " " : "", g_fistFA[i]);
+                    WritePrivateProfileStringA("Arms", "sFistOnForearm", b, g_iniPath); WritePrivateProfileStringA("Arms", "sFistOnBone", g_fistFABone, g_iniPath);
+                    if (!g_fistFAok || g_fistFAn == 30) Log("Power fist: how it sits on the gun hand's forearm measured (on %s: %s) - the other hand's is its mirror image", g_fistFABone, b);
+                    g_fistFAok = true;
+                }
+            }
+        }
+    }
     if (c >= 2) {   /* (melee: the weapon's whole turn in the hand's axes, Hr^T W) */
         float Rn[9]; for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) Rn[i * 3 + j] = Hr[0 * 3 + i] * W[0 * 3 + j] + Hr[1 * 3 + i] * W[1 * 3 + j] + Hr[2 * 3 + i] * W[2 * 3 + j];
         float kr = r->n < 30 || !r->rok ? 1.0f : 0.05f;
@@ -11876,7 +11941,28 @@ static bool Barrel_Aim(float *h, float *p)
    borrows it while the fist is worn and takes it off again when it's let go. */
 static RGrip *RG_ForLeft(void);
 static bool Pf1_Ok(char *n) { return n && !IsBadReadPtr(n, 0xB0) && *(void **)n; }
-static struct { char *model, *parent, *forRef; void *forBase; char *hid[8]; int nhid; bool tried; double retryAt; } g_pf1;
+static struct { char *model, *parent, *forRef; void *forBase; char *hid[8]; int nhid; bool tried, onArm; double retryAt; } g_pf1;
+/* a mirror image turns every face round (the outside would be culled and its inside shown): the gauntlet's pieces are drawn
+   from both sides - a stencil property set to "both", as the game uses for two-sided models */
+typedef char *(__cdecl *NiStencilNew_t)(void);
+static char *g_pfTwoSided = NULL; static bool g_pfTwoSidedBad = false;
+static void Pf1_TwoSided(char *n, int depth)
+{
+    if (!n || depth > 12 || g_pfTwoSidedBad || IsBadReadPtr(n, 0xC0) || !*(void **)n) return;
+    if (AsNode(n)) { char **kids = *(char ***)(n + 0xA0); unsigned kc = *(uint16_t *)(n + 0xA6);
+        for (unsigned i = 0; kids && i < kc && i < 64; i++) Pf1_TwoSided(kids[i], depth + 1); return; }
+    uintptr_t vt = *(uintptr_t *)n;
+    if (vt != 0x0109D454 && vt != 0x0109CD44) return;   /* (pieces of the model: triangle strips and lists) */
+    if (!g_pfTwoSided) {
+        char *p = ((NiStencilNew_t)0x00A6F410)();   /* (the game's own NiStencilProperty maker) */
+        if (!p || IsBadReadPtr(p, 0x24) || *(uintptr_t *)p != 0x0101E07C) { g_pfTwoSidedBad = true; Log("Power fist (other hand): couldn't make a two-sided drawing setting - the mirrored gauntlet may look inside out"); return; }
+        *(uint16_t *)(p + 0x18) = (uint16_t)((*(uint16_t *)(p + 0x18) & ~0x0C00u) | 0x0C00u);   /* (draw mode: both sides) */
+        InterlockedIncrement((volatile LONG *)(p + 4));   /* (FNVR's own hold: never freed) */
+        g_pfTwoSided = p; Log("Power fist (other hand): its pieces drawn from both sides (the mirror image turns the faces round)");
+    }
+    char **slot = (char **)(n + 0xAC);   /* (the piece's stencil property) */
+    if (*slot != g_pfTwoSided) { *slot = g_pfTwoSided; InterlockedIncrement((volatile LONG *)(g_pfTwoSided + 4)); }
+}
 typedef void (__attribute__((thiscall)) *NiAttach_t)(char *node, char *child, bool firstAvail);
 static void Pf1_Unhide(void)
 {
@@ -11886,7 +11972,8 @@ static void Pf1_Unhide(void)
 static void Pf1_Detach(void)
 {
     Pf1_Unhide();
-    char *m = g_pf1.model, *p = g_pf1.parent; g_pf1.parent = NULL;
+    char *m = g_pf1.model, *p = g_pf1.parent; g_pf1.parent = NULL; g_pf1.onArm = false;
+    if (Pf1_Ok(m)) *(uint32_t *)(m + 0x30) &= ~1u;   /* (shown again for next time) */
     if (!Pf1_Ok(m) || !Pf1_Ok(p) || *(char **)(m + NIAV_PARENT) != p) return;
     char **kids = *(char ***)(p + 0xA0); uint16_t *cap = (uint16_t *)(p + 0xA4), *size = (uint16_t *)(p + 0xA6), *used = (uint16_t *)(p + 0xA8);
     for (unsigned i = 0; kids && i < *size && i < *cap; i++) if (kids[i] == m) {
@@ -11902,7 +11989,7 @@ static void Pf1_Detach(void)
 static bool Pf1_Ensure(void)
 {
     if (g_leftHanded || !g_lg.on || !g_lg.base || *(BYTE *)((char *)g_lg.base + 0xF4) != 0) { if (g_pf1.parent) Pf1_Detach(); return false; }
-    char *body = LG_BodyNode(g_lg.ref); if (!Pf1_Ok(body) || !AsNode(body)) return false;
+    char *body = LG_BodyNode(g_lg.ref), *wbody = body; if (!Pf1_Ok(body) || !AsNode(body)) return false;
     if (g_pf1.forBase != g_lg.base) {   /* (a different power fist: its own model) */
         if (g_pf1.parent) Pf1_Detach();
         g_pf1.forBase = g_lg.base; g_pf1.model = NULL; g_pf1.tried = false;
@@ -11936,23 +12023,49 @@ static bool Pf1_Ensure(void)
         Mdl_Dump("other hand's power fist (first-person model)", m);
     }
     RG_ForLeft();   /* (loads the saved grips the first time) */
-    if (!g_rg[2].rok) {
+    /* on the forearm: the gauntlet hangs from the drawn arm's own forearm bone (the mirror of the gun hand's), so it's drawn with
+       your arms - your own hand and fingers move inside it, and it stays on the forearm whatever your wrist does */
+    bool onArm = g_pfOnArm && g_fistFAok && g_fistFABone[0];
+    if (onArm) {
+        char *pl = (char *)GetPlayer(); char *fp = pl ? *(char **)(pl + PLAYER_NODE_1ST_PERSON) : NULL;
+        char ln[48]; snprintf(ln, sizeof ln, "%s", g_fistFABone); ln[6] = 'L';   /* (Bip01 R ... -> Bip01 L ...) */
+        static char *twFor = NULL, *tw = NULL; static uint32_t twGen = 0;
+        if (twFor != fp || twGen != g_fpGen || !Pf1_Ok(tw)) { twFor = fp; twGen = g_fpGen; tw = fp && !IsBadReadPtr(fp, 0xB0) ? FindBone(fp, ln, 0) : NULL;
+            if (!tw) { static int nl = 0; if (nl++ < 3) Log("Power fist (other hand): the drawn arm has no %s - placed from the hand instead", ln); } }
+        if (Pf1_Ok(tw) && AsNode(tw)) body = tw; else onArm = false;
+    } else if (g_pfOnArm && !g_fistFAok) {
+        static bool said = false; if (!said) { said = true; Log("Power fist (other hand): wear a power fist on your gun hand for a few seconds once, so FNVR sees how it sits on the forearm - until then it's placed from the hand");
+            UIMessage("FNVR: wear a power fist on your gun hand for a few seconds once - then the other hand's sits right on your forearm"); }
+    }
+    if (!onArm && !g_rg[2].rok) {
         static double said = 0; if (QpcMs() > said) { said = QpcMs() + 30000.0; Log("Power fist (other hand): wear one on the gun hand for a few seconds first, so FNVR can see how it sits - until then the world model is used"); }
         if (g_pf1.parent) Pf1_Detach();
         return false;
     }
-    if (g_pf1.parent != body || *(char **)(g_pf1.model + NIAV_PARENT) != body) {
+    if (g_pf1.parent != body || *(char **)(g_pf1.model + NIAV_PARENT) != body || g_pf1.onArm != onArm) {
         if (g_pf1.parent) Pf1_Detach();
         if (*(char **)(g_pf1.model + NIAV_PARENT)) { static int n = 0; if (n++ < 3) Log("Power fist (other hand): the model is in use elsewhere - the world model stays"); return false; }
         ((NiAttach_t)(*(void ***)body)[55])(body, g_pf1.model, true);
         if (*(char **)(g_pf1.model + NIAV_PARENT) != body) { Log("Power fist (other hand): couldn't put the first-person model on it"); return false; }
-        g_pf1.parent = body;
-        char **kids = *(char ***)(body + 0xA0); unsigned kc = *(uint16_t *)(body + 0xA6);
-        for (unsigned i = 0; kids && i < kc && i < 64; i++) {   /* hide the world model */
+        g_pf1.parent = body; g_pf1.onArm = onArm;
+        char **kids = *(char ***)(wbody + 0xA0); unsigned kc = *(uint16_t *)(wbody + 0xA6);
+        for (unsigned i = 0; kids && i < kc && i < 64; i++) {   /* hide the world model (with its own hand inside) */
             char *k = kids[i]; if (!Pf1_Ok(k) || k == g_pf1.model || g_pf1.nhid >= 8) continue;
             if (!(*(uint32_t *)(k + 0x30) & 1)) { *(uint32_t *)(k + 0x30) |= 1; g_pf1.hid[g_pf1.nhid++] = k; }
         }
-        Log("Power fist (other hand): first-person model on, world model hidden (%d parts)", g_pf1.nhid);
+        Log("Power fist (other hand): first-person gauntlet on %s, world model hidden (%d parts)", onArm ? "the forearm - the mirror image of the gun hand's, your own hand moving inside" : "the held fist (placed from the hand)", g_pf1.nhid);
+    }
+    if (g_pf1.onArm) {   /* (every frame: the mirror image of how the gun hand's sits on its forearm; out of the way while the Pip-Boy is up) */
+        char *m = g_pf1.model; int ax = g_pfMirrorAxis;
+        float *Lr = (float *)(m + NIAV_LOCAL_ROTATE), *Lt = (float *)(m + NIAV_LOCAL_TRANSLATE);
+        for (int i = 0; i < 3; i++) { for (int j = 0; j < 3; j++) Lr[i * 3 + j] = g_fistFA[i * 3 + j] * (i == ax ? -1.0f : 1.0f); Lt[i] = g_fistFA[9 + i] * (i == ax ? -1.0f : 1.0f); }
+        *(float *)(m + NIAV_LOCAL_SCALE) = g_fistFA[12] > 0.05f && g_fistFA[12] < 20.0f ? g_fistFA[12] : 1.0f;
+        bool pipUp = g_pipOpen || g_wristUp || PipBoyMode() != 0;
+        if (pipUp) *(uint32_t *)(m + 0x30) |= 1; else *(uint32_t *)(m + 0x30) &= ~1u;
+        Pf1_TwoSided(m, 0);
+        NodeUpdate(m);
+        { static int n = 0; if (n++ == 60) { const float *W = (const float *)(m + NIAV_WORLD_TRANSLATE), *Tw = (const float *)(body + NIAV_WORLD_TRANSLATE);
+            Log("Power fist (other hand): on the forearm, %.1f units from the forearm bone (mirror axis %c)", sqrtf((W[0] - Tw[0]) * (W[0] - Tw[0]) + (W[1] - Tw[1]) * (W[1] - Tw[1]) + (W[2] - Tw[2]) * (W[2] - Tw[2])), "XYZ"[ax]); } }
     }
     return true;
 }
@@ -13485,7 +13598,8 @@ static void Pf_Visual(void)
     double now = QpcMs();
     for (int h = 0; h < 2; h++) {
         float ts = (float)(now - g_pfAt[h]); if (g_pfAt[h] <= 0 || ts > 260.0f || !g_handWOk[h]) continue;
-        char *top = h == amH ? (PlayerWeaponType() == 0 && !g_pfGameSwing ? g_weaponNode : NULL) : (g_lg.on && g_lg.melee && g_lg.ref ? LG_Root(g_lg.ref) : NULL);
+        char *top = h == amH ? (PlayerWeaponType() == 0 && !g_pfGameSwing ? g_weaponNode : NULL) :
+                    (g_lg.on && g_lg.melee && g_lg.ref ? (g_pf1.parent && MR_Ok(g_pf1.model) ? g_pf1.model : LG_Root(g_lg.ref)) : NULL);   /* (the gauntlet you see) */
         if (!MR_Ok(top)) continue;
         if (g_pf[h].top != top) {
             g_pf[h].top = top; static char names[1024]; size_t L = 0; names[0] = 0;
@@ -14374,11 +14488,13 @@ static void Grab_Hold(int h, float dt)
     lv[3] = av[3] = 0.0f;
     ((HkActivate_t)HK_ACTIVATE_ADDR)(g->rb);
 
-    /* fingers close around it */
+    /* fingers close around it (not inside a power fist worn in the other hand: there they keep following yours) */
     g->blend = fminf(g->blend + dt / 0.12f, 1.0f);
-    g_fingerCurl[h][0] = g->curl * 0.85f;
-    g_fingerCurl[h][1] = g->curl;
-    g_fingerCurl[h][2] = g->curl;
+    if (!(g_lg.on && g->ref == g_lg.ref && g_lg.base && *(BYTE *)((char *)g_lg.base + 0xF4) == 0)) {
+        g_fingerCurl[h][0] = g->curl * 0.85f;
+        g_fingerCurl[h][1] = g->curl;
+        g_fingerCurl[h][2] = g->curl;
+    }
 }
 
 /* Draw held objects exactly in the hand (the physics follows a frame or two behind). */
@@ -18289,6 +18405,8 @@ static const SetOpt g_setOpts[] = {
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: left/right", "LeftHanded", "fGunSide", &g_lhGunSide, -15.0f, 15.0f, 0.5f, "%.1f cm", 0, 0, "Moves the gun in your left hand to the right (+) or left (-) - the second gun when dual wielding, or your gun in left-handed play." },
     { SP_WEAPONS, ST_FLOAT, "Left hand gun: tilt (dual wield)", "Grab", "fOtherHandTilt", &g_lgTilt, -90.0f, 90.0f, 1.0f, "%.0f deg", 0, 0, "Dual wielding: tips the second gun in your left hand up (+) or down (-)." },
     { SP_WEAPONS, ST_BOOL, "Left hand gun: fingers go behind it", "Grab", "bOtherHandWithArms", &g_lgWithArms, 0, 0, 0, 0, 0, 0, "ON: fingers wrapped behind the second gun or melee weapon in your left hand are hidden by it, like with the gun in your gun hand (the game draws your hands over the world, so without this they show through it). OFF: as the game draws it." },
+    { SP_WEAPONS, ST_BOOL, "Other hand's power fist on your forearm", "Weapons", "bOtherFistOnForearm", &g_pfOnArm, 0, 0, 0, 0, 0, 0, "ON: a power fist in your other hand is worn on that forearm - the mirror image of how your gun hand wears one, with your own hand and fingers moving inside it. FNVR learns how it sits from your gun hand: wear a power fist there for a few seconds once." },
+    { SP_WEAPONS, ST_CHOICE, "Other hand's power fist: mirror", "Weapons", "iOtherFistMirrorAxis", &g_pfMirrorAxis, 0, 2, 1, "X|Y|Z (standard)", 0, 0, "Which way the gun hand's power fist is mirrored onto your other forearm. Only change it if that one sits upside down or turned round." },
     { SP_WEAPONS, ST_BOOL, "Power fist: the game's own punch", "Weapons", "bPowerFistGameSwing", &g_pfGameSwing, 0, 0, 0, 0, 0, 0, "ON: swinging the power fist on your gun hand plays the game's own punch - its piston animation and sounds - while the damage still lands where your fist hits. OFF: FNVR's own piston kick." },
     { SP_WEAPONS, ST_BOOL, "Muzzle flash light", "Weapons", "bMuzzleLight", &g_mfOn, 0, 0, 0, 0, 0, 0, "ON: each shot lights up the world around the end of the barrel for an instant, like a real gun - bigger guns brighter and further." },
     { SP_WEAPONS, ST_FLOAT, "Muzzle flash brightness", "Weapons", "fMuzzleLight", &g_mfScale, 0.1f, 3.0f, 0.1f, "%.1fx", 0, 0, "How bright and far the muzzle flash light reaches." },

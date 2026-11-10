@@ -42,3 +42,12 @@ Left glove plan: take the power fist's skinned glove, rebind each `Bip01 R ...` 
 each bone's skin-to-bone transform by F = diag(1,1,-1) on a private copy of the skin data gives the
 mirror image. Triangle winding flips with a mirror, so the copy also needs its winding (or culling) reversed.
 Needs the in-game MDL dump (FNVR.log "MDL" lines) first, to see which parts carry the skin.
+
+What the dump showed (Saturnite Fist, 2.5.6 log): the first-person power fist has **no skinned parts** - it's a rigid
+model (PowerFistRigid, pistons, sledge, hinges) hung from the skeleton's `Weapon` node under `Bip01 R ForeTwist`, and the
+hand inside it is the player's own. So 2.5.11 mirrors the rigid model instead: its transform relative to `Bip01 R ForeTwist`
+is measured while one is worn on the gun hand ([Arms] sFistOnForearm), and the other hand's copy hangs from
+`Bip01 L ForeTwist` with local = F x that (F = diag(1,1,-1), a reflection - NiTransform keeps it, the renderer uses the
+matrix as is). The reflection turns the faces round, so each piece gets a NiStencilProperty (made with the game's
+@fnv 0x00a6f410) set to draw mode BOTH (flags 0x0C00) at NiGeometry+0xAC - NiD3DShader_SetupGeometryRenderStates
+(@fnv 0x00be20e0) then turns culling off for it.
