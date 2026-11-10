@@ -79,20 +79,72 @@ static void Stats(void)
     LONG n = g_nConv; if (n == 1 || n == 100 || n == 1000 || n == 5000 || (n % 20000) == 0)
         Log("managed resources moved to the default pool: %ld (%ld made without the dynamic flag, %ld failed)", n, g_nStatic, g_nFail);
 }
+/* The game's renderer asks a buffer / texture for its description and only reuses it if the pool and usage are what it
+   asked for - so the ones moved to the default pool say what the game asked for (managed, its own usage flags); without this
+   it makes a new buffer every time while still holding the old one, and ends up drawing from a freed one (a crash). */
+static const GUID kFnvrTag = { 0x6d1c4b2a, 0x3f0e, 0x4c11, { 0x9a, 0x51, 0x2e, 0x07, 0xb3, 0x8c, 0x44, 0x10 } };
+typedef HRESULT (WINAPI *VBGetDesc_t)(IDirect3DVertexBuffer9 *, D3DVERTEXBUFFER_DESC *);
+typedef HRESULT (WINAPI *IBGetDesc_t)(IDirect3DIndexBuffer9 *, D3DINDEXBUFFER_DESC *);
+typedef HRESULT (WINAPI *TexLevelDesc_t)(IDirect3DTexture9 *, UINT, D3DSURFACE_DESC *);
+typedef HRESULT (WINAPI *CubeLevelDesc_t)(IDirect3DCubeTexture9 *, UINT, D3DSURFACE_DESC *);
+typedef HRESULT (WINAPI *VolLevelDesc_t)(IDirect3DVolumeTexture9 *, UINT, D3DVOLUME_DESC *);
+static VBGetDesc_t o_VBGetDesc; static IBGetDesc_t o_IBGetDesc; static TexLevelDesc_t o_TexLevelDesc; static CubeLevelDesc_t o_CubeLevelDesc; static VolLevelDesc_t o_VolLevelDesc;
+static volatile LONG g_nDescFix;
+static bool Tag_Get(IDirect3DResource9 *r, DWORD *usage)
+{
+    DWORD v = 0, n = sizeof v;
+    if (FAILED(IDirect3DResource9_GetPrivateData(r, &kFnvrTag, &v, &n)) || n != sizeof v) return false;
+    *usage = v; return true;
+}
+static void Tag_Set(IDirect3DResource9 *r, DWORD usage) { IDirect3DResource9_SetPrivateData(r, &kFnvrTag, &usage, sizeof usage, 0); }
+static void DescFixNote(void) { LONG n = InterlockedIncrement(&g_nDescFix); if (n == 1 || n == 1000 || n == 100000) Log("descriptions shown as the game made them (managed): %ld", n); }
+static HRESULT WINAPI H_VBGetDesc(IDirect3DVertexBuffer9 *b, D3DVERTEXBUFFER_DESC *d)
+{
+    HRESULT hr = o_VBGetDesc(b, d); DWORD u;
+    if (SUCCEEDED(hr) && d && d->Pool == D3DPOOL_DEFAULT && Tag_Get((IDirect3DResource9 *)b, &u)) { d->Pool = D3DPOOL_MANAGED; d->Usage = u; DescFixNote(); }
+    return hr;
+}
+static HRESULT WINAPI H_IBGetDesc(IDirect3DIndexBuffer9 *b, D3DINDEXBUFFER_DESC *d)
+{
+    HRESULT hr = o_IBGetDesc(b, d); DWORD u;
+    if (SUCCEEDED(hr) && d && d->Pool == D3DPOOL_DEFAULT && Tag_Get((IDirect3DResource9 *)b, &u)) { d->Pool = D3DPOOL_MANAGED; d->Usage = u; DescFixNote(); }
+    return hr;
+}
+static HRESULT WINAPI H_TexLevelDesc(IDirect3DTexture9 *t, UINT lv, D3DSURFACE_DESC *d)
+{
+    HRESULT hr = o_TexLevelDesc(t, lv, d); DWORD u;
+    if (SUCCEEDED(hr) && d && d->Pool == D3DPOOL_DEFAULT && Tag_Get((IDirect3DResource9 *)t, &u)) { d->Pool = D3DPOOL_MANAGED; d->Usage = u; DescFixNote(); }
+    return hr;
+}
+static HRESULT WINAPI H_CubeLevelDesc(IDirect3DCubeTexture9 *t, UINT lv, D3DSURFACE_DESC *d)
+{
+    HRESULT hr = o_CubeLevelDesc(t, lv, d); DWORD u;
+    if (SUCCEEDED(hr) && d && d->Pool == D3DPOOL_DEFAULT && Tag_Get((IDirect3DResource9 *)t, &u)) { d->Pool = D3DPOOL_MANAGED; d->Usage = u; DescFixNote(); }
+    return hr;
+}
+static HRESULT WINAPI H_VolLevelDesc(IDirect3DVolumeTexture9 *t, UINT lv, D3DVOLUME_DESC *d)
+{
+    HRESULT hr = o_VolLevelDesc(t, lv, d); DWORD u;
+    if (SUCCEEDED(hr) && d && d->Pool == D3DPOOL_DEFAULT && Tag_Get((IDirect3DResource9 *)t, &u)) { d->Pool = D3DPOOL_MANAGED; d->Usage = u; DescFixNote(); }
+    return hr;
+}
+/* (the first one made of each kind: its class's GetDesc hooked; then every one made is tagged with the usage asked for) */
+#define DESC_HOOK(obj, VT, field, H, O, T) do { if (!O) { void *o_ = VtPatch((void **)&((VT *)(obj)->lpVtbl)->field, (void *)H); if (o_) O = (T)o_; } } while (0)
 static HRESULT WINAPI H_CreateTexture(IDirect3DDevice9 *d, UINT w, UINT h, UINT lv, DWORD us, D3DFORMAT f, D3DPOOL pool, IDirect3DTexture9 **t, HANDLE *sh)
 {
     if (pool != D3DPOOL_MANAGED) return o_CreateTexture(d, w, h, lv, us, f, pool, t, sh);
     HRESULT hr = o_CreateTexture(d, w, h, lv, us | D3DUSAGE_DYNAMIC, f, D3DPOOL_DEFAULT, t, sh);
     if (FAILED(hr)) { hr = o_CreateTexture(d, w, h, lv, us & ~D3DUSAGE_AUTOGENMIPMAP, f, D3DPOOL_DEFAULT, t, sh); if (SUCCEEDED(hr)) InterlockedIncrement(&g_nStatic); }
     if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("texture %ux%u (format %08X, %u levels, usage %08lX) couldn't be made: %08lX", w, h, (unsigned)f, lv, (unsigned long)us, (unsigned long)hr); }
-    else { InterlockedIncrement(&g_nConv); Stats(); }
+    else { InterlockedIncrement(&g_nConv); Stats(); if (t && *t) { DESC_HOOK(*t, IDirect3DTexture9Vtbl, GetLevelDesc, H_TexLevelDesc, o_TexLevelDesc, TexLevelDesc_t); Tag_Set((IDirect3DResource9 *)*t, us); } }
     return hr;
 }
 static HRESULT WINAPI H_CreateVolumeTexture(IDirect3DDevice9 *d, UINT w, UINT h, UINT dp, UINT lv, DWORD us, D3DFORMAT f, D3DPOOL pool, IDirect3DVolumeTexture9 **t, HANDLE *sh)
 {
     if (pool != D3DPOOL_MANAGED) return o_CreateVolumeTexture(d, w, h, dp, lv, us, f, pool, t, sh);
     HRESULT hr = o_CreateVolumeTexture(d, w, h, dp, lv, us | D3DUSAGE_DYNAMIC, f, D3DPOOL_DEFAULT, t, sh);
-    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("volume texture %ux%ux%u couldn't be made: %08lX", w, h, dp, (unsigned long)hr); } else { InterlockedIncrement(&g_nConv); Stats(); }
+    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("volume texture %ux%ux%u couldn't be made: %08lX", w, h, dp, (unsigned long)hr); }
+    else { InterlockedIncrement(&g_nConv); Stats(); if (t && *t) { DESC_HOOK(*t, IDirect3DVolumeTexture9Vtbl, GetLevelDesc, H_VolLevelDesc, o_VolLevelDesc, VolLevelDesc_t); Tag_Set((IDirect3DResource9 *)*t, us); } }
     return hr;
 }
 static HRESULT WINAPI H_CreateCubeTexture(IDirect3DDevice9 *d, UINT e, UINT lv, DWORD us, D3DFORMAT f, D3DPOOL pool, IDirect3DCubeTexture9 **t, HANDLE *sh)
@@ -100,21 +152,24 @@ static HRESULT WINAPI H_CreateCubeTexture(IDirect3DDevice9 *d, UINT e, UINT lv, 
     if (pool != D3DPOOL_MANAGED) return o_CreateCubeTexture(d, e, lv, us, f, pool, t, sh);
     HRESULT hr = o_CreateCubeTexture(d, e, lv, us | D3DUSAGE_DYNAMIC, f, D3DPOOL_DEFAULT, t, sh);
     if (FAILED(hr)) { hr = o_CreateCubeTexture(d, e, lv, us & ~D3DUSAGE_AUTOGENMIPMAP, f, D3DPOOL_DEFAULT, t, sh); if (SUCCEEDED(hr)) InterlockedIncrement(&g_nStatic); }
-    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("cube texture %u couldn't be made: %08lX", e, (unsigned long)hr); } else { InterlockedIncrement(&g_nConv); Stats(); }
+    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("cube texture %u couldn't be made: %08lX", e, (unsigned long)hr); }
+    else { InterlockedIncrement(&g_nConv); Stats(); if (t && *t) { DESC_HOOK(*t, IDirect3DCubeTexture9Vtbl, GetLevelDesc, H_CubeLevelDesc, o_CubeLevelDesc, CubeLevelDesc_t); Tag_Set((IDirect3DResource9 *)*t, us); } }
     return hr;
 }
 static HRESULT WINAPI H_CreateVertexBuffer(IDirect3DDevice9 *d, UINT len, DWORD us, DWORD fvf, D3DPOOL pool, IDirect3DVertexBuffer9 **b, HANDLE *sh)
 {
     if (pool != D3DPOOL_MANAGED) return o_CreateVertexBuffer(d, len, us, fvf, pool, b, sh);
     HRESULT hr = o_CreateVertexBuffer(d, len, us | D3DUSAGE_DYNAMIC, fvf, D3DPOOL_DEFAULT, b, sh);
-    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("vertex buffer %u bytes couldn't be made: %08lX", len, (unsigned long)hr); } else { InterlockedIncrement(&g_nConv); Stats(); }
+    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("vertex buffer %u bytes couldn't be made: %08lX", len, (unsigned long)hr); }
+    else { InterlockedIncrement(&g_nConv); Stats(); if (b && *b) { DESC_HOOK(*b, IDirect3DVertexBuffer9Vtbl, GetDesc, H_VBGetDesc, o_VBGetDesc, VBGetDesc_t); Tag_Set((IDirect3DResource9 *)*b, us); } }
     return hr;
 }
 static HRESULT WINAPI H_CreateIndexBuffer(IDirect3DDevice9 *d, UINT len, DWORD us, D3DFORMAT f, D3DPOOL pool, IDirect3DIndexBuffer9 **b, HANDLE *sh)
 {
     if (pool != D3DPOOL_MANAGED) return o_CreateIndexBuffer(d, len, us, f, pool, b, sh);
     HRESULT hr = o_CreateIndexBuffer(d, len, us | D3DUSAGE_DYNAMIC, f, D3DPOOL_DEFAULT, b, sh);
-    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("index buffer %u bytes couldn't be made: %08lX", len, (unsigned long)hr); } else { InterlockedIncrement(&g_nConv); Stats(); }
+    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("index buffer %u bytes couldn't be made: %08lX", len, (unsigned long)hr); }
+    else { InterlockedIncrement(&g_nConv); Stats(); if (b && *b) { DESC_HOOK(*b, IDirect3DIndexBuffer9Vtbl, GetDesc, H_IBGetDesc, o_IBGetDesc, IBGetDesc_t); Tag_Set((IDirect3DResource9 *)*b, us); } }
     return hr;
 }
 static void Device_Hook(IDirect3DDevice9 *dev)
