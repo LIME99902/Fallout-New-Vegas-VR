@@ -18,7 +18,7 @@
 #include "vripc.h"
 
 static HANDLE g_shmMap, g_req, g_rsp, g_hostProc; static VrIpc *g_ipc; static CRITICAL_SECTION g_cs; static bool g_csInit, g_dead;
-static FILE *g_log;
+static FILE *g_log; static float g_sharpen = 0.0f;   /* (sharpening of the eye pictures in the host, 0 off .. 1 strongest) */
 static void Log(const char *fmt, ...)
 {
     if (!g_log) { char p[MAX_PATH]; GetModuleFileNameA(NULL, p, MAX_PATH); char *s = strrchr(p, '\\'); if (s) s[1] = 0; strcat(p, "FNVR_Stereo.log"); g_log = fopen(p, "w"); if (!g_log) return; }
@@ -193,6 +193,7 @@ static EVRCompositorError CT C_Submit(EVREye eye, struct Texture_t *t, struct VR
     memcpy(in, &e32, 4); memcpy(in + 4, &f32, 4); memcpy(in + 8, &it, sizeof it); memcpy(in + 8 + sizeof it, &hasB, 4);
     if (b) memcpy(in + 12 + sizeof it, b, sizeof *b);
     memcpy(in + 12 + sizeof it + sizeof(VRTextureBounds_t), &pose, sizeof pose);
+    { float z = 0; memcpy(in + 12 + sizeof it + sizeof(VRTextureBounds_t) + sizeof pose, &z, 4); }
     if (Call(C_SUBMIT, 2000)) memcpy(&err, out, 4);
     END
 fail: return (EVRCompositorError)err;
@@ -296,11 +297,25 @@ __declspec(dllexport) uint32_t FNVRStereo_SubmitShared9(int eye, uint64_t handle
     memcpy(in, &e32, 4); memcpy(in + 4, &f32, 4); memcpy(in + 8, &it, sizeof it); memcpy(in + 8 + sizeof it, &hasB, 4);
     if (b) memcpy(in + 12 + sizeof it, b, sizeof *b);
     memcpy(in + 12 + sizeof it + sizeof(VRTextureBounds_t), &p, sizeof p);
+    memcpy(in + 12 + sizeof it + sizeof(VRTextureBounds_t) + sizeof p, &g_sharpen, 4);
     if (Call(C_SUBMIT, 2000)) memcpy(&err, g_ipc->out, 4);
     LeaveCriticalSection(&g_cs);
     static bool said = false; if (!said) { said = true; Log("zero copy: Direct3D 9Ex pictures submitted straight from the game's GPU memory"); }
     return (uint32_t)err;
 }
+/* FNVR's zero copy for overlays: a Direct3D 9Ex shared picture (finished on the GPU) for an overlay */
+__declspec(dllexport) uint32_t FNVRStereo_SetOverlayShared9(uint64_t overlay, uint64_t handle, uint32_t w, uint32_t h, int colorSpace)
+{
+    int32_t err = EVROverlayError_VROverlayError_InvalidTexture;
+    if (!g_ipc || g_dead || !handle) return (uint32_t)err;
+    IpcTex it; memset(&it, 0, sizeof it); it.shared = handle; it.type = ETextureType_TextureType_DirectX; it.colorSpace = colorSpace; it.w = w; it.h = h;
+    EnterCriticalSection(&g_cs);
+    memcpy(g_ipc->in, &overlay, 8); memcpy(g_ipc->in + 8, &it, sizeof it);
+    if (Call(O_TEXTURE, 2000)) memcpy(&err, g_ipc->out, 4);
+    LeaveCriticalSection(&g_cs);
+    return (uint32_t)err;
+}
+__declspec(dllexport) void FNVRStereo_SetSharpen(float s) { g_sharpen = s < 0 ? 0 : s > 1 ? 1 : s; }
 __declspec(dllexport) bool VR_IsRuntimeInstalled(void) { return true; }
 __declspec(dllexport) bool VR_IsHmdPresent(void) { return true; }
 __declspec(dllexport) bool VR_IsInterfaceVersionValid(const char *v) { (void)v; return true; }

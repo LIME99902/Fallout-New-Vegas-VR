@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.2 (FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.3 (zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -215,6 +215,8 @@ static bool  g_fastAer = true; static int g_aerDrewEye = -1;   /* (the eye this 
 /* Game frame rate vs. the headset: [Stereo] iFrameRate - 0 unlimited, 1 120, 2 90, 3 60, 4 30, 5 match the headset (wait every
    refresh, the old way). Except in 5, the game isn't tied to the headset: it draws as fast as allowed, and once per headset
    refresh the newest picture goes to the headset (SteamVR fills in between when the game is slower). */
+static int   g_renderScaleSel = 0, g_sharpenSel = 0;   /* [Display] iRenderScale (100|85|75|66|50 %), iSharpen (off|low|medium|high) */
+static const int g_renderScaleOf[5] = { 100, 85, 75, 66, 50 }; static const float g_sharpenOf[4] = { 0.0f, 0.35f, 0.65f, 1.0f };
 static bool  g_vrClock = true;   /* [Clock] bVRClock: FNVR runs the game clock */
 static int   g_fpsMode = 0; static const int g_fpsOf[6] = { 0, 120, 90, 60, 30, -1 };
 static bool  g_syncNow = true;   /* (this frame goes to the headset) */
@@ -668,6 +670,8 @@ static void LoadSettings(void)
     g_stereo = GetPrivateProfileIntA("Stereo", "bStereo", 0, g_iniPath) != 0;
     g_stereoFull = GetPrivateProfileIntA("Stereo", "bFullStereo", 0, g_iniPath) != 0;
     g_fastAer = GetPrivateProfileIntA("Stereo", "bFastAlternate", 1, g_iniPath) != 0;
+    g_renderScaleSel = GetPrivateProfileIntA("Display", "iRenderScale", 0, g_iniPath); if (g_renderScaleSel < 0 || g_renderScaleSel > 4) g_renderScaleSel = 0;
+    g_sharpenSel = GetPrivateProfileIntA("Display", "iSharpen", 0, g_iniPath); if (g_sharpenSel < 0 || g_sharpenSel > 3) g_sharpenSel = 0;
     g_fpsMode = GetPrivateProfileIntA("Stereo", "iFrameRate", 0, g_iniPath); if (g_fpsMode < 0 || g_fpsMode > 5) g_fpsMode = 0;
     g_motionControls = GetPrivateProfileIntA("Controls", "bMotionControls", 1, g_iniPath) != 0;
     g_handAim = GetPrivateProfileIntA("Controls", "bHandAim", 1, g_iniPath) != 0;
@@ -3260,6 +3264,9 @@ static void SaveBMP(const char *name, const BYTE *bits, int pitch, int w, int h)
 }
 
 
+typedef struct { IDirect3DTexture9 *tex; IDirect3DSurface9 *surf; HANDLE h; IDirect3DQuery9 *q; UINT w, hgt; D3DFORMAT f; DWORD seq; bool pending; } OvZcSlot;
+typedef struct { OvZcSlot s[3]; int next; DWORD seq, shown; } OvZc;
+static OvZc g_uiZc, g_pipZc; static void OvZc_Release(OvZc *z);
 /* ---- Zero copy (FNVR Stereo with Direct3D 9Ex) ---------------------------------------------------------------------------
    When FNVRStereo.dll made the game's device a Direct3D 9Ex one and OpenVR runs in FNVR-VRHost.exe, each eye picture is
    scaled straight into a shared texture that the host opens on its own D3D11 device: the copy from the graphics card to
@@ -3273,6 +3280,7 @@ static struct { IDirect3DTexture9 *tex; IDirect3DSurface9 *surf; HANDLE h; UINT 
 static int g_zcNext = 0, g_zcEye[2] = { -1, -1 }; static HmdMatrix34_t g_zcPose[2]; static bool g_zcMono = true;
 static void ZC_Release(void)
 {
+    OvZc_Release(&g_uiZc); OvZc_Release(&g_pipZc);
     for (int i = 0; i < ZC_N; i++) { if (g_zcImg[i].surf) IDirect3DSurface9_Release(g_zcImg[i].surf); if (g_zcImg[i].tex) IDirect3DTexture9_Release(g_zcImg[i].tex); memset(&g_zcImg[i], 0, sizeof g_zcImg[i]); }
     g_zcEye[0] = g_zcEye[1] = -1;
 }
@@ -3323,14 +3331,63 @@ static void ZC_Upload(CapSlot *slot)
     else { g_zcEye[slot->targetEye] = slot->zc[0]; g_zcPose[slot->targetEye] = slot->pose; g_zcMono = false; if (g_zcEye[slot->targetEye ^ 1] < 0) g_zcEye[slot->targetEye ^ 1] = slot->zc[0]; }
     g_haveEyeImage = true;
 }
+typedef void (*SetSharpen_t)(float);
 static void ZC_Submit(void)
 {
+    {   static SetSharpen_t ss = NULL; static bool t = false; static float last = -1;
+        if (!t) { t = true; ss = g_ovrDll ? (SetSharpen_t)GetProcAddress(g_ovrDll, "FNVRStereo_SetSharpen") : NULL; }
+        float v = g_sharpenOf[g_sharpenSel]; if (ss && v != last) { ss(v); last = v; Log("Sharpening: %s", v > 0 ? (g_sharpenSel == 1 ? "low" : g_sharpenSel == 2 ? "medium" : "high") : "off"); } }
     for (int e = 0; e < 2; e++) {
         int i = g_zcEye[e]; if (i < 0 || !g_zcImg[i].h) return;
         uint32_t ce = p_SubmitShared9(e, (uint64_t)(uintptr_t)g_zcImg[i].h, g_zcImg[i].w, g_zcImg[i].hgt, &g_bounds[e], &g_zcPose[e]);
         if (ce) { static int n = 0; if (n++ < 10) Log("Zero copy: submit eye %d - compositor error %u", e, ce); return; }
     }
     g_submitsSinceLog++;
+}
+
+/* Zero copy for overlays (the curved HUD, the Pip-Boy screen): the picture is copied on the graphics card into a shared
+   texture the VR host shows - no copy through the CPU. A frame later (when the copy is finished) it's handed over, so the
+   game never waits for the graphics card. */
+typedef uint32_t (*SetOverlayShared9_t)(uint64_t overlay, uint64_t handle, uint32_t w, uint32_t h, int colorSpace);
+static SetOverlayShared9_t p_SetOverlayShared9; static bool g_ovZcTried = false;
+static bool OvZc_On(void)
+{
+    if (g_zc != 1) return false;
+    if (!g_ovZcTried) { g_ovZcTried = true; p_SetOverlayShared9 = g_ovrDll ? (SetOverlayShared9_t)GetProcAddress(g_ovrDll, "FNVRStereo_SetOverlayShared9") : NULL;
+        Log("Zero copy: overlays (HUD, Pip-Boy screen) %s", p_SetOverlayShared9 ? "too" : "not supported by this FNVR Stereo - CPU copy for them"); }
+    return p_SetOverlayShared9 != NULL;
+}
+static void OvZc_Release(OvZc *z)
+{
+    for (int i = 0; i < 3; i++) { OvZcSlot *k = &z->s[i]; if (k->q) IDirect3DQuery9_Release(k->q); if (k->surf) IDirect3DSurface9_Release(k->surf); if (k->tex) IDirect3DTexture9_Release(k->tex); memset(k, 0, sizeof *k); }
+    z->next = 0;
+}
+/* the picture in src (whole surface, scaled to w x h) to overlay ov; true = done this way (skip the CPU copy) */
+static bool OvZc_Set(IDirect3DDevice9 *dev, OvZc *z, IDirect3DSurface9 *src, const RECT *srcRect, UINT w, UINT h, D3DFORMAT f, VROverlayHandle_t ov, int cs, D3DTEXTUREFILTERTYPE filt)
+{
+    if (!OvZc_On() || !src || !ov) return false;
+    OvZcSlot *k = &z->s[z->next];
+    if (k->pending) {   /* (all three still in flight: skip this frame's picture) */
+        if (IDirect3DQuery9_GetData(k->q, NULL, 0, D3DGETDATA_FLUSH) != S_OK) return true;
+        k->pending = false;
+    }
+    if (k->tex && (k->w != w || k->hgt != h || k->f != f)) { IDirect3DSurface9_Release(k->surf); IDirect3DTexture9_Release(k->tex); k->surf = NULL; k->tex = NULL; }
+    if (!k->tex) {
+        HANDLE sh = NULL;
+        if (FAILED(IDirect3DDevice9_CreateTexture(dev, w, h, 1, D3DUSAGE_RENDERTARGET, f, D3DPOOL_DEFAULT, &k->tex, &sh)) || !sh) { k->tex = NULL; Log("Zero copy: couldn't make a shared %ux%u overlay picture - CPU copy for it", w, h); p_SetOverlayShared9 = NULL; return false; }
+        IDirect3DTexture9_GetSurfaceLevel(k->tex, 0, &k->surf); k->h = sh; k->w = w; k->hgt = h; k->f = f;
+    }
+    if (!k->q && FAILED(IDirect3DDevice9_CreateQuery(dev, D3DQUERYTYPE_EVENT, &k->q))) { k->q = NULL; return false; }
+    if (FAILED(IDirect3DDevice9_StretchRect(dev, src, srcRect, k->surf, NULL, filt))) return false;
+    IDirect3DQuery9_Issue(k->q, D3DISSUE_END); k->pending = true; k->seq = ++z->seq;
+    z->next = (z->next + 1) % 3;
+    /* the newest finished one goes to the overlay */
+    OvZcSlot *best = NULL;
+    for (int i = 0; i < 3; i++) { OvZcSlot *c = &z->s[i]; if (!c->tex || !c->seq) continue;
+        if (c->pending && IDirect3DQuery9_GetData(c->q, NULL, 0, 0) == S_OK) c->pending = false;
+        if (!c->pending && (!best || c->seq > best->seq)) best = c; }
+    if (best && best->seq != z->shown) { z->shown = best->seq; p_SetOverlayShared9((uint64_t)ov, (uint64_t)(uintptr_t)best->h, best->w, best->hgt, cs); }
+    return true;
 }
 static void Capture_Upload(CapSlot *slot)
 {
@@ -4221,6 +4278,7 @@ static void UI_Present(IDirect3DDevice9 *dev)
     bool drew = g_uiDrewThisFrame && !g_farActive && !g_setOpen; g_uiDrewThisFrame = false;
     static bool shown = false;
     if (!drew || !g_uiSurf || !g_d11) { if (shown) { g_vrOverlay->HideOverlay(g_uiOverlay); shown = false; } return; }
+    if (OvZc_Set(dev, &g_uiZc, g_uiSurf, NULL, UI_OUT_W, UI_OUT_H, D3DFMT_A8R8G8B8, g_uiOverlay, EColorSpace_ColorSpace_Auto, D3DTEXF_LINEAR)) goto uiPlaced;
     if (FAILED(IDirect3DDevice9_StretchRect(dev, g_uiSurf, NULL, g_uiSmall, NULL, D3DTEXF_LINEAR))) return;
     if (FAILED(IDirect3DDevice9_GetRenderTargetData(dev, g_uiSmall, g_uiSys))) return;
     if (!g_uiTex11) {
@@ -4232,8 +4290,9 @@ static void UI_Present(IDirect3DDevice9 *dev)
     ID3D11DeviceContext_UpdateSubresource(g_d11ctx, (ID3D11Resource *)g_uiTex11, 0, NULL, lr.pBits, (UINT)lr.Pitch, 0);
     IDirect3DSurface9_UnlockRect(g_uiSys);
     ID3D11DeviceContext_Flush(g_d11ctx);
-    Texture_t t = { g_uiTex11, ETextureType_TextureType_DirectX, EColorSpace_ColorSpace_Auto };
-    g_vrOverlay->SetOverlayTexture(g_uiOverlay, &t);
+    {   Texture_t t = { g_uiTex11, ETextureType_TextureType_DirectX, EColorSpace_ColorSpace_Auto };
+        g_vrOverlay->SetOverlayTexture(g_uiOverlay, &t); }
+uiPlaced: ;
 
     /* where: fixed in the room while a menu (or the main menu/loading) is up, with your head for the HUD */
     bool menuUp = !g_inGameplay || (IsMenuMode() && !g_pipOpen);
@@ -5372,6 +5431,7 @@ static void PipOv_Frame(IDirect3DDevice9 *dev)
         g_vrOverlay->SetOverlayWidthInMeters(g_pipOv, g_pipOvWidth);
     }
     if (!g_pipRT || !g_pipSys || !g_pipTex11) return;
+    if (OvZc_Set(dev, &g_pipZc, src, NULL, g_pipW, g_pipH, D3DFMT_X8R8G8B8, g_pipOv, EColorSpace_ColorSpace_Auto, D3DTEXF_NONE)) goto pipPlaced;   /* (X8: opaque, as the CPU copy makes it) */
     bool ok = SUCCEEDED(IDirect3DDevice9_StretchRect(dev, src, NULL, g_pipRT, NULL, D3DTEXF_NONE)) &&
               SUCCEEDED(IDirect3DDevice9_GetRenderTargetData(dev, g_pipRT, g_pipSys));
     if (!ok) { static int l = 0; if (l++ < 3) Log("Pip-Boy wrist screen: couldn't copy the menu"); return; }
@@ -5384,8 +5444,9 @@ static void PipOv_Frame(IDirect3DDevice9 *dev)
         IDirect3DSurface9_UnlockRect(g_pipSys);
     }
     ID3D11DeviceContext_Flush(g_d11ctx);
-    Texture_t t = { g_pipTex11, ETextureType_TextureType_DirectX, EColorSpace_ColorSpace_Auto };
-    g_vrOverlay->SetOverlayTexture(g_pipOv, &t);
+    {   Texture_t t = { g_pipTex11, ETextureType_TextureType_DirectX, EColorSpace_ColorSpace_Auto };
+        g_vrOverlay->SetOverlayTexture(g_pipOv, &t); }
+pipPlaced: ;
     if (boxMode) {   /* exactly over the Pip-Boy's dark screen box */
         g_vrOverlay->SetOverlayWidthInMeters(g_pipOv, g_pipBoxWidthM);
         g_vrOverlay->SetOverlayTransformAbsolute(g_pipOv, ETrackingUniverseOrigin_TrackingUniverseStanding, &g_pipBoxPose);
@@ -17416,6 +17477,8 @@ static const SetOpt g_setOpts[] = {
 
     { SP_DISPLAY, ST_BOOL, "US units (feet & inches)", "Display", "bUSUnits", &g_imperial, 0, 0, 0, 0, 0, 0, "ON: heights, reaches and distances in this panel are shown in feet and inches (speeds in mph) instead of metres." },
     { SP_DISPLAY, ST_BOOL, "Game in the headset", "Display", "bHeadsetDisplay", &g_headsetDisplay, 0, 0, 0, 0, SF_RESTART, 0, "OFF: head tracking only, the game stays on the monitor. Takes effect after a restart." },
+    { SP_DISPLAY, ST_CHOICE, "Render resolution", "Display", "iRenderScale", &g_renderScaleSel, 0, 4, 1, "100% (full)|85%|75%|66%|50%", 0, 0, "How much of the full resolution the game draws at. Lower = faster frames; the picture is scaled up to the headset and can be sharpened (below). Takes effect after a restart." },
+    { SP_DISPLAY, ST_CHOICE, "Sharpening", "Display", "iSharpen", &g_sharpenSel, 0, 3, 1, "Off|Low|Medium|High", 0, 0, "Sharpens the picture on its way to the headset (AMD's contrast adaptive sharpening) - most useful with a lower render resolution. Needs FNVR Stereo with zero copy (see FNVR.log)." },
     { SP_DISPLAY, ST_BOOL, "FNVR runs the game clock", "Clock", "bVRClock", &g_vrClock, 0, 0, 0, 0, 0, 0, "ON: the game moves by the real time between frames (or whole headset refreshes), at any frame rate - instead of New Vegas Tick Fix's frame-time fix, which puts the game in fast motion above its limit. Takes effect after a restart." },
     { SP_DISPLAY, ST_CHOICE, "Game frame rate", "Stereo", "iFrameRate", &g_fpsMode, 0, 5, 1, "Unlimited|120|90|60|30|Match the headset (old way)", 0, 0, "How many frames a second the game may draw. The game no longer waits for the headset: it draws as fast as this allows and each headset refresh gets the newest picture (SteamVR fills in when the game is slower). Unlimited = as fast as your PC can. Match the headset = wait for every refresh, as before." },
     { SP_DISPLAY, ST_BOOL, "Full 3D (both eyes every frame)", "Stereo", "bFullStereo", &g_stereoFull, 0, 0, 0, 0, 0, 0, "ON: real 3D - the world is drawn twice every frame, once from each eye, so near things (your hands, guns, the Pip-Boy) have true depth. Costs about twice the drawing time. Overrides the alternating mode below." },
@@ -17601,6 +17664,7 @@ static void Gfx_TargetFor(int tier, int *w, int *h)
     static const float tierF[4] = { 0.45f, 0.60f, 0.75f, 0.90f };
     float f = g_gfxResPct > 0 ? g_gfxResPct / 100.0f : tierF[tier < 0 ? 0 : tier > 3 ? 3 : tier];
     if (g_gfxWirelessI && g_gfxResPct <= 0) f *= 0.9f;
+    f *= g_renderScaleOf[g_renderScaleSel] / 100.0f;   /* (lower render resolution: drawn smaller, scaled up and sharpened on the way to the headset) */
     float ht = TargetHTan(16.0f / 9.0f); if (!(ht > 0.5f && ht < 4.0f)) ht = 1.3f;
     float W = f * pxpt * 2.0f * ht;
     if (W < 1280) W = 1280; if (W > 5760) W = 5760;
@@ -17687,6 +17751,7 @@ static void Set_Changed(const SetOpt *o)
     if (o->flags & SF_MELEE) MeleeAngle_Save();
     if (o->flags & SF_HOLM) Hol_Save();
     if (o->var == &g_wristPip || o->var == &g_pipScrOn) g_pipScrDrawing = false;
+    if (o->var == &g_renderScaleSel) { if (Gfx_Apply()) { int w, h; Gfx_Target(&w, &h); char m[96]; snprintf(m, sizeof m, "Game resolution %dx%d - restart the game to use it", w, h); Set_Toast(m); } }
     if (o->flags & SF_RESTART) Set_Toast("Saved - restart the game for this one to take effect");
     char v[64]; Set_ValueText(o, v, sizeof v);
     Log("Settings: %s = %s", o->label, v);

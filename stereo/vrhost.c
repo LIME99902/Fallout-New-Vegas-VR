@@ -65,6 +65,79 @@ static ID3D11Texture2D *Tex_Open(const IpcTex *it)
     return t;
 }
 
+
+/* ---- Sharpening (AMD's Contrast Adaptive Sharpening, MIT licence) -------------------------------------------------------
+   When the game draws below the headset's resolution, its picture is scaled up and comes out soft; this pass sharpens it
+   on the way to SteamVR, on this process's own D3D11 device. Strength from the game (0 = off). */
+typedef HRESULT (WINAPI *D3DCompile_t)(const void *, SIZE_T, const char *, const void *, void *, const char *, const char *, UINT, UINT, ID3DBlob **, ID3DBlob **);
+static ID3D11VertexShader *g_vs; static ID3D11PixelShader *g_ps; static ID3D11Buffer *g_cb; static bool g_shTried, g_shOk;
+static struct { ID3D11Texture2D *t[2]; ID3D11RenderTargetView *rtv[2]; UINT w, h; DXGI_FORMAT f; int k; } g_sharp[2];
+static struct { ID3D11Texture2D *t; ID3D11ShaderResourceView *srv; } g_srv[8]; static int g_srvN;
+static const char *k_sharpHlsl =
+"cbuffer C : register(b0) { float peak; float3 pad; };\n"
+"Texture2D T : register(t0);\n"
+"float4 VS(uint id : SV_VertexID) : SV_Position { float2 uv = float2((id << 1) & 2, id & 2); return float4(uv * float2(2, -2) + float2(-1, 1), 0, 1); }\n"
+"float4 PS(float4 pos : SV_Position) : SV_Target {\n"
+"  int2 p = int2(pos.xy);\n"
+"  float4 cc = T.Load(int3(p, 0)); float3 c = cc.rgb;\n"
+"  float3 a = T.Load(int3(p + int2(0, -1), 0)).rgb, b = T.Load(int3(p + int2(-1, 0), 0)).rgb;\n"
+"  float3 d = T.Load(int3(p + int2(1, 0), 0)).rgb, e = T.Load(int3(p + int2(0, 1), 0)).rgb;\n"
+"  float3 mn = min(min(min(a, b), min(d, e)), c), mx = max(max(max(a, b), max(d, e)), c);\n"
+"  float3 amp = sqrt(saturate(min(mn, 1.0 - mx) / max(mx, 1e-5)));\n"
+"  float3 w = amp * peak;\n"
+"  float3 r = (c + (a + b + d + e) * w) / (1.0 + 4.0 * w);\n"
+"  return float4(saturate(r), cc.a);\n"
+"}\n";
+static bool Sharp_Init(void)
+{
+    if (g_shTried) return g_shOk; g_shTried = true;
+    HMODULE dc = LoadLibraryA("d3dcompiler_47.dll"); D3DCompile_t comp = dc ? (D3DCompile_t)GetProcAddress(dc, "D3DCompile") : NULL;
+    if (!comp) { Log("sharpening off: d3dcompiler_47.dll missing"); return false; }
+    ID3DBlob *vb = NULL, *pb = NULL, *er = NULL;
+    if (FAILED(comp(k_sharpHlsl, strlen(k_sharpHlsl), "sharp", NULL, NULL, "VS", "vs_4_0", 0, 0, &vb, &er)) ||
+        FAILED(comp(k_sharpHlsl, strlen(k_sharpHlsl), "sharp", NULL, NULL, "PS", "ps_4_0", 0, 0, &pb, &er))) {
+        Log("sharpening off: shader didn't compile (%s)", er ? (const char *)ID3D10Blob_GetBufferPointer(er) : "?"); return false; }
+    ID3D11Device_CreateVertexShader(g_dev, ID3D10Blob_GetBufferPointer(vb), ID3D10Blob_GetBufferSize(vb), NULL, &g_vs);
+    ID3D11Device_CreatePixelShader(g_dev, ID3D10Blob_GetBufferPointer(pb), ID3D10Blob_GetBufferSize(pb), NULL, &g_ps);
+    D3D11_BUFFER_DESC bd = { 16, D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0 };
+    ID3D11Device_CreateBuffer(g_dev, &bd, NULL, &g_cb);
+    g_shOk = g_vs && g_ps && g_cb; Log("sharpening %s", g_shOk ? "ready" : "off (shader setup failed)");
+    return g_shOk;
+}
+static ID3D11Texture2D *Sharp_Apply(ID3D11Texture2D *src, int eye, float amount)
+{
+    if (amount <= 0.001f || eye < 0 || eye > 1 || !Sharp_Init()) return src;
+    D3D11_TEXTURE2D_DESC d; ID3D11Texture2D_GetDesc(src, &d);
+    ID3D11ShaderResourceView *srv = NULL;
+    for (int i = 0; i < g_srvN; i++) if (g_srv[i].t == src) srv = g_srv[i].srv;
+    if (!srv) { if (FAILED(ID3D11Device_CreateShaderResourceView(g_dev, (ID3D11Resource *)src, NULL, &srv))) return src;
+        int k = g_srvN < 8 ? g_srvN++ : 7; if (g_srv[k].srv && k == 7) ID3D11ShaderResourceView_Release(g_srv[k].srv); g_srv[k].t = src; g_srv[k].srv = srv; }
+    if (g_sharp[eye].w != d.Width || g_sharp[eye].h != d.Height || g_sharp[eye].f != d.Format || !g_sharp[eye].t[0]) {
+        for (int k = 0; k < 2; k++) { if (g_sharp[eye].rtv[k]) ID3D11RenderTargetView_Release(g_sharp[eye].rtv[k]); if (g_sharp[eye].t[k]) ID3D11Texture2D_Release(g_sharp[eye].t[k]); g_sharp[eye].t[k] = NULL; g_sharp[eye].rtv[k] = NULL; }
+        D3D11_TEXTURE2D_DESC o = d; o.MipLevels = 1; o.ArraySize = 1; o.SampleDesc.Count = 1; o.SampleDesc.Quality = 0; o.Usage = D3D11_USAGE_DEFAULT;
+        o.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE; o.CPUAccessFlags = 0; o.MiscFlags = 0;
+        for (int k = 0; k < 2; k++) { if (FAILED(ID3D11Device_CreateTexture2D(g_dev, &o, NULL, &g_sharp[eye].t[k]))) return src; ID3D11Device_CreateRenderTargetView(g_dev, (ID3D11Resource *)g_sharp[eye].t[k], NULL, &g_sharp[eye].rtv[k]); }
+        g_sharp[eye].w = d.Width; g_sharp[eye].h = d.Height; g_sharp[eye].f = d.Format;
+        Log("sharpening eye %d: %ux%u", eye, d.Width, d.Height);
+    }
+    int k = g_sharp[eye].k ^= 1;
+    D3D11_MAPPED_SUBRESOURCE m; if (SUCCEEDED(ID3D11DeviceContext_Map(g_ctx, (ID3D11Resource *)g_cb, 0, D3D11_MAP_WRITE_DISCARD, 0, &m))) {
+        float v[4] = { -1.0f / (8.0f - 3.0f * amount), 0, 0, 0 }; memcpy(m.pData, v, 16); ID3D11DeviceContext_Unmap(g_ctx, (ID3D11Resource *)g_cb, 0); }
+    D3D11_VIEWPORT vp = { 0, 0, (float)d.Width, (float)d.Height, 0, 1 };
+    ID3D11DeviceContext_OMSetRenderTargets(g_ctx, 1, &g_sharp[eye].rtv[k], NULL);
+    ID3D11DeviceContext_RSSetViewports(g_ctx, 1, &vp);
+    ID3D11DeviceContext_IASetInputLayout(g_ctx, NULL);
+    ID3D11DeviceContext_IASetPrimitiveTopology(g_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    ID3D11DeviceContext_VSSetShader(g_ctx, g_vs, NULL, 0);
+    ID3D11DeviceContext_PSSetShader(g_ctx, g_ps, NULL, 0);
+    ID3D11DeviceContext_PSSetConstantBuffers(g_ctx, 0, 1, &g_cb);
+    ID3D11DeviceContext_PSSetShaderResources(g_ctx, 0, 1, &srv);
+    ID3D11DeviceContext_Draw(g_ctx, 3, 0);
+    ID3D11ShaderResourceView *none = NULL; ID3D11DeviceContext_PSSetShaderResources(g_ctx, 0, 1, &none);
+    ID3D11DeviceContext_OMSetRenderTargets(g_ctx, 0, NULL, NULL);
+    ID3D11DeviceContext_Flush(g_ctx);
+    return g_sharp[eye].t[k];
+}
 static void Handle(int fn)
 {
     uint8_t *in = g_ipc->in, *out = g_ipc->out; int32_t i32; float f;
@@ -121,7 +194,9 @@ static void Handle(int fn)
         int32_t eye, fl, hasB; IpcTex it; VRTextureBounds_t b; HmdMatrix34_t pose;
         memcpy(&eye, in, 4); memcpy(&fl, in + 4, 4); memcpy(&it, in + 8, sizeof it); memcpy(&hasB, in + 8 + sizeof it, 4);
         memcpy(&b, in + 12 + sizeof it, sizeof b); memcpy(&pose, in + 12 + sizeof it + sizeof b, sizeof pose);
+        float sharpen = 0; memcpy(&sharpen, in + 12 + sizeof it + sizeof b + sizeof pose, 4); if (!(sharpen >= 0 && sharpen <= 1)) sharpen = 0;
         ID3D11Texture2D *t = Tex_Open(&it);
+        if (t) t = Sharp_Apply(t, eye, sharpen);
         i32 = EVRCompositorError_VRCompositorError_InvalidTexture;
         if (t && C) {
             VRTextureWithPose_t tp; memset(&tp, 0, sizeof tp);
