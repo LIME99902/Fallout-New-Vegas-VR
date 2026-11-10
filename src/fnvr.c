@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.1 (game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.2 (FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -215,6 +215,7 @@ static bool  g_fastAer = true; static int g_aerDrewEye = -1;   /* (the eye this 
 /* Game frame rate vs. the headset: [Stereo] iFrameRate - 0 unlimited, 1 120, 2 90, 3 60, 4 30, 5 match the headset (wait every
    refresh, the old way). Except in 5, the game isn't tied to the headset: it draws as fast as allowed, and once per headset
    refresh the newest picture goes to the headset (SteamVR fills in between when the game is slower). */
+static bool  g_vrClock = true;   /* [Clock] bVRClock: FNVR runs the game clock */
 static int   g_fpsMode = 0; static const int g_fpsOf[6] = { 0, 120, 90, 60, 30, -1 };
 static bool  g_syncNow = true;   /* (this frame goes to the headset) */
 static double g_lastSyncAt = 0, g_frameStartAt = 0;
@@ -17188,22 +17189,56 @@ enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_AD
 /* ---- Setup check: is everything FNVVRMC needs actually loaded? (shown first on the startup screen, and in the log) ---- */
 static char g_reqLabel[96] = "Setup check", g_reqDesc[700] = "Checking what's installed...";
 static int  g_reqMissing = 0;
-/* Fast alternate eyes need the game's clock to follow real time at 180+ frames a second. New Vegas Tick Fix (NVTF) treats
-   any frame faster than its iMaxFPSTolerance (59 by default) as that long - above it the game would run in fast motion -
-   so FNVR raises it (once; NVTF reads it at start, so the game needs one restart). [Stereo] bAdjustNVTF */
-static void NVTF_Check(void)
+/* ---- The game clock (replaces NVTF's frame-time fix) -------------------------------------------------------------------
+   Each frame the game advances its clock - movement, animation, physics - by that frame's time. Vanilla New Vegas measures
+   it with a coarse millisecond timer; New Vegas Tick Fix (NVTF) swaps in the precise timer but also treats any frame faster
+   than its iMaxFPSTolerance (59) as that long, which would put the game in fast motion at VR frame rates.
+   FNVR takes that one job over (NVTF's other fixes stay): the step is the real time between frames from the precise timer,
+   and when the game waits for every headset refresh it's whole refreshes - so the game moves exactly as often as the headset
+   shows it. Physics steps follow the frame (at most 16 ms each, like NVTF). [Clock] bVRClock (on). */
+#define CLOCK_CALLSITE 0x0086F296   /* (the main loop's call that updates the game's timer; NVTF hooks the same call) */
+#define TIMER_UPDATE   0x00AA4EE0   /* BSTimer::Update(time) */
+#define HAVOK_MAXTIME  0x01267B38   /* bhkWorld::fMaxTime: longest physics step */
+static float g_havokMaxDefault = 0.0f; static double g_clkLast = 0; static int g_clkMode = 0;
+typedef void (__attribute__((thiscall)) *TimerUpdate_t)(void *timer, uint32_t ms);
+static void __attribute__((thiscall)) Clock_Hook(char *timer)
 {
-    bool aer = g_stereo && !g_stereoFull && g_fastAer;
-    if (g_fpsOf[g_fpsMode] < 0 && !aer) return;
-    char ini[MAX_PATH]; snprintf(ini, sizeof ini, "%sNVTF.ini", g_pluginDir);
-    if (GetFileAttributesA(ini) == INVALID_FILE_ATTRIBUTES) { Log("Fast alternate eyes: NVTF.ini not found - can't check the game clock's frame limit"); return; }
-    int fix = GetPrivateProfileIntA("GTC", "bFPSFix", 0, ini), tol = GetPrivateProfileIntA("FPSFix", "iMaxFPSTolerance", 59, ini);
-    if (!fix) { Log("Fast alternate eyes: NVTF's frame-time fix is off - the game clock follows real time as it is"); return; }
-    if (tol >= 480) { Log("Frame rate: NVTF follows real time up to %d frames a second - fine", tol); return; }
-    if (!GetPrivateProfileIntA("Stereo", "bAdjustNVTF", 1, g_iniPath)) { Log("Fast alternate eyes: NVTF's iMaxFPSTolerance is %d - above that many frames a second the game runs in fast motion (raise it to 240 in NVTF.ini)", tol); return; }
-    WritePrivateProfileStringA("FPSFix", "iMaxFPSTolerance", "500", ini);
-    char was[16]; snprintf(was, sizeof was, "%d", tol); WritePrivateProfileStringA("FPSFix", "iMaxFPSTolerance_BeforeFNVR", was, ini);
-    Log("Frame rate: NVTF's iMaxFPSTolerance raised from %d to 500 (the game clock now follows real time up to 500 frames a second) - restart the game once for it to apply", tol);
+    double now = QpcMs(), d = g_clkLast > 0 ? now - g_clkLast : 16.7; g_clkLast = now;
+    bool loading = *(volatile bool *)0x011D8907;   /* (loading a new game) */
+    char *sl = *(char **)0x011DDF38; if (sl && (*(uint32_t *)(sl + 0x244) & 2)) loading = true;   /* (loading a save) */
+    bool fade = *(volatile bool *)0x011DEA2D;
+    float step = 0.0f;   /* ms; 0 = the game's own measure */
+    if (!loading && d > 0.0) {
+        step = (float)d;
+        g_clkMode = 0;
+        if (g_fpsOf[g_fpsMode] < 0 && g_vrSystem && HeadsetDisplayActive() && g_inGameplay) {   /* waiting for every refresh: whole refreshes */
+            static float hz = 0; if (hz < 1) hz = g_vrSystem->GetFloatTrackedDeviceProperty(0, ETrackedDeviceProperty_Prop_DisplayFrequency_Float, NULL);
+            if (hz > 1) { double per = 1000.0 / hz, k = floor(d / per + 0.5); if (k >= 1 && k <= 4) { step = (float)(k * per); g_clkMode = 1; } }
+        }
+        if (step < 0.5f) step = 0.5f; if (step > 50.0f) step = 50.0f;   /* (a long hitch moves the game at most 50 ms - 20 frames a second - like NVTF) */
+    }
+    float *hm = (float *)HAVOK_MAXTIME;
+    if (fade || step <= 0.0f) *hm = g_havokMaxDefault;
+    else *hm = fminf(fmaxf(step / 1000.0f, 0.0005f), 0.016f);
+    *(float *)(timer + 4) = step;   /* fClamp: this frame's step */
+    ((TimerUpdate_t)TIMER_UPDATE)(timer, (uint32_t)now);
+    {   static double rep = 0, sum = 0; static int n = 0; sum += step; n++;
+        if (now - rep > 30000.0) { if (rep > 0) Log("Game clock: %.2f ms steps on average (%s)", sum / n, g_clkMode ? "whole headset refreshes" : "real time"); rep = now; sum = 0; n = 0; } }
+}
+static void Clock_Install(void)
+{
+    g_vrClock = GetPrivateProfileIntA("Clock", "bVRClock", 1, g_iniPath) != 0;
+    BYTE *site = (BYTE *)CLOCK_CALLSITE;
+    if (!g_vrClock) { Log("Game clock: left to the game / NVTF ([Clock] bVRClock=0)"); return; }
+    if (site[0] != 0xE8) { Log("Game clock: unexpected code at %08X (%02X) - left to the game", CLOCK_CALLSITE, site[0]); return; }
+    uintptr_t was = CLOCK_CALLSITE + 5 + *(int32_t *)(site + 1);
+    HMODULE m = NULL; char mod[MAX_PATH] = "the game";
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)was, &m) && m && m != GetModuleHandleA(NULL)) { GetModuleFileNameA(m, mod, MAX_PATH); char *b = strrchr(mod, '\\'); if (b) memmove(mod, b + 1, strlen(b)); }
+    g_havokMaxDefault = *(float *)HAVOK_MAXTIME; if (!(g_havokMaxDefault > 0 && g_havokMaxDefault < 1)) g_havokMaxDefault = 0.0333f;
+    DWORD old; VirtualProtect(site, 5, PAGE_EXECUTE_READWRITE, &old);
+    *(int32_t *)(site + 1) = (int32_t)((uintptr_t)Clock_Hook - (CLOCK_CALLSITE + 5));
+    VirtualProtect(site, 5, old, &old); FlushInstructionCache(GetCurrentProcess(), site, 5);
+    Log("Game clock: FNVR runs it now (was %s at %08X) - precise real time, whole headset refreshes when waiting for each one; no frame-rate limit (NVTF's other fixes stay)", mod, (unsigned)was);
 }
 static void Req_Check(void)
 {
@@ -17381,6 +17416,7 @@ static const SetOpt g_setOpts[] = {
 
     { SP_DISPLAY, ST_BOOL, "US units (feet & inches)", "Display", "bUSUnits", &g_imperial, 0, 0, 0, 0, 0, 0, "ON: heights, reaches and distances in this panel are shown in feet and inches (speeds in mph) instead of metres." },
     { SP_DISPLAY, ST_BOOL, "Game in the headset", "Display", "bHeadsetDisplay", &g_headsetDisplay, 0, 0, 0, 0, SF_RESTART, 0, "OFF: head tracking only, the game stays on the monitor. Takes effect after a restart." },
+    { SP_DISPLAY, ST_BOOL, "FNVR runs the game clock", "Clock", "bVRClock", &g_vrClock, 0, 0, 0, 0, 0, 0, "ON: the game moves by the real time between frames (or whole headset refreshes), at any frame rate - instead of New Vegas Tick Fix's frame-time fix, which puts the game in fast motion above its limit. Takes effect after a restart." },
     { SP_DISPLAY, ST_CHOICE, "Game frame rate", "Stereo", "iFrameRate", &g_fpsMode, 0, 5, 1, "Unlimited|120|90|60|30|Match the headset (old way)", 0, 0, "How many frames a second the game may draw. The game no longer waits for the headset: it draws as fast as this allows and each headset refresh gets the newest picture (SteamVR fills in when the game is slower). Unlimited = as fast as your PC can. Match the headset = wait for every refresh, as before." },
     { SP_DISPLAY, ST_BOOL, "Full 3D (both eyes every frame)", "Stereo", "bFullStereo", &g_stereoFull, 0, 0, 0, 0, 0, 0, "ON: real 3D - the world is drawn twice every frame, once from each eye, so near things (your hands, guns, the Pip-Boy) have true depth. Costs about twice the drawing time. Overrides the alternating mode below." },
     { SP_DISPLAY, ST_BOOL, "3D depth (experimental)", "Stereo", "bStereo", &g_stereo, 0, 0, 0, 0, 0, 0, "ON: real 3D depth - the game is drawn from your left and right eye in turn (each eye gets a new picture every other frame, so fast movement can shimmer). OFF: the same picture in both eyes. Ctrl+F10 toggles it too." },
@@ -18570,7 +18606,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
     switch (msg->type) {
     case kMessage_DeferredInit:
         Req_Check();   /* (is everything FNVVRMC needs loaded?) */
-        NVTF_Check();
+        Clock_Install();
         InstallShaderCache();
         InstallD3D9Hooks();
         InstallRenderHook();
