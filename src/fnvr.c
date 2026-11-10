@@ -2431,10 +2431,12 @@ static void Arms_LogHidden(const char *when)
     Log("First-person model %s: %s; hidden parts:%s", when, node ? "present" : "MISSING", out[0] ? out : " none");
 }
 
+static void D3D9_CheckHooks(void);
 static void VR_Tick(void)
 {
     DWORD now = GetTickCount();
     g_ticksSinceLog++;
+    D3D9_CheckHooks();
     g_frameHasSample = false;
 
     { static bool kF11 = false; if (KeyPressed(VK_F11, &kF11)) Settings_Toggle(); }
@@ -18873,6 +18875,11 @@ static void *PatchVtable(void **vtbl, int index, void *hook)
     return orig;
 }
 
+/* FNVR's own entries in the device's function table, checked every frame (D3D9_CheckHooks) */
+typedef struct { int slot; void *hook; void **orig; } DevHookRec;
+static DevHookRec g_devHooks[12]; static int g_devHookN = 0; static void **g_devVt = NULL;
+static void *g_scHook = NULL; static void **g_scVt = NULL;
+static void DevHook_Note(int slot, void *hook, void **orig) { if (*orig && g_devHookN < 12) { g_devHooks[g_devHookN].slot = slot; g_devHooks[g_devHookN].hook = hook; g_devHooks[g_devHookN].orig = orig; g_devHookN++; } }
 static void InstallD3D9Hooks(void)
 {
     if (g_hookedDevice || !g_headsetDisplay) return;
@@ -18901,13 +18908,56 @@ static void InstallD3D9Hooks(void)
     if (SUCCEEDED(IDirect3DDevice9_GetSwapChain(dev, 0, &sc)) && sc) {
         void **svt = *(void ***)sc;
         o_SwapPresent = (SwapPresent_t)PatchVtable(svt, 3, (void *)Hook_SwapPresent);
+        g_scVt = svt; g_scHook = (void *)Hook_SwapPresent;
         IDirect3DSwapChain9_Release(sc);
     }
+    g_devVt = vtbl; g_devHookN = 0;
+    DevHook_Note(16, (void *)Hook_DevReset, (void **)&o_DevReset); DevHook_Note(17, (void *)Hook_DevPresent, (void **)&o_DevPresent);
+    DevHook_Note(43, (void *)Hook_DevClear, (void **)&o_DevClear); DevHook_Note(37, (void *)Hook_SetRT, (void **)&o_SetRT);
+    DevHook_Note(65, (void *)Hook_SetTex, (void **)&o_SetTex); DevHook_Note(81, (void *)Hook_DP, (void **)&o_DP);
+    DevHook_Note(82, (void *)Hook_DIP, (void **)&o_DIP); DevHook_Note(75, (void *)Hook_SetScissor, (void **)&o_SetScissor);
+    if (g_curvedUI && !g_flatMenus) { DevHook_Note(39, (void *)Hook_SetDS, (void **)&o_SetDS); DevHook_Note(47, (void *)Hook_SetVP, (void **)&o_SetVP); DevHook_Note(57, (void *)Hook_SetRS, (void **)&o_SetRS); }
 
     D3DDEVICE_CREATION_PARAMETERS cp;
     IDirect3DDevice9_GetCreationParameters(dev, &cp);
     Log("Hooked D3D9 device %p (adapter %u): Present=%d Reset=%d SwapChain::Present=%d Clear=%d",
         (void *)dev, cp.AdapterOrdinal, o_DevPresent != NULL, o_DevReset != NULL, o_SwapPresent != NULL, o_DevClear != NULL);
+}
+
+/* Every frame: are FNVR's hooks (and FNVR Stereo's) still in the device's table of functions? Something changing that
+   table takes FNVR out of the picture (the headset stops getting pictures) and, with FNVR Stereo, makes the game's
+   buffers fail to be made (it crashed a moment later). Any entry that changed back to Windows' own function is hooked
+   again; anything else (another program's hook on top) is left alone. What happened is written to the log. */
+static bool Mod_IsD3D9(const void *p)
+{
+    static HMODULE d9 = NULL; if (!d9) d9 = GetModuleHandleA("d3d9.dll");
+    HMODULE m = NULL;
+    return p && d9 && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)p, &m) && m == d9;
+}
+typedef int (*StereoCheck_t)(IDirect3DDevice9 *);
+static void DescribeAddress(DWORD addr, char *out, size_t n);
+static void D3D9_CheckHooks(void)
+{
+    IDirect3DDevice9 *dev = g_hookedDevice; if (!dev || !g_devVt) return;
+    void **vt = *(void ***)dev;
+    static int logs = 0;
+    if (vt != g_devVt) {
+        char a[96], b[96]; DescribeAddress((DWORD)(uintptr_t)g_devVt, a, sizeof a); DescribeAddress((DWORD)(uintptr_t)vt, b, sizeof b);
+        if (logs++ < 12) Log("D3D9: the device's function table was SWITCHED (%s -> %s) - FNVR's hooks put on the new one", a, b);
+        g_devVt = vt;
+    }
+    for (int i = 0; i < g_devHookN; i++) {
+        DevHookRec *h = &g_devHooks[i]; void *cur = vt[h->slot];
+        if (cur == h->hook) continue;
+        char c[96]; DescribeAddress((DWORD)(uintptr_t)cur, c, sizeof c);
+        if (!Mod_IsD3D9(cur)) { static uint32_t told = 0; if (!(told & (1u << i)) && logs++ < 12) { told |= 1u << i; Log("D3D9: device function %d now leads to %s (another program's hook) - left alone", h->slot, c); } continue; }
+        *h->orig = cur; PatchVtable(vt, h->slot, h->hook);
+        if (logs++ < 12) Log("D3D9: device function %d had been put back to %s - FNVR's hook put back", h->slot, c);
+    }
+    if (g_scVt && g_scHook && g_scVt[3] != g_scHook && Mod_IsD3D9(g_scVt[3])) { o_SwapPresent = (SwapPresent_t)g_scVt[3]; PatchVtable(g_scVt, 3, g_scHook); if (logs++ < 12) Log("D3D9: swap chain Present had been put back - FNVR's hook put back"); }
+    static StereoCheck_t sc = NULL; static bool scTried = false;
+    if (!scTried) { scTried = true; HMODULE m = GetModuleHandleA("FNVRStereo.dll"); sc = m ? (StereoCheck_t)GetProcAddress(m, "FNVRStereo_CheckDevice") : NULL; }
+    if (sc) { int n = sc(dev); if (n && logs++ < 12) Log("D3D9: FNVR Stereo had to hook %d of the device's create functions again (see FNVRStereo.log)", n); }
 }
 
 /* ======================================================================= */
@@ -18974,6 +19024,9 @@ static LONG CALLBACK CrashNote(EXCEPTION_POINTERS *ep)
         for (int k = 0; k < 4; k++) { const DWORD *q = (const DWORD *)(uintptr_t)regs[k];
             if (!q || IsBadReadPtr(q, 32)) continue;
             Log("CRASH?   [%s] %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX", rn[k], (unsigned long)q[0], (unsigned long)q[1], (unsigned long)q[2], (unsigned long)q[3], (unsigned long)q[4], (unsigned long)q[5], (unsigned long)q[6], (unsigned long)q[7]); }
+        if (g_hookedDevice && !IsBadReadPtr(g_hookedDevice, 4)) { void **dvt = *(void ***)g_hookedDevice; char a[96], b[96], d[96];
+            if (!IsBadReadPtr(dvt, 28 * 4)) { DescribeAddress((DWORD)(uintptr_t)dvt, d, sizeof d); DescribeAddress((DWORD)(uintptr_t)dvt[17], a, sizeof a); DescribeAddress((DWORD)(uintptr_t)dvt[26], b, sizeof b);
+                Log("CRASH?   device table %s (FNVR saw %p): Present -> %s, CreateVertexBuffer -> %s", d, (void *)g_devVt, a, b); } }
         if (!IsBadReadPtr(sp, 48)) Log("CRASH?   esp %08lX: %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX", (unsigned long)c->Esp,
             (unsigned long)sp[0], (unsigned long)sp[1], (unsigned long)sp[2], (unsigned long)sp[3], (unsigned long)sp[4], (unsigned long)sp[5], (unsigned long)sp[6], (unsigned long)sp[7], (unsigned long)sp[8], (unsigned long)sp[9], (unsigned long)sp[10], (unsigned long)sp[11]);
     }

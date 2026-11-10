@@ -200,16 +200,62 @@ static HRESULT WINAPI H_CreateIndexBuffer(IDirect3DDevice9 *d, UINT len, DWORD u
     if (SUCCEEDED(hr) && conv) { InterlockedIncrement(&g_nConv); Stats(); if (b && *b) { DESC_HOOK(*b, IDirect3DIndexBuffer9Vtbl, GetDesc, H_IBGetDesc, o_IBGetDesc, IBGetDesc_t); Tag_Set((IDirect3DResource9 *)*b, us); } }
     return hr;
 }
+/* The device's create functions are hooked in the functions themselves (a jump at their start), so every call goes
+   through here whatever happens to the device's table of functions afterwards; if a function can't be hooked that way,
+   its entry in the table is. FNVR also asks every frame (FNVRStereo_CheckDevice) whether the device's table still leads
+   here - if it changed, the new entries are hooked too and the change is written to the log. */
+typedef struct { int slot; void *hook; void **orig; void *fn[4]; int nfn; const char *name; } CHook;
+static CHook g_ch[5]; static bool g_chInit = false; static HMODULE g_d9mod = NULL;
+static bool InD3D9(const void *p)
+{
+    HMODULE m = NULL;
+    return p && g_d9mod && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)p, &m) && m == g_d9mod;
+}
+static void ModName(const void *p, char *out, size_t n)
+{
+    HMODULE m = NULL; char path[MAX_PATH] = "?";
+    if (p && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)p, &m) && m) GetModuleFileNameA(m, path, sizeof path);
+    const char *b = strrchr(path, '\\'); snprintf(out, n, "%s+%lX", b ? b + 1 : path, m ? (unsigned long)((uintptr_t)p - (uintptr_t)m) : 0UL);
+}
+/* returns true if this entry had to be changed */
+static bool CH_Check(void **vt, CHook *c, bool first)
+{
+    void *cur = vt[c->slot];
+    if (cur == c->hook) return false;                         /* (the table entry leads here) */
+    for (int i = 0; i < c->nfn; i++) if (cur == c->fn[i]) return false;   /* (that function already jumps here) */
+    char nm[96]; ModName(cur, nm, sizeof nm);
+    if (!first && !InD3D9(cur)) { static int nl = 0; if (nl++ < 10) Log("device function table: %s now leads to %s (another program's hook) - left alone", c->name, nm); return false; }
+    if (c->nfn < 4) {
+        void *tr = HookFn((BYTE *)cur, c->hook);
+        if (tr) { *c->orig = tr; c->fn[c->nfn++] = cur; if (!first) Log("device function table: %s CHANGED to %s - hooked again (in the function)", c->name, nm); return true; }
+    }
+    void *o = VtPatch(&vt[c->slot], c->hook);
+    if (o) { *c->orig = o; Log("device function table: %s %s (%s) - hooked in the table", c->name, first ? "hooked" : "CHANGED", nm); }
+    return true;
+}
 static void Device_Hook(IDirect3DDevice9 *dev)
 {
-    IDirect3DDevice9Vtbl *vt = (IDirect3DDevice9Vtbl *)dev->lpVtbl;
-    void *o;
-    if ((o = VtPatch((void **)&vt->CreateTexture, (void *)H_CreateTexture))) o_CreateTexture = (CreateTexture_t)o;
-    if ((o = VtPatch((void **)&vt->CreateVolumeTexture, (void *)H_CreateVolumeTexture))) o_CreateVolumeTexture = (CreateVolumeTexture_t)o;
-    if ((o = VtPatch((void **)&vt->CreateCubeTexture, (void *)H_CreateCubeTexture))) o_CreateCubeTexture = (CreateCubeTexture_t)o;
-    if ((o = VtPatch((void **)&vt->CreateVertexBuffer, (void *)H_CreateVertexBuffer))) o_CreateVertexBuffer = (CreateVertexBuffer_t)o;
-    if ((o = VtPatch((void **)&vt->CreateIndexBuffer, (void *)H_CreateIndexBuffer))) o_CreateIndexBuffer = (CreateIndexBuffer_t)o;
-    Log("device hooked: managed textures and buffers go to the default pool");
+    void **vt = *(void ***)dev;
+    g_d9mod = GetModuleHandleA("d3d9.dll");
+    CHook init[5] = { { 23, (void *)H_CreateTexture, (void **)&o_CreateTexture, { 0 }, 0, "CreateTexture" },
+                      { 24, (void *)H_CreateVolumeTexture, (void **)&o_CreateVolumeTexture, { 0 }, 0, "CreateVolumeTexture" },
+                      { 25, (void *)H_CreateCubeTexture, (void **)&o_CreateCubeTexture, { 0 }, 0, "CreateCubeTexture" },
+                      { 26, (void *)H_CreateVertexBuffer, (void **)&o_CreateVertexBuffer, { 0 }, 0, "CreateVertexBuffer" },
+                      { 27, (void *)H_CreateIndexBuffer, (void **)&o_CreateIndexBuffer, { 0 }, 0, "CreateIndexBuffer" } };
+    memcpy(g_ch, init, sizeof g_ch);
+    for (int k = 0; k < 5; k++) CH_Check(vt, &g_ch[k], true);
+    g_chInit = true;
+    Log("device hooked: managed textures and buffers go to the default pool (%s)", g_ch[3].nfn ? "hooked in the functions themselves" : "hooked in the function table");
+}
+/* (FNVR, every frame) the device's function table still leads here? returns how many entries had to be hooked again */
+__declspec(dllexport) int FNVRStereo_CheckDevice(IDirect3DDevice9 *dev)
+{
+    if (!g_chInit || !dev) return 0;
+    void **vt = *(void ***)dev; static void **lastVt = NULL; int n = 0;
+    if (lastVt && vt != lastVt) { char a[96], b[96]; ModName(lastVt, a, sizeof a); ModName(vt, b, sizeof b); Log("the device's function table was SWITCHED (%p %s -> %p %s)", (void *)lastVt, a, (void *)vt, b); }
+    lastVt = vt;
+    for (int k = 0; k < 5; k++) if (CH_Check(vt, &g_ch[k], false)) n++;
+    return n;
 }
 
 static const GUID kIID_D3D9Ex = { 0x02177241, 0x69fc, 0x400c, { 0x8f, 0xf1, 0x93, 0xa4, 0x4d, 0xf6, 0x86, 0x1d } };
