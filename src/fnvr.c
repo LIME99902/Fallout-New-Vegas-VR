@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.11 (the other hand's power fist is worn on that forearm - the exact mirror image of how the gun hand's sits on its forearm, drawn with your arms, your own hand and fingers moving inside it; its swing plays the weapon's swing sound and fires its piston; tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.12 (the left trigger on a weapon in the Pip-Boy's item list makes it your other hand's weapon again - the highlighted item is read from the game's own menu (the script function it used doesn't exist in New Vegas); the other hand's power fist is worn on that forearm - the exact mirror image of how the gun hand's sits on its forearm, drawn with your arms, your own hand and fingers moving inside it; its swing plays the weapon's swing sound and fires its piston; tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -14162,6 +14162,25 @@ static void LG_Tick(void)
    [Display] fLeftHudX / fLeftHudY */
 static void *g_lgAssign = NULL;
 static char g_lhud[3][96]; static bool g_lhudOn = false;
+/* the item highlighted in the Pip-Boy's item list, read from the game's own inventory menu: its item list box (+0xB8) holds
+   a list of (line, item) pairs and the highlighted line (+0x10); the item's base form is at +8 */
+static char *Inv_SelectedForm(void)
+{
+    const volatile bool *vis = (const volatile bool *)0x011F308F;
+    if (!vis[1002]) return NULL;
+    char *im = *(char **)0x011D9EA4;   /* (InventoryMenu) */
+    if (!im || IsBadReadPtr(im, 0xE8)) return NULL;
+    char *lb = im + 0xB8, *hl = *(char **)(lb + 0x10);
+    if (!hl) return NULL;
+    int n = 0;
+    for (char **nd = (char **)(lb + 4); nd && !IsBadReadPtr(nd, 8) && n < 4000; nd = (char **)nd[1], n++) {
+        char *it = nd[0]; if (!it || IsBadReadPtr(it, 8) || *(char **)it != hl) continue;
+        char *e = *(char **)(it + 4); if (!e || IsBadReadPtr(e, 12)) return NULL;
+        char *f = *(char **)(e + 8); if (!f || IsBadReadPtr(f, 0x100)) return NULL;
+        return f;
+    }
+    return NULL;
+}
 static void LG_DrawFromInventory(void *w, int rounds)
 {
     int mvH = g_leftHanded ? 1 : 0;
@@ -14179,18 +14198,22 @@ static void LHud_Tick(void)
     static void *sel = NULL, *res = NULL, *cnd = NULL, *putAway = NULL; static bool tried = false;
     if (!tried) {
         tried = true;
-        sel = g_scriptIntf->CompileScript("ref rWeap\nref rSel\nBegin Function { rWeap }\nlet rSel := GetActiveMenuSelection\nSetFunctionValue rSel\nEnd\n");
-        if (!sel) sel = g_scriptIntf->CompileScript("ref rWeap\nref rSel\nBegin Function { rWeap }\nset rSel to GetActiveMenuSelection\nSetFunctionValue rSel\nEnd\n");
+        /* (GetActiveMenuSelection doesn't exist in New Vegas - that's why the left trigger did nothing: the highlighted item is
+           read straight from the game's menu now (Inv_SelectedForm); JIP LN's GetSelectedItemRef is the fallback) */
+        sel = g_scriptIntf->CompileScript("ref rArg\nref rSel\nref rB\nBegin Function { rArg }\nlet rSel := GetSelectedItemRef\nif rSel\nlet rB := rSel.GetBaseObject\nendif\nSetFunctionValue rB\nEnd\n");
         res = g_scriptIntf->CompileScript("ref rWeap\nref rAmmo\nref rList\nint iVal\nint iN\nint iI\nBegin Function { rWeap }\nset iVal to 0\nset rList to GetWeaponAmmo rWeap\nif rList\nset iN to 0\nif GetType rList == 85\nset iN to ListGetCount rList\nendif\nif iN == 0\nset iVal to player.GetItemCount rList\nelse\nset iI to 0\nwhile iI < iN\nset rAmmo to ListGetNthForm rList iI\nset iVal to iVal + player.GetItemCount rAmmo\nset iI to iI + 1\nloop\nendif\nendif\nSetFunctionValue iVal\nEnd\n");
         if (!res) res = g_scriptIntf->CompileScript("ref rWeap\nref rAmmo\nint iVal\nBegin Function { rWeap }\nset iVal to 0\nset rAmmo to GetWeaponAmmo rWeap\nif rAmmo\nset iVal to player.GetItemCount rAmmo\nendif\nSetFunctionValue iVal\nEnd\n");
         cnd = g_scriptIntf->CompileScript("ref rR\nref rB\nfloat fC\nfloat fM\nBegin Function { rR }\nset rB to rR.GetBaseObject\nset fM to GetHealth rB\nset fC to rR.GetCurrentHealth\nif fM > 0\nset fC to fC / fM * 100\nelse\nset fC to 100\nendif\nSetFunctionValue fC\nEnd\n");
         putAway = g_scriptIntf->CompileScript("ref rR\nBegin Function { rR }\nrR.Activate player\nEnd\n");
-        Log("Other hand's weapon: Pip-Boy pick %s, ammo readout %s, condition %s", sel ? "ok" : "FAILED", res ? "ok" : "FAILED", cnd ? "ok" : "FAILED");
+        Log("Other hand's weapon: Pip-Boy pick from the game's menu%s, ammo readout %s, condition %s", sel ? " (JIP fallback ok)" : "", res ? "ok" : "FAILED", cnd ? "ok" : "FAILED");
     }
     int mvH = g_leftHanded ? 1 : 0;
     if (g_lgAssignReq) {   /* the left trigger on a Pip-Boy item */
         g_lgAssignReq = false;
-        char *w = sel ? Scr_Ref(sel, GetPlayer()) : NULL;
+        char *w = Inv_SelectedForm(); const char *how = "the game's menu";
+        if (!w && sel) { w = Scr_Ref(sel, GetPlayer()); how = "JIP's GetSelectedItemRef"; }
+        if (!w) { Log("Other hand's weapon: left trigger in the Pip-Boy, but no highlighted item was found (item list %s)", ((const volatile bool *)0x011F308F)[1002] ? "open" : "not open"); UIMessage("Highlight a weapon in the Pip-Boy's item list, then pull the LEFT trigger"); }
+        else { static int nl = 0; if (nl++ < 5) Log("Other hand's weapon: left trigger on %08X (form type %02X, found through %s)", *(uint32_t *)(w + 0x0C), *(BYTE *)(w + 4), how); }
         int t = (w && !IsBadReadPtr(w, 0x100) && *(BYTE *)(w + 4) == 0x28) ? *(BYTE *)(w + 0xF4) : -1;
         const char *nm = (t >= 0 && *(const char **)(w + 0x34) && !IsBadStringPtrA(*(const char **)(w + 0x34), 64)) ? *(const char **)(w + 0x34) : "";
         if (t >= 0 && t <= 9) {
