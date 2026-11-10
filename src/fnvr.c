@@ -6043,6 +6043,7 @@ static int PrologueLen(const BYTE *p)
         else if (q[0] >= 0x50 && q[0] <= 0x57) n += 1;                  /* push reg */
         else if (q[0] == 0x8B && q[1] == 0x45) n += 3;                  /* mov eax,[ebp+d8] */
         else if (q[0] == 0x83 && q[1] == 0xE4) n += 3;                  /* and esp,imm8 */
+        else if (q[0] == 0xA1) n += 5;                                  /* mov eax,[abs32] */
         else return 0;
     }
     return n;
@@ -6083,7 +6084,7 @@ static void *HookExport(HMODULE m, const char *name, void *hook)
    before that - so the (not infinitely far) dome slid against the world when you leaned, and each eye saw it at a
    slightly different spot. Each time the game sets up a sky piece for drawing (SkyShader::SetupGeometry), the piece is
    moved by exactly the camera's offset for that upload and put back after; nothing else moves.
-   (Approach from a FNVVRMC contributor.) [Display] bSkyFollowsHead */
+   (Approach and the hook address from debtripper1's PR #4.) [Display] bSkyFollowsHead */
 #define SKY_SETUP_ADDR 0x00B89D80
 #define RENDER_PASS_GEOM 0x011F91E0
 static bool g_skyFix = true; static char *g_skyCam = NULL; static float g_skyBase[3];
@@ -6093,7 +6094,8 @@ static void __cdecl Sky_Pre(void)
 {
     g_skyMoved = false;
     char *cam = g_skyCam; if (!cam) return;
-    char *geom = *(char **)RENDER_PASS_GEOM; if (!geom || IsBadReadPtr(geom, 0x9C)) return;
+    char *pass = *(char **)RENDER_PASS_GEOM; if (!pass || IsBadReadPtr(pass, 4)) return;
+    char *geom = *(char **)pass; if (!geom || IsBadReadPtr(geom, 0x9C)) return;   /* (the render pass's geometry) */
     const float *ct = (const float *)(cam + NIAV_WORLD_TRANSLATE); float off[3];
     for (int i = 0; i < 3; i++) off[i] = ct[i] - g_skyBase[i];
     if (fabsf(off[0]) + fabsf(off[1]) + fabsf(off[2]) < 0.01f || V3Len(off) > 500.0f) return;
