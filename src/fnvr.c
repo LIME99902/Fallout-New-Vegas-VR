@@ -18918,6 +18918,22 @@ static LONG CALLBACK CrashNote(EXCEPTION_POINTERS *ep)
         }
         Log("CRASH?   stack:%s", line);
     }
+    {   /* more to go on: the code just before where it came from, what the registers point at, the top of the stack */
+        CONTEXT *c = ep->ContextRecord; char line[400];
+        uintptr_t *sp = (uintptr_t *)c->Esp; int shown = 0;
+        for (int i = 0; i < 64 && shown < 3 && !IsBadReadPtr(sp + i, 4); i++) {
+            uintptr_t r = sp[i]; if (r < 0x401000 || r > 0x1100000 || IsBadReadPtr((void *)(r - 24), 28)) continue;
+            int L = 0; L += snprintf(line + L, sizeof line - L, "code before %08lX:", (unsigned long)r);
+            for (int k = 24; k > 0; k--) L += snprintf(line + L, sizeof line - L, " %02X", ((BYTE *)r)[-k]);
+            Log("CRASH?   %s", line); shown++;
+        }
+        const DWORD regs[4] = { c->Ecx, c->Esi, c->Ebp, c->Ebx }; static const char *const rn[4] = { "ecx", "esi", "ebp", "ebx" };
+        for (int k = 0; k < 4; k++) { const DWORD *q = (const DWORD *)(uintptr_t)regs[k];
+            if (!q || IsBadReadPtr(q, 32)) continue;
+            Log("CRASH?   [%s] %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX", rn[k], (unsigned long)q[0], (unsigned long)q[1], (unsigned long)q[2], (unsigned long)q[3], (unsigned long)q[4], (unsigned long)q[5], (unsigned long)q[6], (unsigned long)q[7]); }
+        if (!IsBadReadPtr(sp, 48)) Log("CRASH?   esp %08lX: %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX %08lX", (unsigned long)c->Esp,
+            (unsigned long)sp[0], (unsigned long)sp[1], (unsigned long)sp[2], (unsigned long)sp[3], (unsigned long)sp[4], (unsigned long)sp[5], (unsigned long)sp[6], (unsigned long)sp[7], (unsigned long)sp[8], (unsigned long)sp[9], (unsigned long)sp[10], (unsigned long)sp[11]);
+    }
     return EXCEPTION_CONTINUE_SEARCH;
 }
 static DWORD WINAPI WatchdogThread(LPVOID unused)
