@@ -156,20 +156,48 @@ static HRESULT WINAPI H_CreateCubeTexture(IDirect3DDevice9 *d, UINT e, UINT lv, 
     else { InterlockedIncrement(&g_nConv); Stats(); if (t && *t) { DESC_HOOK(*t, IDirect3DCubeTexture9Vtbl, GetLevelDesc, H_CubeLevelDesc, o_CubeLevelDesc, CubeLevelDesc_t); Tag_Set((IDirect3DResource9 *)*t, us); } }
     return hr;
 }
+/* The game's renderer doesn't check whether making a vertex buffer worked - on a failure it goes on with whatever was on
+   the stack and crashes later. So every vertex / index buffer it asks for is made somehow: a zero-length one is made a
+   little one (other Direct3D 9 versions allow that), and if Windows refuses one it's tried again with fewer demands. */
+static HRESULT VB_Make(IDirect3DDevice9 *d, UINT len, DWORD us, DWORD fvf, D3DPOOL pool, IDirect3DVertexBuffer9 **b, HANDLE *sh, bool *conv)
+{
+    if (len == 0) { len = 64; static int z = 0; if (z++ < 5) Log("vertex buffer asked for with no size - made 64 bytes"); }
+    *conv = false;
+    HRESULT hr;
+    if (pool == D3DPOOL_MANAGED) { hr = o_CreateVertexBuffer(d, len, us | D3DUSAGE_DYNAMIC, fvf, D3DPOOL_DEFAULT, b, sh); if (SUCCEEDED(hr)) { *conv = true; return hr; } }
+    else { hr = o_CreateVertexBuffer(d, len, us, fvf, pool, b, sh); if (SUCCEEDED(hr)) return hr; }
+    HRESULT first = hr;
+    DWORD u2 = us & ~(DWORD)D3DUSAGE_SOFTWAREPROCESSING;
+    D3DPOOL p2 = pool == D3DPOOL_MANAGED ? D3DPOOL_DEFAULT : pool;
+    hr = o_CreateVertexBuffer(d, len, u2 | (pool == D3DPOOL_MANAGED ? D3DUSAGE_DYNAMIC : 0), fvf, p2, b, sh);
+    if (FAILED(hr)) hr = o_CreateVertexBuffer(d, len, u2, 0, p2, b, sh);
+    if (FAILED(hr)) hr = o_CreateVertexBuffer(d, len, u2 & ~(DWORD)D3DUSAGE_WRITEONLY, 0, D3DPOOL_SYSTEMMEM, b, sh);
+    if (InterlockedIncrement(&g_nFail) < 30) Log("vertex buffer %u bytes (usage %08lX, fvf %08lX, pool %d) refused (%08lX) - %s", len, (unsigned long)us, (unsigned long)fvf, (int)pool, (unsigned long)first, SUCCEEDED(hr) ? "made with fewer demands" : "couldn't be made at all");
+    if (SUCCEEDED(hr) && pool == D3DPOOL_MANAGED) *conv = true;
+    return hr;
+}
 static HRESULT WINAPI H_CreateVertexBuffer(IDirect3DDevice9 *d, UINT len, DWORD us, DWORD fvf, D3DPOOL pool, IDirect3DVertexBuffer9 **b, HANDLE *sh)
 {
-    if (pool != D3DPOOL_MANAGED) return o_CreateVertexBuffer(d, len, us, fvf, pool, b, sh);
-    HRESULT hr = o_CreateVertexBuffer(d, len, us | D3DUSAGE_DYNAMIC, fvf, D3DPOOL_DEFAULT, b, sh);
-    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("vertex buffer %u bytes couldn't be made: %08lX", len, (unsigned long)hr); }
-    else { InterlockedIncrement(&g_nConv); Stats(); if (b && *b) { DESC_HOOK(*b, IDirect3DVertexBuffer9Vtbl, GetDesc, H_VBGetDesc, o_VBGetDesc, VBGetDesc_t); Tag_Set((IDirect3DResource9 *)*b, us); } }
+    if (b) *b = NULL;
+    bool conv; HRESULT hr = VB_Make(d, len, us, fvf, pool, b, sh, &conv);
+    if (SUCCEEDED(hr) && conv) { InterlockedIncrement(&g_nConv); Stats(); if (b && *b) { DESC_HOOK(*b, IDirect3DVertexBuffer9Vtbl, GetDesc, H_VBGetDesc, o_VBGetDesc, VBGetDesc_t); Tag_Set((IDirect3DResource9 *)*b, us); } }
     return hr;
 }
 static HRESULT WINAPI H_CreateIndexBuffer(IDirect3DDevice9 *d, UINT len, DWORD us, D3DFORMAT f, D3DPOOL pool, IDirect3DIndexBuffer9 **b, HANDLE *sh)
 {
-    if (pool != D3DPOOL_MANAGED) return o_CreateIndexBuffer(d, len, us, f, pool, b, sh);
-    HRESULT hr = o_CreateIndexBuffer(d, len, us | D3DUSAGE_DYNAMIC, f, D3DPOOL_DEFAULT, b, sh);
-    if (FAILED(hr)) { if (InterlockedIncrement(&g_nFail) < 20) Log("index buffer %u bytes couldn't be made: %08lX", len, (unsigned long)hr); }
-    else { InterlockedIncrement(&g_nConv); Stats(); if (b && *b) { DESC_HOOK(*b, IDirect3DIndexBuffer9Vtbl, GetDesc, H_IBGetDesc, o_IBGetDesc, IBGetDesc_t); Tag_Set((IDirect3DResource9 *)*b, us); } }
+    if (b) *b = NULL;
+    if (len == 0) { len = 64; static int z = 0; if (z++ < 5) Log("index buffer asked for with no size - made 64 bytes"); }
+    bool conv = false; HRESULT hr;
+    if (pool == D3DPOOL_MANAGED) { hr = o_CreateIndexBuffer(d, len, us | D3DUSAGE_DYNAMIC, f, D3DPOOL_DEFAULT, b, sh); conv = SUCCEEDED(hr); }
+    else hr = o_CreateIndexBuffer(d, len, us, f, pool, b, sh);
+    if (FAILED(hr)) {
+        HRESULT first = hr; DWORD u2 = us & ~(DWORD)D3DUSAGE_SOFTWAREPROCESSING; D3DPOOL p2 = pool == D3DPOOL_MANAGED ? D3DPOOL_DEFAULT : pool;
+        hr = o_CreateIndexBuffer(d, len, u2 | (pool == D3DPOOL_MANAGED ? D3DUSAGE_DYNAMIC : 0), f, p2, b, sh);
+        if (FAILED(hr)) hr = o_CreateIndexBuffer(d, len, u2 & ~(DWORD)D3DUSAGE_WRITEONLY, f, D3DPOOL_SYSTEMMEM, b, sh);
+        conv = SUCCEEDED(hr) && pool == D3DPOOL_MANAGED;
+        if (InterlockedIncrement(&g_nFail) < 30) Log("index buffer %u bytes (usage %08lX, pool %d) refused (%08lX) - %s", len, (unsigned long)us, (int)pool, (unsigned long)first, SUCCEEDED(hr) ? "made with fewer demands" : "couldn't be made at all");
+    }
+    if (SUCCEEDED(hr) && conv) { InterlockedIncrement(&g_nConv); Stats(); if (b && *b) { DESC_HOOK(*b, IDirect3DIndexBuffer9Vtbl, GetDesc, H_IBGetDesc, o_IBGetDesc, IBGetDesc_t); Tag_Set((IDirect3DResource9 *)*b, us); } }
     return hr;
 }
 static void Device_Hook(IDirect3DDevice9 *dev)
