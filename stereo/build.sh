@@ -7,3 +7,4 @@ mkdir -p out/Stereo/x64
 $TC/i686-w64-mingw32-gcc -O2 -Wall -Wextra -Wno-unused-label -shared -static -s -Wl,--kill-at -o out/Stereo/openvr_api.dll vrproxy.c -ld3d11 -ldxgi -ldxguid -luuid
 $TC/x86_64-w64-mingw32-gcc -O2 -Wall -Wextra -mwindows -static -s -o out/Stereo/x64/FNVR-VRHost.exe vrhost.c -ld3d11 -ldxgi -ldxguid -luuid
 cp /home/claude/valvesoftware/openvr/bin/win64/openvr_api.dll out/Stereo/x64/openvr_api.dll
+$TC/i686-w64-mingw32-gcc -O2 -Wall -Wextra -shared -static -s -Wl,--kill-at -o out/FNVRStereo.dll fnvrstereo.c

@@ -284,6 +284,23 @@ __declspec(dllexport) intptr_t VR_GetGenericInterface(const char *ver, EVRInitEr
     Log("interface %s isn't passed to the host", ver ? ver : "?");
     if (err) *err = EVRInitError_VRInitError_Init_InterfaceNotFound; return 0;
 }
+/* FNVR's zero copy: a Direct3D 9Ex shared picture (already finished on the GPU) for one eye */
+__declspec(dllexport) uint32_t FNVRStereo_SubmitShared9(int eye, uint64_t handle, uint32_t w, uint32_t h, const VRTextureBounds_t *b, const HmdMatrix34_t *pose)
+{
+    int32_t err = EVRCompositorError_VRCompositorError_InvalidTexture;
+    if (!g_ipc || g_dead || !handle) return (uint32_t)err;
+    IpcTex it; memset(&it, 0, sizeof it); it.shared = handle; it.type = ETextureType_TextureType_DirectX; it.colorSpace = EColorSpace_ColorSpace_Gamma; it.w = w; it.h = h; it.fmt = 87;
+    HmdMatrix34_t p; memset(&p, 0, sizeof p); if (pose) p = *pose;
+    EnterCriticalSection(&g_cs);
+    int32_t e32 = eye, f32 = pose ? EVRSubmitFlags_Submit_TextureWithPose : 0, hasB = b ? 1 : 0; uint8_t *in = g_ipc->in;
+    memcpy(in, &e32, 4); memcpy(in + 4, &f32, 4); memcpy(in + 8, &it, sizeof it); memcpy(in + 8 + sizeof it, &hasB, 4);
+    if (b) memcpy(in + 12 + sizeof it, b, sizeof *b);
+    memcpy(in + 12 + sizeof it + sizeof(VRTextureBounds_t), &p, sizeof p);
+    if (Call(C_SUBMIT, 2000)) memcpy(&err, g_ipc->out, 4);
+    LeaveCriticalSection(&g_cs);
+    static bool said = false; if (!said) { said = true; Log("zero copy: Direct3D 9Ex pictures submitted straight from the game's GPU memory"); }
+    return (uint32_t)err;
+}
 __declspec(dllexport) bool VR_IsRuntimeInstalled(void) { return true; }
 __declspec(dllexport) bool VR_IsHmdPresent(void) { return true; }
 __declspec(dllexport) bool VR_IsInterfaceVersionValid(const char *v) { (void)v; return true; }

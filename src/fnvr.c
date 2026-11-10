@@ -31,7 +31,7 @@
 #include "openvr_capi.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.4.1 (pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.5.0 (FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -209,6 +209,9 @@ static bool g_matchHeadsetFov = true;
 static bool g_asyncCapture;
 static bool  g_stereo = true;
 static bool  g_stereoFull = false;
+/* Fast alternate eyes: the headset waits only after the right eye, so the left-eye frame runs straight on - a pair of
+   eyes per headset refresh (90+ pairs a second at 90 Hz) instead of one eye. [Stereo] bFastAlternate */
+static bool  g_fastAer = true; static int g_aerDrewEye = -1;   /* (the eye this frame drew, -1 none) */
 static bool  g_fullPipNow = false, g_fullPipSlow = false;   /* full 3D with the Pip-Boy open; it was too slow once */   /* INI [Stereo] bFullStereo: both eyes drawn every frame (real 3D, twice the drawing) */
 static float g_unitsPerMeter = 70.0f;   /* game units per real-world meter (world scale) */
 static float g_menuScreenFov = 90.0f;
@@ -657,6 +660,7 @@ static void LoadSettings(void)
     g_asyncCapture = GetPrivateProfileIntA("Display", "bAsyncCapture", 1, g_iniPath) != 0;
     g_stereo = GetPrivateProfileIntA("Stereo", "bStereo", 0, g_iniPath) != 0;
     g_stereoFull = GetPrivateProfileIntA("Stereo", "bFullStereo", 0, g_iniPath) != 0;
+    g_fastAer = GetPrivateProfileIntA("Stereo", "bFastAlternate", 1, g_iniPath) != 0;
     g_motionControls = GetPrivateProfileIntA("Controls", "bMotionControls", 1, g_iniPath) != 0;
     g_handAim = GetPrivateProfileIntA("Controls", "bHandAim", 1, g_iniPath) != 0;
     g_leftHanded = GetPrivateProfileIntA("Controls", "bLeftHanded", 0, g_iniPath) != 0;
@@ -2848,6 +2852,7 @@ typedef struct {
     bool filling;              /* being captured this frame */
     bool pending;
     DWORD seq;
+    int  zc[2];                /* zero copy: which shared picture each image went into */
 } CapSlot;
 static CapSlot g_slots[NSLOTS];
 static CapSlot *g_fillSlot = NULL;
@@ -2876,6 +2881,7 @@ static void TF_Release9(void);
 static void Rec_Release9(void);
 static void Far_UiTick(void);
 static void Holster_Tick(void);
+static void ZC_Release(void);
 static void Display_Release9(void)
 {
     Scope_Release();
@@ -2887,6 +2893,7 @@ static void Display_Release9(void)
     TF_Release9();
     Rec_Release9();
     Release9(&g_resolveSurf);
+    ZC_Release();
     for (int i = 0; i < NSLOTS; i++) {
         for (int e = 0; e < 2; e++) { Release9(&g_slots[i].rt[e]); Release9(&g_slots[i].sys[e]); }
         g_slots[i].filling = false;
@@ -3244,8 +3251,82 @@ static void SaveBMP(const char *name, const BYTE *bits, int pitch, int w, int h)
     Log("Saved diagnostic snapshot %s (%dx%d)", path, w, h);
 }
 
+
+/* ---- Zero copy (FNVR Stereo with Direct3D 9Ex) ---------------------------------------------------------------------------
+   When FNVRStereo.dll made the game's device a Direct3D 9Ex one and OpenVR runs in FNVR-VRHost.exe, each eye picture is
+   scaled straight into a shared texture that the host opens on its own D3D11 device: the copy from the graphics card to
+   the CPU and back (the slowest part of getting the picture to the headset) is gone. [Stereo] bZeroCopy */
+#define ZC_N 6
+static const GUID kIID_D3D9DevEx = { 0xb18b10ce, 0x2649, 0x405a, { 0x87, 0x0f, 0x95, 0xf7, 0x77, 0xd4, 0x31, 0x3a } };
+typedef uint32_t (*SubmitShared9_t)(int eye, uint64_t handle, uint32_t w, uint32_t h, const VRTextureBounds_t *b, const HmdMatrix34_t *pose);
+static int g_zc = -1;   /* -1 not decided, 0 off, 1 on */
+static SubmitShared9_t p_SubmitShared9;
+static struct { IDirect3DTexture9 *tex; IDirect3DSurface9 *surf; HANDLE h; UINT w, hgt; } g_zcImg[ZC_N];
+static int g_zcNext = 0, g_zcEye[2] = { -1, -1 }; static HmdMatrix34_t g_zcPose[2]; static bool g_zcMono = true;
+static void ZC_Release(void)
+{
+    for (int i = 0; i < ZC_N; i++) { if (g_zcImg[i].surf) IDirect3DSurface9_Release(g_zcImg[i].surf); if (g_zcImg[i].tex) IDirect3DTexture9_Release(g_zcImg[i].tex); memset(&g_zcImg[i], 0, sizeof g_zcImg[i]); }
+    g_zcEye[0] = g_zcEye[1] = -1;
+}
+static bool ZC_Decide(IDirect3DDevice9 *dev)
+{
+    if (g_zc >= 0) return g_zc == 1;
+    g_zc = 0;
+    if (!GetPrivateProfileIntA("Stereo", "bZeroCopy", 1, g_iniPath)) { Log("Zero copy: off ([Stereo] bZeroCopy=0)"); return false; }
+    IDirect3DDevice9Ex *ex = NULL;
+    if (FAILED(IDirect3DDevice9_QueryInterface(dev, &kIID_D3D9DevEx, (void **)&ex)) || !ex) { Log("Zero copy: off - the game's device is plain Direct3D 9 (FNVRStereo.dll makes it 9Ex; see FNVRStereo.log)"); return false; }
+    IDirect3DDevice9Ex_Release(ex);
+    p_SubmitShared9 = g_ovrDll ? (SubmitShared9_t)GetProcAddress(g_ovrDll, "FNVRStereo_SubmitShared9") : NULL;
+    if (!p_SubmitShared9) { Log("Zero copy: off - OpenVR isn't running in FNVR-VRHost.exe"); return false; }
+    g_zc = 1; Log("Zero copy: ON - eye pictures go to the headset as shared textures (no copy through the CPU)");
+    return true;
+}
+static int ZC_Take(IDirect3DDevice9 *dev)
+{
+    int i = g_zcNext; g_zcNext = (g_zcNext + 1) % ZC_N;
+    if (g_zcImg[i].tex && (g_zcImg[i].w != g_eyeW || g_zcImg[i].hgt != g_eyeH)) { IDirect3DSurface9_Release(g_zcImg[i].surf); IDirect3DTexture9_Release(g_zcImg[i].tex); memset(&g_zcImg[i], 0, sizeof g_zcImg[i]); }
+    if (!g_zcImg[i].tex) {
+        HANDLE h = NULL;
+        HRESULT hr = IDirect3DDevice9_CreateTexture(dev, g_eyeW, g_eyeH, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &g_zcImg[i].tex, &h);
+        if (FAILED(hr) || !g_zcImg[i].tex || !h) { Log("Zero copy: couldn't make a shared %ux%u picture (%08lX) - back to the CPU copy", g_eyeW, g_eyeH, (unsigned long)hr); g_zc = 0; ZC_Release(); return -1; }
+        IDirect3DTexture9_GetSurfaceLevel(g_zcImg[i].tex, 0, &g_zcImg[i].surf);
+        g_zcImg[i].h = h; g_zcImg[i].w = g_eyeW; g_zcImg[i].hgt = g_eyeH;
+        if (i == 0) Log("Zero copy: shared pictures %ux%u", g_eyeW, g_eyeH);
+    }
+    return i;
+}
+/* (in Capture_Eye: the scaled picture straight into a shared texture) */
+static bool ZC_Capture(IDirect3DDevice9 *dev, IDirect3DSurface9 *source, CapSlot *slot, int eye)
+{
+    int i = ZC_Take(dev); if (i < 0) return false;
+    IDirect3DDevice9_ColorFill(dev, g_zcImg[i].surf, NULL, D3DCOLOR_ARGB(255, 0, 0, 0));
+    RECT dst = { (LONG)slot->dx, (LONG)slot->dy, (LONG)(slot->dx + slot->dw), (LONG)(slot->dy + slot->dh) };
+    HRESULT hr = IDirect3DDevice9_StretchRect(dev, source, &slot->src, g_zcImg[i].surf, &dst, D3DTEXF_LINEAR);
+    if (FAILED(hr)) { Log("Zero copy: StretchRect failed (%08lX) - back to the CPU copy", (unsigned long)hr); g_zc = 0; return false; }
+    slot->zc[eye] = i; slot->eyes = eye + 1;
+    return true;
+}
+/* (when the slot's GPU work is done: these pictures are now the latest for their eyes) */
+static void ZC_Upload(CapSlot *slot)
+{
+    if (slot->eyes < 1) return;
+    if (slot->targetEye == 2 && slot->eyes >= 2) { g_zcEye[0] = slot->zc[0]; g_zcEye[1] = slot->zc[1]; g_zcPose[0] = g_zcPose[1] = slot->pose; g_zcMono = false; }
+    else if (slot->targetEye < 0 || slot->targetEye == 2) { g_zcEye[0] = g_zcEye[1] = slot->zc[0]; g_zcPose[0] = g_zcPose[1] = slot->pose; g_zcMono = true; }
+    else { g_zcEye[slot->targetEye] = slot->zc[0]; g_zcPose[slot->targetEye] = slot->pose; g_zcMono = false; if (g_zcEye[slot->targetEye ^ 1] < 0) g_zcEye[slot->targetEye ^ 1] = slot->zc[0]; }
+    g_haveEyeImage = true;
+}
+static void ZC_Submit(void)
+{
+    for (int e = 0; e < 2; e++) {
+        int i = g_zcEye[e]; if (i < 0 || !g_zcImg[i].h) return;
+        uint32_t ce = p_SubmitShared9(e, (uint64_t)(uintptr_t)g_zcImg[i].h, g_zcImg[i].w, g_zcImg[i].hgt, &g_bounds[e], &g_zcPose[e]);
+        if (ce) { static int n = 0; if (n++ < 10) Log("Zero copy: submit eye %d - compositor error %u", e, ce); return; }
+    }
+    g_submitsSinceLog++;
+}
 static void Capture_Upload(CapSlot *slot)
 {
+    if (g_zc == 1) { ZC_Upload(slot); return; }
     static const float black[4] = { 0, 0, 0, 1 };
     if (slot->eyes < 1 || !slot->sys[0]) return;
     if (slot->targetEye == 2) {   /* full 3D: both eyes drawn this frame */
@@ -3324,6 +3405,7 @@ static void Capture_Collect(bool wait)
 static void Display_Submit(void)
 {
     if (!g_haveEyeImage) return;
+    if (g_zc == 1) { ZC_Submit(); return; }
     bool stereo = !g_monoImage && g_haveEye[0] && g_haveEye[1];
     for (int e = 0; e < 2; e++) {
         int src = stereo ? e : 0;
@@ -3477,6 +3559,11 @@ static bool Capture_Eye_(IDirect3DDevice9 *dev, int eye)
         source = g_resolveSurf;
     }
 
+    if (ZC_Decide(dev)) {   /* zero copy: straight into a shared picture */
+        bool ok = ZC_Capture(dev, source, slot, eye);
+        if (ok || g_zc == 1) { IDirect3DSurface9_Release(bb); return ok; }
+        /* (it just failed: the CPU copy, from now on) */
+    }
     /* Make sure this slot's surfaces are big enough. */
     if (slot->w < slot->dw || slot->h < slot->dh) {
         /* Only reallocate when the frame got bigger - and only at the start of a frame, so an
@@ -3529,6 +3616,7 @@ static void Capture_FinishAndSubmit_(IDirect3DDevice9 *dev)
         }
     }
     Capture_Collect(!g_asyncCapture);
+    if (g_fastAer && g_aerDrewEye == 0) return;   /* (fast alternate: the pair goes to the headset after the right eye) */
     Display_Submit();
 }
 
@@ -5509,6 +5597,20 @@ static void Display_WaitForNextFrame(void)
     if (!HeadsetDisplayActive()) return;
     TrackedDevicePose_t poses[16];
     static double lastEnd = 0;
+    int drew = g_aerDrewEye; g_aerDrewEye = -1;
+    if (g_fastAer && drew == 0 && g_vrSystem) {   /* fast alternate: the left eye's frame doesn't wait - the right eye draws at once */
+        static float hz = 0, v2p = 0.011f; static int got = 0;
+        if (!got++) { hz = g_vrSystem->GetFloatTrackedDeviceProperty(0, ETrackedDeviceProperty_Prop_DisplayFrequency_Float, NULL);
+                      float v = g_vrSystem->GetFloatTrackedDeviceProperty(0, ETrackedDeviceProperty_Prop_SecondsFromVsyncToPhotons_Float, NULL); if (v > 0 && v < 0.05f) v2p = v;
+                      Log("Fast alternate eyes: on - the headset waits once per pair of eyes (%.0f Hz, %.1f ms vsync to photons)", hz, v2p * 1000.0f); }
+        float frame = hz > 1 ? 1.0f / hz : 1.0f / 90.0f, since = 0; uint64_t fc = 0;
+        if (!g_vrSystem->GetTimeSinceLastVsync || !g_vrSystem->GetTimeSinceLastVsync(&since, &fc)) since = 0;
+        float predict = (frame - since) + frame + v2p;   /* (this pair shows at the refresh after the right eye is done) */
+        if (predict < 0) predict = 0; if (predict > 0.1f) predict = 0.1f;
+        g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, predict, poses, 16);
+        memcpy(g_waitPoses, poses, sizeof poses); g_waitPose = poses[0]; g_haveWaitPose = poses[0].bPoseIsValid;
+        return;
+    }
     double w0 = QpcMs();
     EVRCompositorError ce = g_vrCompositor->WaitGetPoses(poses, 16, NULL, 0);
     double w1 = QpcMs();
@@ -15377,6 +15479,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
     }
     bool ok = Capture_Eye(dev, 0);
     if (ok && g_fillSlot) g_fillSlot->targetEye = eye;
+    g_aerDrewEye = ok ? eye : -1;
     for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
     g_aerEye ^= 1;
     g_stereoCapturedThisFrame = ok;
@@ -17049,6 +17152,22 @@ enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_AD
 /* ---- Setup check: is everything FNVVRMC needs actually loaded? (shown first on the startup screen, and in the log) ---- */
 static char g_reqLabel[96] = "Setup check", g_reqDesc[700] = "Checking what's installed...";
 static int  g_reqMissing = 0;
+/* Fast alternate eyes need the game's clock to follow real time at 180+ frames a second. New Vegas Tick Fix (NVTF) treats
+   any frame faster than its iMaxFPSTolerance (59 by default) as that long - above it the game would run in fast motion -
+   so FNVR raises it (once; NVTF reads it at start, so the game needs one restart). [Stereo] bAdjustNVTF */
+static void NVTF_Check(void)
+{
+    if (!g_stereo || g_stereoFull || !g_fastAer) return;
+    char ini[MAX_PATH]; snprintf(ini, sizeof ini, "%sNVTF.ini", g_pluginDir);
+    if (GetFileAttributesA(ini) == INVALID_FILE_ATTRIBUTES) { Log("Fast alternate eyes: NVTF.ini not found - can't check the game clock's frame limit"); return; }
+    int fix = GetPrivateProfileIntA("GTC", "bFPSFix", 0, ini), tol = GetPrivateProfileIntA("FPSFix", "iMaxFPSTolerance", 59, ini);
+    if (!fix) { Log("Fast alternate eyes: NVTF's frame-time fix is off - the game clock follows real time as it is"); return; }
+    if (tol >= 200) { Log("Fast alternate eyes: NVTF allows %d frames a second - fine", tol); return; }
+    if (!GetPrivateProfileIntA("Stereo", "bAdjustNVTF", 1, g_iniPath)) { Log("Fast alternate eyes: NVTF's iMaxFPSTolerance is %d - above that many frames a second the game runs in fast motion (raise it to 240 in NVTF.ini)", tol); return; }
+    WritePrivateProfileStringA("FPSFix", "iMaxFPSTolerance", "240", ini);
+    char was[16]; snprintf(was, sizeof was, "%d", tol); WritePrivateProfileStringA("FPSFix", "iMaxFPSTolerance_BeforeFNVR", was, ini);
+    Log("Fast alternate eyes: NVTF's iMaxFPSTolerance raised from %d to 240 (the game clock now follows real time up to 240 frames a second) - restart the game once for it to apply", tol);
+}
 static void Req_Check(void)
 {
     static const struct { const char *dll, *name, *why; bool must; } R[] = {
@@ -18413,6 +18532,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
     switch (msg->type) {
     case kMessage_DeferredInit:
         Req_Check();   /* (is everything FNVVRMC needs loaded?) */
+        NVTF_Check();
         InstallShaderCache();
         InstallD3D9Hooks();
         InstallRenderHook();
