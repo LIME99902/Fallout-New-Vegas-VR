@@ -14164,7 +14164,7 @@ static void Full3D_Hint(double now, double dt)
     Log("Full 3D: %.0f frames a second over 20 s of play (headset %.0f Hz)", fps, hz);
     if (hz > 1 && fps < hz * 0.75f) {
         char m[200]; snprintf(m, sizeof m, "FNVR: full 3D runs at %.0f FPS here (headset %.0f Hz). Smoother: lower PC power, or 3D view: Alternating (FNVR menu > Display)", fps, hz);
-        UIMessage(m);
+        if (g_gameOk) QueueUIMessage(m, 0, NULL, NULL, 8.0f, false);
     }
 }
 static void Fps_Tick(void)
