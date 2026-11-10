@@ -549,6 +549,7 @@ static const int g_liveMenuIds[] = { /* (1001 message boxes: not live - their OK
                                      1053 /* barter */, 1058 /* repair services */, 1061 /* weapon mods */, 1075 /* companion wheel */, 1077 /* crafting */ };
 static bool g_liveBlocked = false; static int g_liveBlockId = 0;   /* (another, non-live menu is up) */
 static bool MsgBox_PressFirst(void); static int MsgBox_Buttons(void);   /* (a pop-up message's buttons: one OK button = it can stay live) */
+static double g_mbZeroSince = 0; static bool g_mbNotLive = false;   /* (a pop-up with no button found yet: since when; made a normal pop-up) */
 static bool g_liveMsgBoxes = true;  /* [Display] bLiveMessages: pop-ups with just an OK (reputation, notes) stay live too */
 static bool LiveMenu_Check(void)
 {
@@ -560,7 +561,8 @@ static bool LiveMenu_Check(void)
         if (!v[id] || id == 1004 /* HUD */ || id > 1084 /* (menus added by other mods - HUD editors and the like - aren't menus you're in) */) continue;
         bool live = false;
         for (unsigned k = 0; k < sizeof g_liveMenuIds / sizeof g_liveMenuIds[0]; k++) if (g_liveMenuIds[k] == id) live = true;
-        if (id == 1001 && g_liveMsgBoxes && MsgBox_Buttons() <= 1) live = true;   /* (or no button found: the game takes A itself) */   /* (a message with only OK: A presses it) */
+        if (id == 1001 && g_liveMsgBoxes && !g_mbNotLive) { int nb = MsgBox_Buttons();
+            if (nb == 1 || (nb == 0 && g_mbZeroSince > 0 && QpcMs() - g_mbZeroSince > 300.0)) live = true; }   /* (one OK - or still no button found after a moment) */   /* (a message with only OK: A presses it) */
         if (!live) { g_liveBlocked = true; g_liveBlockId = id; return false; }   /* another menu is up too (pause menu, loading, lockpicking...): the game's normal way */
         any = true;
     }
@@ -2182,7 +2184,11 @@ static void Controllers_Poll(bool menu)
     }
     {   /* a live pop-up message: A (or the trigger) presses its OK */
         static bool aP = false; bool down = rA || am->rAxis[1].x > 0.7f;
-        if (g_liveMenuNow && ((const volatile bool *)0x011F308F)[1001] && down && !aP && MsgBox_PressFirst()) { rA = false; p->bRightTrigger = 0; }
+        if (g_liveMenuNow && ((const volatile bool *)0x011F308F)[1001] && down && !aP) {
+            if (MsgBox_PressFirst()) { rA = false; p->bRightTrigger = 0; }
+            else if (!g_mbNotLive) { g_mbNotLive = true; Log("Pop-up message: no button to press - shown as a normal pop-up, A closes it"); }   /* (the game's own menu handling then takes A) */
+        }
+        if (!((const volatile bool *)0x011F308F)[1001]) g_mbNotLive = false;
         aP = down;
     }
     if (lX && !g_pipOpen && !menu && !IsMenuMode() && !g_liveMenuNow) b |= XB_START;   /* (in menus left X is the pad's X: accept a trade, take all) */
@@ -10280,8 +10286,8 @@ static bool Hit_Scripts(void)
     /* 0 alive and calm, 1 dead, 2 knocked down / getting up / out cold, 4 fighting (or should be fighting) you */
     static const char *st[3] = {
         "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nelseif rWho.GetUnconscious\nset iVal to 2\nelseif rWho.GetPlayerTeammate\nset iVal to 5\nelseif rWho.IsInCombat\nset iVal to 4\nelseif rWho.GetShouldAttack player\nset iVal to 4\nendif\nSetFunctionValue iVal\nEnd\n",
-        "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nelseif rWho.IsInCombat\nset iVal to 4\nelseif rWho.GetShouldAttack player\nset iVal to 4\nendif\nSetFunctionValue iVal\nEnd\n",
-        "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nendif\nSetFunctionValue iVal\nEnd\n" };
+        "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nelseif rWho.GetPlayerTeammate\nset iVal to 5\nelseif rWho.IsInCombat\nset iVal to 4\nelseif rWho.GetShouldAttack player\nset iVal to 4\nendif\nSetFunctionValue iVal\nEnd\n",
+        "ref rWho\nint iVal\nBegin Function { rWho }\nset iVal to 0\nif rWho.GetDead\nset iVal to 1\nelseif rWho.GetKnockedState\nset iVal to 2\nelseif rWho.GetPlayerTeammate\nset iVal to 5\nendif\nSetFunctionValue iVal\nEnd\n" };
     int sv = -1;
     for (int i = 0; i < 3 && !g_hrStatusScr; i++) { g_hrStatusScr = g_scriptIntf->CompileScript(st[i]); if (g_hrStatusScr) sv = i; }
     /* knockdowns: 0 legs taken out (they just drop), 1-3 harder and harder blows; knockouts keep their own push */
@@ -10413,6 +10419,7 @@ static void Hit_Queue(HrActor *A, int dmg10, int part, int action, int lvl, void
     LONG i = g_hrEvN; if (i >= 16) return;
     g_hrEv[i].ref = A->ref; g_hrEv[i].id = A->id; g_hrEv[i].dmg10 = dmg10; g_hrEv[i].part = part; g_hrEv[i].action = action; g_hrEv[i].lvl = lvl; g_hrEv[i].snd = snd;
     g_hrEv[i].weap = g_hrStrikeW ? g_hrStrikeW : (PlayerWeaponType() >= 0 ? PlayerWeaponForm() : NULL);
+    if (g_hrEv[i].weap && !IsBadReadPtr((char *)g_hrEv[i].weap + 0xF4, 1) && *(BYTE *)((char *)g_hrEv[i].weap + 0xF4) >= 3) g_hrEv[i].weap = NULL;   /* (a gun as a club: just the blow) */
     g_hrEvN = i + 1;
 }
 /* damage per hit of what's in your hand (with your skill), checked now and then */
@@ -10661,7 +10668,9 @@ static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float 
     else if (canKnock && kind == HK_LEG && I >= kd * 0.6f) { action = HA_PUSH; lvl = 0; }   /* legs taken out: down they go */
     bool stagger = !action && I >= kd * 0.45f;
     int dmg10 = 0;
-    if (g_contactDmg && armed && A->alive) {
+    void *strikeW = g_hrStrikeW ? g_hrStrikeW : (PlayerWeaponType() >= 0 ? PlayerWeaponForm() : NULL);
+    bool club = strikeW && !IsBadReadPtr((char *)strikeW + 0xF4, 1) && *(BYTE *)((char *)strikeW + 0xF4) >= 3;   /* (a gun swung as a club) */
+    if (g_contactDmg && armed && A->alive && !(club && A->teammate)) {
         int wt = PlayerWeaponType();
         float base = g_hrStrikeW ? Hit_BaseDamageOf(g_hrStrikeW, *(BYTE *)((char *)g_hrStrikeW + 0xF4), 1) : Hit_BaseDamage(wt), spdF = fminf(fmaxf(I / 3.0f, 0.35f), 1.6f);
         float pm = part == 1 ? 1.6f : part == 0 ? 1.0f : 0.7f;
@@ -10785,7 +10794,6 @@ static void Hit_Update(float dt, bool weaponOut)
         }
         Probe pr[PROBES_MAX];
         bool leftMelee = h != aimH && g_lg.on && g_holding[h] && g_held[h].ref == g_lg.ref;   /* (its melee weapon or its gun) */
-        if (leftMelee && !g_lg.melee && g_lg.len < 8.0f) g_lg.len = fminf(fmaxf(V3Len(g_lg.pnL), 10.0f), 60.0f);   /* (a gun: as long as to its muzzle) */
         int n;
         if (leftMelee) {   /* the other hand's melee weapon: the palm and points along the weapon */
             n = 0; float palm[3]; Gun_Palm(h, palm); memcpy(pr[n].p, palm, 12); pr[n].r = 3.0f; n++;
@@ -10802,6 +10810,7 @@ static void Hit_Update(float dt, bool weaponOut)
         float fwd[3] = { -g_handWR[h][0][2], -g_handWR[h][1][2], -g_handWR[h][2][2] };
         float m = (h == aimH || wt == -1) ? mass : 0.75f;
         bool handArmed = armedOut && (h == aimH ? meleeHand || wt == -1 || (wt >= 3 && wt <= 9) : wt == -1);   /* (a gun in the gun hand: a club) */
+        bool gunClub = (h == aimH && !leftMelee && wt >= 3 && wt <= 9) || (leftMelee && !g_lg.melee);
         if (leftMelee) { int lt = *(BYTE *)((char *)g_lg.base + 0xF4); m = lt == 2 ? 1.5f : lt <= 1 ? 1.0f : lt <= 4 ? 0.9f : lt <= 7 ? 1.3f : 1.8f; handArmed = true;
             float o2[3]; M3 W2; LG_PoseNow(o2, W2, fwd); }
         float push[3] = { 0, 0, 0 }; float pushLen = 0;
@@ -10828,7 +10837,7 @@ static void Hit_Update(float dt, bool weaponOut)
                         float pen = R - dist, nv[3]; for (int i = 0; i < 3; i++) nv[i] = (pr[k].p[i] - q[i]) / dist * pen;
                         if (pen > pushLen) { pushLen = pen; memcpy(push, nv, 12); }
                     }
-                    if (spd > 1500.0f || spd < 1.2f * g_unitsPerMeter || now - A->lastHit < 250.0) continue;   /* (too slow to be a blow, or a teleport) */
+                    if (spd > 1500.0f || spd < (gunClub ? 3.0f : 1.2f) * g_unitsPerMeter || now - A->lastHit < 250.0) continue;   /* (too slow to be a blow, or a teleport; a gun swung as a club: a real swing, not aiming) */
                     float qp[3]; if (Hit_SegDist(A, b, sc, prev[k].p, qp) < Rh) { Hit_Miss(A, b, spd, "it was already inside the body"); continue; }   /* (not a new blow) */
                     float nrm[3]; if (dist > 1e-3f) for (int i = 0; i < 3; i++) nrm[i] = (pr[k].p[i] - q[i]) / dist; else { nrm[0] = -v[0] / spd; nrm[1] = -v[1] / spd; nrm[2] = -v[2] / spd; }
                     float into = -V3Dot(v, nrm);
@@ -11634,6 +11643,7 @@ static bool LG_SetGrip(int h, char *ref)
     memcpy(g_lg.barrelL, bl, 12); memcpy(g_lg.upL, ul, 12);
     if (pn) { float d[3]; V3Sub(d, (const float *)(pn + NIAV_WORLD_TRANSLATE), org); for (int i = 0; i < 3; i++) g_lg.pnL[i] = WrT[i][0] * d[0] + WrT[i][1] * d[1] + WrT[i][2] * d[2]; }
     else for (int i = 0; i < 3; i++) g_lg.pnL[i] = bl[i] * (g_lg.melee ? g_lg.len : 20.0f);
+    if (!g_lg.melee) g_lg.len = fminf(fmaxf(V3Len(g_lg.pnL), 10.0f), 60.0f);   /* (a gun swung as a club: as long as to its muzzle) */
     return true;
 }
 /* How the gun hand holds its weapon, measured from the game's own first-person view of it (the gun in the right hand,
@@ -11749,9 +11759,9 @@ static void Barrel_Capture(void)
 {
     if (g_leftHanded || !g_weaponNode || !g_weaponOutThisFrame || !g_handWOk[1]) return;
     int t = PlayerWeaponType(); if (t < 3 || t > 9) return;
-    static char *axFor = NULL; static float bl[3]; static bool axOk = false;
-    if (axFor != g_weaponNode) {
-        axFor = g_weaponNode; float ul[3], len; axOk = LG_ModelAxes(g_weaponNode, bl, ul, &len);
+    static char *axFor = NULL; static void *axW = NULL; static float bl[3]; static bool axOk = false; static int axRetry = 0;
+    if (axFor != g_weaponNode || axW != PlayerWeaponForm() || (!axOk && ++axRetry % 30 == 0)) {   /* (the "Weapon" bone stays when you switch guns: the gun itself is the key) */
+        axFor = g_weaponNode; axW = PlayerWeaponForm(); float ul[3], len; axOk = LG_ModelAxes(g_weaponNode, bl, ul, &len);
         char *pn = axOk ? FindBone(g_weaponNode, "ProjectileNode", 0) : NULL;
         if (pn) {   /* (the muzzle point settles which end is the front) */
             M3 Wr, WrT; memcpy(Wr, g_weaponNode + NIAV_WORLD_ROTATE, sizeof Wr); M3T(WrT, Wr);
@@ -11766,8 +11776,7 @@ static void Barrel_Capture(void)
     float L = V3Len(bw); if (L < 0.5f) return;
     for (int i = 0; i < 3; i++) g_brlH[i] = (g_handWR[1][0][i] * bw[0] + g_handWR[1][1][i] * bw[1] + g_handWR[1][2][i] * bw[2]) / L;   /* (into the controller's axes) */
     g_brlAt = QpcMs();
-    {   static char *pnFor = NULL, *pnN = NULL;
-        if (pnFor != g_weaponNode) { pnFor = g_weaponNode; pnN = FindBone(g_weaponNode, "ProjectileNode", 0); }
+    {   char *pnN = FindBone(g_weaponNode, "ProjectileNode", 0);   /* (found afresh: the gun under the "Weapon" bone changes with a weapon switch) */
         if (pnN && !IsBadReadPtr(pnN, 0xB0)) {
             float d[3]; V3Sub(d, (const float *)(pnN + NIAV_WORLD_TRANSLATE), g_handW[1]);
             for (int i = 0; i < 3; i++) g_brlPosH[i] = g_handWR[1][0][i] * d[0] + g_handWR[1][1][i] * d[1] + g_handWR[1][2][i] * d[2];
@@ -12388,11 +12397,11 @@ static void MR_GunAxes(float *f, float *u)
 static void MR_GunAxesG(int g, float *f, float *u)
 {
     if (g == 1 && g_lg.on && !g_lg.melee && g_lg.ref) {
-        char *root = LG_Root(g_lg.ref); int h = g_leftHanded ? 1 : 0;
-        if (root && !IsBadReadPtr(root, 0xB0) && g_handWOk[h]) {
-            const float *W = (const float *)(root + NIAV_WORLD_ROTATE); float fw[3], up[3];
-            for (int i = 0; i < 3; i++) { fw[i] = W[i * 3] * g_lg.barrelL[0] + W[i * 3 + 1] * g_lg.barrelL[1] + W[i * 3 + 2] * g_lg.barrelL[2];
-                                          up[i] = W[i * 3] * g_lg.upL[0] + W[i * 3 + 1] * g_lg.upL[1] + W[i * 3 + 2] * g_lg.upL[2]; }
+        int h = g_leftHanded ? 1 : 0; float org[3]; M3 W;
+        if (g_handWOk[h] && LG_PoseNow(org, W, NULL)) {   /* (the gun as it's drawn in that hand) */
+            float fw[3], up[3];
+            for (int i = 0; i < 3; i++) { fw[i] = W[i][0] * g_lg.barrelL[0] + W[i][1] * g_lg.barrelL[1] + W[i][2] * g_lg.barrelL[2];
+                                          up[i] = W[i][0] * g_lg.upL[0] + W[i][1] * g_lg.upL[1] + W[i][2] * g_lg.upL[2]; }
             for (int j = 0; j < 3; j++) { f[j] = g_handWR[h][0][j] * fw[0] + g_handWR[h][1][j] * fw[1] + g_handWR[h][2][j] * fw[2];
                                           u[j] = g_handWR[h][0][j] * up[0] + g_handWR[h][1][j] * up[1] + g_handWR[h][2][j] * up[2]; }
             float lf = V3Len(f), lu = V3Len(u);
@@ -12496,7 +12505,7 @@ static void MR_Eject(int g)   /* B / Y: the magazine out, or the gun opened */
                     G->cls == MRC_TOPBREAK ? "Broken open, cases out - speedloader from a pouch, then flick the gun up to close it" :
                     G->cls == MRC_LAUNCHER ? "Opened, the spent case is out - a new round from a pouch into the back, then flick it up to close" : "Breech open - shells from a pouch, then flick the gun up to close it"); }
         else if (G->st == MRS_OPEN) { MR_SetRounds(g, G->stored); G->stored = 0; G->st = MRS_READY; MR_Buzz(h, 3000); MR_Sound(G->base);
-            Log("Reload: %s closed with the button - %d rounds", G->cls == MRC_REVOLVER ? "cylinder" : "breech", MR_Rounds(g)); }
+            Log("Reload: %s closed with the button - %d rounds", G->cls == MRC_REVOLVER ? "cylinder" : G->cls == MRC_LAUNCHER ? "launcher" : "breech", MR_Rounds(g)); }
         break;
     case MRC_TUBE:
         if (G->st == MRS_RACK) { MR_SetRounds(g, G->stored); G->stored = 0; G->st = MRS_READY; MR_Buzz(h, 3000); MR_Sound(G->base); Log("Reload: pumped with the button - %d rounds", MR_Rounds(g)); }
@@ -12714,13 +12723,12 @@ static void MR_Tick(void)
             g_mr.eatGrip[fh] = true;
             if (edge[fh]) {
                 if (MR_Spare(g) <= 0) { MR_Buzz(fh, 500); MR_Hint(8, "No ammo for this gun"); }
-                else { g_mr.item = want; g_mr.itemHand = fh; g_mr.itemGun = g; MR_Buzz(fh, 2000);
+                else { g_mr.item = want; g_mr.itemHand = fh; g_mr.itemGun = g; g_mr.seated = false; MR_Buzz(fh, 2000);
                        MR_Hint(6, want == MRI_MAG ? "Push it into the gun" : want == MRI_SPEED ? "Push the speedloader into the cylinder" : "Push it into the gun");
                        Log("Reload: took a %s from the pocket", want == MRI_MAG ? "magazine" : want == MRI_SPEED ? "speedloader" : want == MRI_SHELL ? "shell" : "round"); }
             }
         }
         /* carrying it to the gun */
-        if (!(g_mr.item && g_mr.itemGun == g)) { if (g_mr.seated && g == g_mr.itemGun) g_mr.seated = false; }
         if (g_mr.item && g_mr.itemGun == g && g_mr.itemHand == fh) {
             if (!g_mr.gripRaw[fh]) { g_mr.item = MRI_NONE; g_mr.seated = false; MR_Buzz(fh, 300); Log("Reload: let go of it before it reached the gun"); }
             else {
@@ -12729,7 +12737,7 @@ static void MR_Tick(void)
                 if (G->slideDown) {   /* the Fat Man: set the mini nuke on top, then slide it down onto the launcher */
                     float f[3], u[3], upV[3]; MR_GunAxesG(g, f, u);
                     for (int k = 0; k < 3; k++) upV[k] = g_vrHandRot[gh][k][0] * u[0] + g_vrHandRot[gh][k][1] * u[1] + g_vrHandRot[gh][k][2] * u[2];
-                    float hu = V3Dot(g_vrHandPos[fh], upV);
+                    float hu = V3Dot(d, upV);   /* (the hand's height above / below where the round sits on top, along the launcher's up) */
                     if (!g_mr.seated) { if (V3Len(d) < r) { g_mr.seated = true; g_mr.seatUp = hu; MR_Buzz(fh, 900); MR_Hint(9, "On top - now slide it down into the launcher"); } }
                     else if (g_mr.seatUp - hu > 0.06f) { g_mr.item = MRI_NONE; g_mr.seated = false; MR_Load(g, false); Log("Reload: mini nuke slid down into the launcher"); }
                     else if (V3Len(d) > r * 3.0f) g_mr.seated = false;
@@ -13122,13 +13130,16 @@ static void MR_VisualGun(int g, char *top)
         float ft = (float)((now - G->openAt) / 1000.0); bool rev = G->cls == MRC_REVOLVER;
         for (int k = 0; k < G->shellCnt; k++) { char *s = G->shellN[k]; if (!MR_Ok(s)) continue;
             int idx = G->shellIdx[k] > 0 ? G->shellIdx[k] : k + 1;
-            if (G->stored > 0) { if (idx <= G->stored) MR_Show(s); else MR_Hide(s); continue; }
+            if (idx <= G->stored) { MR_Show(s); continue; }   /* (a round in that hole - left in, or loaded) */
+            if (G->stored > 0 && G->cls != MRC_REVOLVER && ft >= 0.5f) { MR_Hide(s); continue; }
             if (ft >= 0 && ft < 0.5f) { const float *St = (const float *)(s + NIAV_WORLD_TRANSLATE); M3 Ws; memcpy(Ws, s + NIAV_WORLD_ROTATE, sizeof Ws);
                 float org[3], spread = 0.12f * (float)(k - G->shellCnt / 2);
                 for (int i = 0; i < 3; i++) org[i] = rev ? St[i] - fw[i] * (0.9f * ft * U) + sd[i] * (spread * ft * U)
                                                          : St[i] - fw[i] * (1.2f * ft * U) + up[i] * (1.4f * ft * U) + sd[i] * (spread * ft * U);
                 org[2] -= 0.5f * 9.8f * ft * ft * U; MR_Show(s); MR_Move(s, org, Ws); }
             else MR_Hide(s); }
+        for (int k = 0; k < G->bulCnt; k++) { char *b = G->bulN[k]; if (!MR_Ok(b)) continue;   /* (separate round parts: one per round in it) */
+            if (G->bulIdx[k] <= G->stored) MR_Show(b); else MR_Hide(b); }
     }
 }
 /* ---- The ammo pouches as real game models -----------------------------------------------------------------------------
@@ -13382,7 +13393,7 @@ static void Mf_Tick(void)
         float p[3]; bool ok = false;
         if (h == 1) {
             if (g_weaponNode) {
-                if (g_mf[1].pnFor != g_weaponNode) { g_mf[1].pnFor = g_weaponNode; g_mf[1].pn = FindBone(g_weaponNode, "ProjectileNode", 0); }
+                g_mf[1].pnFor = g_weaponNode; g_mf[1].pn = FindBone(g_weaponNode, "ProjectileNode", 0);   /* (afresh: the gun under the "Weapon" bone changes with a weapon switch) */
                 char *pn = g_mf[1].pn;
                 if (pn && !IsBadReadPtr(pn, 0xA0)) { memcpy(p, pn + NIAV_WORLD_TRANSLATE, 12); ok = true; }
             }
@@ -17094,6 +17105,7 @@ static int MsgBox_Buttons(void)
     double now = QpcMs(); if (now - g_mbAt < 100.0 && g_msgBtnN >= 0) return g_msgBtnN;
     VcAns a[VC_MAXOPT]; int n = MsgBox_Find(a); g_mbAt = now;
     if (n != g_msgBtnN) { static int nl = 0; if (nl++ < 20) Log("Pop-up message: %d button(s)%s%s%s", n, n ? " - first \"" : "", n ? a[0].text : "", n ? "\"" : ""); }
+    if (n == 0) { if (!g_mbZeroSince) g_mbZeroSince = now; } else g_mbZeroSince = 0;
     g_msgBtnN = n; return n;
 }
 static bool MsgBox_PressFirst(void)
@@ -19139,9 +19151,11 @@ static void InstallD3D9Hooks(void)
    again; anything else (another program's hook on top) is left alone. What happened is written to the log. */
 static bool Mod_IsD3D9(const void *p)
 {
-    static HMODULE d9 = NULL; if (!d9) d9 = GetModuleHandleA("d3d9.dll");
-    HMODULE m = NULL;
-    return p && d9 && GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)p, &m) && m == d9;
+    static uintptr_t lo = 0, hi = 0;   /* (d3d9.dll's range in memory, read once from its header) */
+    if (!lo) { HMODULE d9 = GetModuleHandleA("d3d9.dll"); if (!d9) return false;
+        IMAGE_DOS_HEADER *dh = (IMAGE_DOS_HEADER *)d9; IMAGE_NT_HEADERS *nh = (IMAGE_NT_HEADERS *)((char *)d9 + dh->e_lfanew);
+        lo = (uintptr_t)d9; hi = lo + nh->OptionalHeader.SizeOfImage; }
+    return (uintptr_t)p >= lo && (uintptr_t)p < hi;
 }
 typedef int (*StereoCheck_t)(IDirect3DDevice9 *);
 static void DescribeAddress(DWORD addr, char *out, size_t n);
@@ -19158,7 +19172,7 @@ static void D3D9_CheckHooks(void)
     for (int i = 0; i < g_devHookN; i++) {
         DevHookRec *h = &g_devHooks[i]; void *cur = vt[h->slot];
         if (cur == h->hook) continue;
-        char c[96]; DescribeAddress((DWORD)(uintptr_t)cur, c, sizeof c);
+        char c[96] = ""; if (logs < 12) DescribeAddress((DWORD)(uintptr_t)cur, c, sizeof c);
         if (!Mod_IsD3D9(cur)) {
             if (h->slot == 17 && g_presentTrue) {   /* Present: FNVR goes back on top, calling the other program's hook (a loop back into FNVR goes straight to Windows' own) */
                 *h->orig = cur; PatchVtable(vt, h->slot, h->hook);
