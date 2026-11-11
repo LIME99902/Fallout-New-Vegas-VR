@@ -16,6 +16,7 @@
 #include <string.h>
 #include "../src/openvr_capi.h"
 #include "vripc.h"
+#include "vrinput.h"
 
 static HANDLE g_shmMap, g_req, g_rsp, g_hostProc; static VrIpc *g_ipc; static CRITICAL_SECTION g_cs; static bool g_csInit, g_dead;
 static FILE *g_log; static float g_sharpen = 0.0f;   /* (sharpening of the eye pictures in the host, 0 off .. 1 strongest) */
@@ -330,6 +331,34 @@ __declspec(dllexport) uint32_t FNVRStereo_SetOverlayShared9Ink(uint64_t overlay,
     return (uint32_t)err;
 }
 __declspec(dllexport) void FNVRStereo_SetSharpen(float s) { g_sharpen = s < 0 ? 0 : s > 1 ? 1 : s; }
+/* SteamVR Input, run in the host (vrinput.h): set up the actions from the manifest; read both hands; buzz a hand */
+__declspec(dllexport) int FNVR_InputSetup(const char *manifest, char *msg, int cap)
+{
+    int32_t ok = 0; if (msg && cap > 0) msg[0] = 0;
+    if (!g_ipc || g_dead || !manifest) return 0;
+    EnterCriticalSection(&g_cs);
+    memset(g_ipc->in, 0, MAX_PATH); strncpy((char *)g_ipc->in, manifest, MAX_PATH - 1);
+    if (Call(I_SETUP, 15000)) { memcpy(&ok, g_ipc->out, 4); if (msg && cap > 0) { strncpy(msg, (const char *)g_ipc->out + 8, (size_t)cap - 1); msg[cap - 1] = 0; } }
+    LeaveCriticalSection(&g_cs);
+    return ok;
+}
+__declspec(dllexport) int FNVR_InputRead(VrInFrame *f)
+{
+    if (!f) return 0; memset(f, 0, sizeof *f);
+    if (!g_ipc || g_dead) return 0;
+    EnterCriticalSection(&g_cs);
+    if (Call(I_READ, 1000)) memcpy(f, g_ipc->out, sizeof *f);
+    LeaveCriticalSection(&g_cs);
+    return f->ok;
+}
+__declspec(dllexport) void FNVR_InputHaptic(int hand, float seconds, float freq, float amp)
+{
+    if (!g_ipc || g_dead) return;
+    EnterCriticalSection(&g_cs);
+    int32_t h = hand; float v[3] = { seconds, freq, amp }; memcpy(g_ipc->in, &h, 4); memcpy(g_ipc->in + 4, v, 12);
+    Call(I_HAPTIC, 500);
+    LeaveCriticalSection(&g_cs);
+}
 __declspec(dllexport) bool VR_IsRuntimeInstalled(void) { return true; }
 __declspec(dllexport) bool VR_IsHmdPresent(void) { return true; }
 __declspec(dllexport) bool VR_IsInterfaceVersionValid(const char *v) { (void)v; return true; }

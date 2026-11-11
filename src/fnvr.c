@@ -29,9 +29,11 @@
 #include <ctype.h>
 #include "nvse_api.h"
 #include "openvr_capi.h"
+#define VRIN_IMPL
+#include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.5.12 (the left trigger on a weapon in the Pip-Boy's item list makes it your other hand's weapon again - the highlighted item is read from the game's own menu (the script function it used doesn't exist in New Vegas); the other hand's power fist is worn on that forearm - the exact mirror image of how the gun hand's sits on its forearm, drawn with your arms, your own hand and fingers moving inside it; its swing plays the weapon's swing sound and fires its piston; tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.6.0 (Valve Index, Vive and Windows Mixed Reality controllers read through SteamVR Input with FNVR's own bindings - the Index thumbstick alone moves you, squeezing grabs, its fingers are tracked; buttons changeable in SteamVR's controller bindings; the left trigger on a weapon in the Pip-Boy's item list makes it your other hand's weapon again - the highlighted item is read from the game's own menu (the script function it used doesn't exist in New Vegas); the other hand's power fist is worn on that forearm - the exact mirror image of how the gun hand's sits on its forearm, drawn with your arms, your own hand and fingers moving inside it; its swing plays the weapon's swing sound and fires its piston; tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -536,7 +538,17 @@ static int   g_pipPulse = 0;          /* (unused) */
 static double g_pipPressUntil = 0;    /* wrist gesture: hold a button until this time */
 static double g_pipExpectUntil = 0;   /* the Pip-Boy was just asked to open: don't flash the flat screen */
 static WORD  g_pipPressMask = 0;
-static bool  g_pipYOpen = true;        /* [Controls] bPipBoyButtonY: left Y opens / closes the Pip-Boy (on as standard) */
+static bool  g_pipYOpen = true;
+static int   g_vrInModeSet;   /* (the setting as saved: used from the next start) */
+/* SteamVR Input (with VrIn_Start further down) */
+static int g_vrInMode = 0;
+static bool g_vrInOn = false, g_vrInTried = false;
+static char g_vrInType[64] = "";
+static VrInFrame g_vrInFrame; static double g_vrInAt = 0;
+static VrInHandles g_vrInH; static struct VR_IVRInput_FnTable *g_vrInput = NULL;
+typedef int (*VrInSetup_t)(const char *, char *, int); typedef int (*VrInRead_t)(VrInFrame *); typedef void (*VrInHaptic_t)(int, float, float, float);
+static VrInSetup_t pIn_Setup; static VrInRead_t pIn_Read; static VrInHaptic_t pIn_Haptic;
+        /* [Controls] bPipBoyButtonY: left Y opens / closes the Pip-Boy (on as standard) */
 static bool  g_pipYFront = true;       /* [PipScreen] bYMenuInFront: opened with Y, the menu floats in front of you (like trading) */
 static bool  g_pipNoMove = true;       /* [Controls] bPipBoyHoldStill: you don't walk while the Pip-Boy is open */
 static bool  g_pipByY = false;         /* (this Pip-Boy was opened with Y) */
@@ -800,6 +812,7 @@ static void LoadSettings(void)
     g_climbEnabled = GetPrivateProfileIntA("Grab", "bClimbing", 1, g_iniPath) != 0;
     g_wristPip = GetPrivateProfileIntA("Controls", "bWristPipBoy", 1, g_iniPath) != 0;
     g_pipYOpen = GetPrivateProfileIntA("Controls", "bPipBoyButtonY", 1, g_iniPath) != 0;
+    g_vrInMode = GetPrivateProfileIntA("Controls", "iSteamVRInput", 0, g_iniPath); if (g_vrInMode < 0 || g_vrInMode > 2) g_vrInMode = 0; g_vrInModeSet = g_vrInMode;
     g_pipYFront = GetPrivateProfileIntA("PipScreen", "bYMenuInFront", 1, g_iniPath) != 0;
     g_pipNoMove = GetPrivateProfileIntA("Controls", "bPipBoyHoldStill", 1, g_iniPath) != 0;
 g_pipHudMode = GetPrivateProfileIntA("Controls", "bPipBoyHudMode", 0, g_iniPath) != 0;
@@ -1138,6 +1151,7 @@ static bool VR_Start(void)
         return false;
     }
     Log("Connected to SteamVR (%s, app type %s)", IVRSystem_Version, g_headsetDisplay ? "Scene" : "Other");
+    g_vrInOn = false; g_vrInTried = false; pIn_Setup = NULL; pIn_Read = NULL; pIn_Haptic = NULL; g_vrInput = NULL;   /* (a new session: its controls are set up again) */
     LogMem("after SteamVR connect");
     {
         ETrackedPropertyError perr = ETrackedPropertyError_TrackedProp_Success;
@@ -1219,6 +1233,113 @@ static bool  g_bothSticksClicked = false;
 static DWORD g_padPacket = 0;
 static unsigned g_xinputCalls = 0;
 static TrackedDeviceIndex_t g_handIdx[2] = { 0xFFFFFFFF, 0xFFFFFFFF };   /* 0 = left, 1 = right */
+/* SteamVR Input (stereo/vrinput.h): every controller read through SteamVR's action system, with a default binding for each
+   kind (FNVR\input) - an Index's thumbstick, grip squeeze and finger tracking land where they should, and players can change
+   any button in SteamVR's controller bindings. The rest of FNVR keeps reading "controller states": the system table's
+   GetControllerState and TriggerHapticPulse are swapped for ones made from the actions. [Controls] iSteamVRInput: 0 automatic
+   (every controller except Quest/Rift Touch, which is read directly as before), 1 always, 2 never. */
+static struct VR_IVRSystem_FnTable g_sysWrap;
+static bool (OPENVR_FNTABLE_CALLTYPE *o_GetCS)(TrackedDeviceIndex_t, VRControllerState_t *, uint32_t);
+static void (OPENVR_FNTABLE_CALLTYPE *o_Haptic)(TrackedDeviceIndex_t, uint32_t, unsigned short);
+static double QpcMs(void);
+static void VrIn_Fresh(void)
+{
+    double now = QpcMs(); if (now - g_vrInAt < 2.0) return; g_vrInAt = now;
+    if (pIn_Read) pIn_Read(&g_vrInFrame); else VrIn_Read(g_vrInput, &g_vrInH, &g_vrInFrame);
+}
+/* one hand's actions as the controller state the rest of FNVR reads (Touch's layout: stick axis 0, trigger 1, grip 2) */
+static void VrIn_ToState(const VrInHand *h, VRControllerState_t *cs)
+{
+    static uint32_t pk = 0; memset(cs, 0, sizeof *cs); cs->unPacketNum = ++pk;
+    uint64_t P = 0, T = 0;
+    if (h->gripDown)    P |= 1ull << EVRButtonId_k_EButton_Grip;
+    if (h->triggerDown) P |= 1ull << EVRButtonId_k_EButton_SteamVR_Trigger;
+    if (h->primary)     P |= 1ull << EVRButtonId_k_EButton_A;
+    if (h->secondary)   P |= 1ull << EVRButtonId_k_EButton_ApplicationMenu;
+    if (h->stickDown)   P |= 1ull << EVRButtonId_k_EButton_SteamVR_Touchpad;
+    T = P;
+    if (h->thumbTouch) T |= 1ull << EVRButtonId_k_EButton_SteamVR_Touchpad;
+    if (h->trigger > 0.05f) T |= 1ull << EVRButtonId_k_EButton_SteamVR_Trigger;
+    cs->ulButtonPressed = P; cs->ulButtonTouched = T;
+    cs->rAxis[0].x = h->stick[0]; cs->rAxis[0].y = h->stick[1];
+    cs->rAxis[1].x = h->trigger;
+    float g = h->grip < 0 ? 0 : h->grip > 1 ? 1 : h->grip;
+    cs->rAxis[2].x = h->gripDown ? fmaxf(g, 0.75f) : fminf(g, 0.65f);   /* (FNVR takes over 0.7 as a grip: only when it's held) */
+    if (h->skel) { cs->rAxis[3].x = h->curl[1]; cs->rAxis[3].y = h->curl[2]; cs->rAxis[4].x = h->curl[3]; cs->rAxis[4].y = h->curl[4]; }
+}
+static bool OPENVR_FNTABLE_CALLTYPE W_GetControllerState(TrackedDeviceIndex_t d, VRControllerState_t *st, uint32_t size)
+{
+    int h = d == g_handIdx[0] ? 0 : d == g_handIdx[1] ? 1 : -1;
+    if (!g_vrInOn || h < 0 || !st) return o_GetCS ? o_GetCS(d, st, size) : false;
+    VrIn_Fresh();
+    if (!g_vrInFrame.ok || !g_vrInFrame.h[h].active) return o_GetCS ? o_GetCS(d, st, size) : false;   /* (nothing bound for that hand: as before) */
+    VRControllerState_t cs; VrIn_ToState(&g_vrInFrame.h[h], &cs);
+    memcpy(st, &cs, size < sizeof cs ? size : sizeof cs);
+    return true;
+}
+static void OPENVR_FNTABLE_CALLTYPE W_TriggerHapticPulse(TrackedDeviceIndex_t d, uint32_t axis, unsigned short us)
+{
+    int h = d == g_handIdx[0] ? 0 : d == g_handIdx[1] ? 1 : -1;
+    if (!g_vrInOn || h < 0) { if (o_Haptic) o_Haptic(d, axis, us); return; }
+    float k = us / 3999.0f; if (k > 1) k = 1;   /* (an old-style pulse of so many microseconds as a short buzz that strong) */
+    float amp = 0.15f + 0.85f * k, secs = 0.012f + 0.045f * k;
+    if (pIn_Haptic) pIn_Haptic(h, secs, 160.0f, amp); else VrIn_Haptic(g_vrInput, &g_vrInH, h, secs, 160.0f, amp);
+}
+static void UIMessage(const char *msg);
+/* (controls, once a controller is there) which way this player's controllers are read */
+static void VrIn_Start(void)
+{
+    if (g_vrInTried || !g_vrSystem || !g_ovrDll) return;
+    TrackedDeviceIndex_t idx = g_handIdx[1] < 64 ? g_handIdx[1] : g_handIdx[0] < 64 ? g_handIdx[0] : 0xFFFFFFFF;
+    if (idx == 0xFFFFFFFF) return;   /* (no controller yet - decided when one turns up) */
+    char type[64] = ""; ETrackedPropertyError pe = ETrackedPropertyError_TrackedProp_Success;
+    g_vrSystem->GetStringTrackedDeviceProperty(idx, ETrackedDeviceProperty_Prop_ControllerType_String, type, sizeof type, &pe);
+    static int waited = 0; if (!type[0] && ++waited < 400) return;   /* (its kind comes a moment after it connects) */
+    g_vrInTried = true; snprintf(g_vrInType, sizeof g_vrInType, "%s", type[0] ? type : "unknown");
+    bool bound = !strcmp(type, "knuckles") || !strcmp(type, "vive_controller") || !strcmp(type, "holographic_controller") ||
+                 !strcmp(type, "hpmotioncontroller") || !strcmp(type, "vive_cosmos_controller") || !strcmp(type, "oculus_touch");
+    /* (automatic: the controllers whose old-style reading is wrong - an Index reports its thumbstick and trackpad as one stick
+       and the fingers resting on its handle as a held grip; Vive and Windows Mixed Reality have trackpads - go through
+       SteamVR Input; the others keep the direct reading they've always had) */
+    bool fix = !strcmp(type, "knuckles") || !strcmp(type, "vive_controller") || !strcmp(type, "holographic_controller");
+    bool want = g_vrInMode == 1 || (g_vrInMode == 0 && fix);
+    if (want && !bound) Log("Controllers: %s - FNVR has no binding of its own for these yet: set one in SteamVR > Settings > Controllers > Manage Controller Bindings", g_vrInType);
+    Log("Controllers: %s - %s", g_vrInType, want ? "read through SteamVR Input (FNVR's bindings for them; changeable in SteamVR)" :
+        g_vrInMode == 2 ? "read directly (SteamVR Input switched off)" : "read directly");
+    if (!want) return;
+    char man[MAX_PATH]; snprintf(man, sizeof man, "%sFNVR\input\actions.json", g_pluginDir);
+    if (GetFileAttributesA(man) == INVALID_FILE_ATTRIBUTES) { Log("SteamVR Input: %s is missing - controllers read directly", man); return; }
+    char msg[200] = ""; int ok = 0;
+    pIn_Setup = (VrInSetup_t)GetProcAddress(g_ovrDll, "FNVR_InputSetup");
+    if (pIn_Setup) {   /* (OpenVR in the VR host: it reads the actions there) */
+        pIn_Read = (VrInRead_t)GetProcAddress(g_ovrDll, "FNVR_InputRead"); pIn_Haptic = (VrInHaptic_t)GetProcAddress(g_ovrDll, "FNVR_InputHaptic");
+        ok = pIn_Read && pIn_Haptic && pIn_Setup(man, msg, sizeof msg);
+        if (!ok) pIn_Read = NULL, pIn_Haptic = NULL;
+    } else {   /* (OpenVR in the game) */
+        typedef intptr_t (*GetIntf_t)(const char *, EVRInitError *); GetIntf_t gi = (GetIntf_t)GetProcAddress(g_ovrDll, "VR_GetGenericInterface");
+        char ver[64]; snprintf(ver, sizeof ver, "FnTable:%s", IVRInput_Version); EVRInitError e = EVRInitError_VRInitError_None;
+        g_vrInput = gi ? (struct VR_IVRInput_FnTable *)gi(ver, &e) : NULL;
+        ok = g_vrInput && e == EVRInitError_VRInitError_None && VrIn_Setup(g_vrInput, man, &g_vrInH, msg, sizeof msg);
+    }
+    Log("SteamVR Input: %s", msg[0] ? msg : ok ? "ready" : "couldn't start");
+    if (!ok) { Log("SteamVR Input: off - controllers read directly"); return; }
+    memcpy(&g_sysWrap, g_vrSystem, sizeof g_sysWrap);
+    o_GetCS = g_sysWrap.GetControllerState; o_Haptic = g_sysWrap.TriggerHapticPulse;
+    g_sysWrap.GetControllerState = W_GetControllerState; g_sysWrap.TriggerHapticPulse = W_TriggerHapticPulse;
+    g_vrSystem = &g_sysWrap; g_vrInOn = true; g_vrInAt = 0;
+}
+/* (controls) nothing bound for a while: say where to set them */
+static void VrIn_Check(bool any)
+{
+    static double since = 0; static bool said = false;
+    if (!g_vrInOn || said) return;
+    bool live = g_vrInFrame.ok && (g_vrInFrame.h[0].active || g_vrInFrame.h[1].active);
+    if (live || !any) { since = 0; return; }
+    if (!since) since = QpcMs();
+    else if (QpcMs() - since > 10000.0) { said = true;
+        Log("SteamVR Input: no controls bound for %s controllers - SteamVR > Settings > Controllers > Manage Controller Bindings, pick FNVR's binding (UI error %d)", g_vrInType, g_vrInFrame.err);
+        UIMessage("FNVR: SteamVR has no bindings for these controllers - SteamVR Settings > Controllers > Manage Controller Bindings"); }
+}
 static bool  g_loggedControllers = false;
 
 static void PadLock(void)   { while (InterlockedExchange(&g_padLock, 1)) YieldProcessor(); }
@@ -1915,6 +2036,7 @@ static void Controllers_Poll(bool menu)
     if (!g_vrSystem) { g_padActive = false; return; }   /* (with motion controls off, the controllers still run the FNVR settings panel) */
     g_handIdx[0] = g_vrSystem->GetTrackedDeviceIndexForControllerRole(ETrackedControllerRole_TrackedControllerRole_LeftHand);
     g_handIdx[1] = g_vrSystem->GetTrackedDeviceIndexForControllerRole(ETrackedControllerRole_TrackedControllerRole_RightHand);
+    VrIn_Start();
 
     VRControllerState_t c[2];
     bool ok[2];
@@ -1932,8 +2054,14 @@ static void Controllers_Poll(bool menu)
 
     /* Finger curl from the Touch sensors: trigger = index, grip = other three, thumb resting on a
        button/stick = thumb down. (Physical hands: 0 = left, 1 = right.) */
+    VrIn_Check(ok[0] || ok[1]);
     for (int h = 0; h < 2; h++) {
         if (!ok[h]) continue;
+        if (g_vrInOn && g_vrInFrame.ok && g_vrInFrame.h[h].skel) {   /* (SteamVR's hand skeleton: each finger's own curl - an Index tracks them all) */
+            const float *k = g_vrInFrame.h[h].curl;
+            g_fingerCurl[h][0] = 0.85f * k[0]; g_fingerCurl[h][1] = k[1]; g_fingerCurl[h][2] = (k[2] + k[3] + k[4]) / 3.0f;
+            continue;
+        }
         const VRControllerState_t *cs = &c[h];
         uint64_t touched = cs->ulButtonTouched | cs->ulButtonPressed;
         bool thumbOn = (touched >> EVRButtonId_k_EButton_A) & 1 || (touched >> EVRButtonId_k_EButton_ApplicationMenu) & 1 ||
@@ -18322,6 +18450,7 @@ static const SetOpt g_setOpts[] = {
     { SP_PIP, ST_FLOAT, "Elbow follows hand", "Controls", "fArmFollowHand", &g_armFollowHand, 0.0f, 1.0f, 0.05f, "%.2f", 0, 0, "How much the elbow goes where your hand's angle says it is (0 = the game's pose, 1 = fully)." },
 
     { SP_CONTROLS, ST_BOOL, "Motion controls", "Controls", "bMotionControls", &g_motionControls, 0, 0, 0, 0, 0, 0, "Your VR controllers work as the game's controller (sticks, buttons, triggers)." },
+    { SP_CONTROLS, ST_CHOICE, "Controller input", "Controls", "iSteamVRInput", &g_vrInModeSet, 0, 2, 1, "Automatic|SteamVR bindings|Direct", SF_RESTART, 0, "AUTOMATIC: Valve Index, Vive and Windows Mixed Reality controllers go through SteamVR's controller bindings (FNVR's own for each - changeable in SteamVR > Settings > Controllers > Manage Controller Bindings); Quest, Rift, Reverb G2 and Cosmos controllers are read directly. STEAMVR BINDINGS: every controller through SteamVR. DIRECT: the old way for all. Used from the next start." },
     { SP_CONTROLS, ST_BOOL, "Aim with your hand", "Controls", "bHandAim", &g_handAim, 0, 0, 0, 0, 0, 0, "ON: guns shoot where your hand points; your head only looks around." },
     { SP_CONTROLS, ST_FLOAT, "Aim angle", "Controls", "fAimPitchOffset", &g_aimPitchOffsetDeg, -90.0f, 90.0f, 0.5f, "%.1f deg", SF_PROFILE, 0, "Tilt between the controller and where you aim - differs between controller models. Quick way: point at the centre of your view and click both sticks." },
     { SP_CONTROLS, ST_FLOAT, "Shot left/right correction", "Controls", "fShotYawTrim", &g_shotYawTrimDeg, -10.0f, 10.0f, 0.25f, "%.2f deg", 0, 0, "Fine correction if shots land left or right of where you point." },

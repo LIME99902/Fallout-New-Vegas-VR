@@ -1,0 +1,107 @@
+{
+  "default_bindings": [
+    {
+      "controller_type": "knuckles",
+      "binding_url": "bindings_knuckles.json"
+    },
+    {
+      "controller_type": "oculus_touch",
+      "binding_url": "bindings_oculus_touch.json"
+    },
+    {
+      "controller_type": "vive_controller",
+      "binding_url": "bindings_vive_controller.json"
+    },
+    {
+      "controller_type": "holographic_controller",
+      "binding_url": "bindings_holographic_controller.json"
+    },
+    {
+      "controller_type": "hpmotioncontroller",
+      "binding_url": "bindings_hpmotioncontroller.json"
+    },
+    {
+      "controller_type": "vive_cosmos_controller",
+      "binding_url": "bindings_vive_cosmos_controller.json"
+    }
+  ],
+  "actions": [
+    {
+      "name": "/actions/fnvr/in/stick",
+      "type": "vector2"
+    },
+    {
+      "name": "/actions/fnvr/in/trigger",
+      "type": "vector1"
+    },
+    {
+      "name": "/actions/fnvr/in/grip",
+      "type": "vector1"
+    },
+    {
+      "name": "/actions/fnvr/in/gripclick",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/fnvr/in/triggerclick",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/fnvr/in/primary",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/fnvr/in/secondary",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/fnvr/in/stickclick",
+      "type": "boolean"
+    },
+    {
+      "name": "/actions/fnvr/in/thumbtouch",
+      "type": "boolean",
+      "requirement": "optional"
+    },
+    {
+      "name": "/actions/fnvr/in/skel_left",
+      "type": "skeleton",
+      "skeleton": "/skeleton/hand/left",
+      "requirement": "optional"
+    },
+    {
+      "name": "/actions/fnvr/in/skel_right",
+      "type": "skeleton",
+      "skeleton": "/skeleton/hand/right",
+      "requirement": "optional"
+    },
+    {
+      "name": "/actions/fnvr/out/haptic",
+      "type": "vibration"
+    }
+  ],
+  "action_sets": [
+    {
+      "name": "/actions/fnvr",
+      "usage": "single"
+    }
+  ],
+  "localization": [
+    {
+      "language_tag": "en_US",
+      "/actions/fnvr": "Fallout: New Vegas VR (FNVR)",
+      "/actions/fnvr/in/stick": "Stick (left: walk, right: turn / menus)",
+      "/actions/fnvr/in/trigger": "Trigger (fire, aim, pick)",
+      "/actions/fnvr/in/grip": "Grip squeeze (how hard)",
+      "/actions/fnvr/in/gripclick": "Grip (grab, hold, draw weapons)",
+      "/actions/fnvr/in/triggerclick": "Trigger click",
+      "/actions/fnvr/in/primary": "A / X button",
+      "/actions/fnvr/in/secondary": "B / Y button",
+      "/actions/fnvr/in/stickclick": "Stick click (crouch, sprint; both = FNVR menu)",
+      "/actions/fnvr/in/thumbtouch": "Thumb on the stick",
+      "/actions/fnvr/in/skel_left": "Left hand fingers",
+      "/actions/fnvr/in/skel_right": "Right hand fingers",
+      "/actions/fnvr/out/haptic": "Buzz"
+    }
+  ]
+}

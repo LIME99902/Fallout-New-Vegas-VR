@@ -18,7 +18,9 @@ enum {
     /* IVRCompositor */
     C_TRACKSPACE = 60, C_WAITPOSES, C_SUBMIT, C_FOCUS, C_POSTPRESENT, C_LASTPOSES,
     /* IVROverlay */
-    O_CREATE = 80, O_HIDE, O_SHOW, O_CURVE, O_FLAG, O_SORT, O_TEXTURE, O_XFORMABS, O_XFORMDEV, O_WIDTH, O_DESTROY, O_ALPHA, O_COLOR
+    O_CREATE = 80, O_HIDE, O_SHOW, O_CURVE, O_FLAG, O_SORT, O_TEXTURE, O_XFORMABS, O_XFORMDEV, O_WIDTH, O_DESTROY, O_ALPHA, O_COLOR,
+    /* SteamVR Input (vrinput.h): set up the actions, read every control of both hands at once, buzz a hand */
+    I_SETUP = 100, I_READ, I_HAPTIC
 };
 
 typedef struct {

@@ -1,0 +1,169 @@
+{
+  "controller_type": "knuckles",
+  "name": "FNVR - Valve Index",
+  "description": "FNVR's default controls",
+  "action_manifest_version": 0,
+  "alias_info": {},
+  "bindings": {
+    "/actions/fnvr": {
+      "sources": [
+        {
+          "path": "/user/hand/left/input/thumbstick",
+          "mode": "joystick",
+          "inputs": {
+            "position": {
+              "output": "/actions/fnvr/in/stick"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/stickclick"
+            },
+            "touch": {
+              "output": "/actions/fnvr/in/thumbtouch"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "pull": {
+              "output": "/actions/fnvr/in/trigger"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/triggerclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/grip",
+          "mode": "force_sensor",
+          "inputs": {
+            "force": {
+              "output": "/actions/fnvr/in/grip"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/grip",
+          "mode": "grab",
+          "parameters": {
+            "force_hold_threshold": "0.1",
+            "force_release_threshold": "0.05"
+          },
+          "inputs": {
+            "grab": {
+              "output": "/actions/fnvr/in/gripclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/a",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/primary"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/b",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/secondary"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/thumbstick",
+          "mode": "joystick",
+          "inputs": {
+            "position": {
+              "output": "/actions/fnvr/in/stick"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/stickclick"
+            },
+            "touch": {
+              "output": "/actions/fnvr/in/thumbtouch"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "pull": {
+              "output": "/actions/fnvr/in/trigger"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/triggerclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/grip",
+          "mode": "force_sensor",
+          "inputs": {
+            "force": {
+              "output": "/actions/fnvr/in/grip"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/grip",
+          "mode": "grab",
+          "parameters": {
+            "force_hold_threshold": "0.1",
+            "force_release_threshold": "0.05"
+          },
+          "inputs": {
+            "grab": {
+              "output": "/actions/fnvr/in/gripclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/a",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/primary"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/b",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/secondary"
+            }
+          }
+        }
+      ],
+      "chords": [],
+      "poses": [],
+      "haptics": [
+        {
+          "output": "/actions/fnvr/out/haptic",
+          "path": "/user/hand/left/output/haptic"
+        },
+        {
+          "output": "/actions/fnvr/out/haptic",
+          "path": "/user/hand/right/output/haptic"
+        }
+      ],
+      "skeleton": [
+        {
+          "output": "/actions/fnvr/in/skel_left",
+          "path": "/user/hand/left/input/skeleton/left"
+        },
+        {
+          "output": "/actions/fnvr/in/skel_right",
+          "path": "/user/hand/right/input/skeleton/right"
+        }
+      ]
+    }
+  }
+}

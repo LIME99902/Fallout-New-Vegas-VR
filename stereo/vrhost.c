@@ -16,6 +16,8 @@
 #include <string.h>
 #include "../src/openvr_capi.h"
 #include "vripc.h"
+#define VRIN_IMPL
+#include "vrinput.h"
 
 typedef intptr_t (*VR_InitInternal2_t)(EVRInitError *err, EVRApplicationType type, const char *startupInfo);
 typedef void (*VR_ShutdownInternal_t)(void);
@@ -24,6 +26,7 @@ typedef const char *(*VR_ErrStr_t)(EVRInitError err);
 
 static VrIpc *g_ipc; static FILE *g_log;
 static struct VR_IVRSystem_FnTable *S; static struct VR_IVRCompositor_FnTable *C; static struct VR_IVROverlay_FnTable *O;
+static struct VR_IVRInput_FnTable *I; static VrInHandles g_in;
 static VR_InitInternal2_t pInit; static VR_ShutdownInternal_t pShut; static VR_GetGenericInterface_t pGet; static VR_ErrStr_t pErr;
 static ID3D11Device *g_dev; static ID3D11DeviceContext *g_ctx;
 typedef struct { uint64_t h; ID3D11Texture2D *t; } Opened;
@@ -197,13 +200,14 @@ static void Handle(int fn)
             snprintf(v, sizeof v, "FnTable:%s", IVRSystem_Version); S = (struct VR_IVRSystem_FnTable *)pGet(v, &e2);
             snprintf(v, sizeof v, "FnTable:%s", IVRCompositor_Version); C = (struct VR_IVRCompositor_FnTable *)pGet(v, &e2);
             snprintf(v, sizeof v, "FnTable:%s", IVROverlay_Version); O = (struct VR_IVROverlay_FnTable *)pGet(v, &e2);
+            snprintf(v, sizeof v, "FnTable:%s", IVRInput_Version); I = (struct VR_IVRInput_FnTable *)pGet(v, &e2);
             Log("SteamVR connected (app type %d) - system %p, compositor %p, overlays %p", type, (void *)S, (void *)C, (void *)O);
             if (!S) e = EVRInitError_VRInitError_Init_InterfaceNotFound;
         } else { snprintf(g_ipc->hostLog, sizeof g_ipc->hostLog, "(%s)", pErr ? pErr(e) : "?"); Log("SteamVR connect failed: %d %s", (int)e, g_ipc->hostLog); }
         memcpy(out, &e, 4); break; }
     case F_SHUTDOWN:
         for (int i = 0; i < g_openN; i++) ID3D11Texture2D_Release(g_open[i].t); g_openN = 0;
-        if (S && pShut) { pShut(); Log("SteamVR disconnected"); } S = NULL; C = NULL; O = NULL; break;
+        if (S && pShut) { pShut(); Log("SteamVR disconnected"); } S = NULL; C = NULL; O = NULL; I = NULL; memset(&g_in, 0, sizeof g_in); break;
     case S_RTSIZE: { uint32_t w = 0, h = 0; if (S) S->GetRecommendedRenderTargetSize(&w, &h); memcpy(out, &w, 4); memcpy(out + 4, &h, 4); break; }
     case S_PROJMAT: { int32_t e; float n, fr; memcpy(&e, in, 4); memcpy(&n, in + 4, 4); memcpy(&fr, in + 8, 4); HmdMatrix44_t m; memset(&m, 0, sizeof m); if (S) m = S->GetProjectionMatrix((EVREye)e, n, fr); memcpy(out, &m, sizeof m); break; }
     case S_PROJRAW: { int32_t e; memcpy(&e, in, 4); float v[4] = { -1, 1, -1, 1 }; if (S) S->GetProjectionRaw((EVREye)e, &v[0], &v[1], &v[2], &v[3]); memcpy(out, v, 16); break; }
@@ -270,6 +274,15 @@ static void Handle(int fn)
         memcpy(out, &i32, 4); break; }
     case O_XFORMABS: { uint64_t h; int32_t o; HmdMatrix34_t m; memcpy(&h, in, 8); memcpy(&o, in + 8, 4); memcpy(&m, in + 12, sizeof m); i32 = O ? O->SetOverlayTransformAbsolute(h, (ETrackingUniverseOrigin)o, &m) : 1; memcpy(out, &i32, 4); break; }
     case O_XFORMDEV: { uint64_t h; uint32_t d; HmdMatrix34_t m; memcpy(&h, in, 8); memcpy(&d, in + 8, 4); memcpy(&m, in + 12, sizeof m); i32 = O ? O->SetOverlayTransformTrackedDeviceRelative(h, d, &m) : 1; memcpy(out, &i32, 4); break; }
+    case I_SETUP: {   /* in: the action manifest's path; out: ok, then a message */
+        char path[MAX_PATH]; memcpy(path, in, MAX_PATH); path[MAX_PATH - 1] = 0;
+        char msg[200]; i32 = VrIn_Setup(I, path, &g_in, msg, sizeof msg);
+        Log("SteamVR Input: %s", msg);
+        memcpy(out, &i32, 4); memcpy(out + 8, msg, sizeof msg); break; }
+    case I_READ: { VrInFrame fr; VrIn_Read(I, &g_in, &fr); memcpy(out, &fr, sizeof fr);
+        if (fr.err) { static int n = 0; if (n++ < 5) Log("SteamVR Input: reading the actions failed (error %d)", fr.err); }
+        break; }
+    case I_HAPTIC: { int32_t h; float v[3]; memcpy(&h, in, 4); memcpy(v, in + 4, 12); VrIn_Haptic(I, &g_in, h, v[0], v[1], v[2]); break; }
     default: { static int n = 0; if (n++ < 10) Log("unknown request %d", fn); }
     }
 }

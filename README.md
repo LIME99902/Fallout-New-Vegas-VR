@@ -72,6 +72,7 @@ FNVR writes a log to `Fallout New Vegas\FNVR.log`. That's the first thing to loo
 - **HUD parts:** health, AP, sneak indicator, compass, ammo/condition and crosshair can each be hidden, or the whole HUD switched off.
 - **Trading:** in the vendor menu, left X accepts the deal (and takes everything in a container).
 - **Menu pointer revolver:** in menus, a revolver in your right hand points at the screen and the trigger selects. Each click can fire a Ranger Sequoia shot (sound, recoil, flash), with its own volume setting.
+- **Every controller mapped properly:** Valve Index, Vive and Windows Mixed Reality controllers go through SteamVR's controller bindings with FNVR's own defaults (Index: thumbstick, squeeze to grab, finger tracking) - change any button in SteamVR. Quest and Rift Touch are read directly.
 - **Real 3D:** each eye gets its own picture every frame, like a game made for VR, so the world has real depth all around you. It's the standard view. It draws the world twice, so on a weaker PC pick **Alternating eyes** (lighter) or **2D** (flat, fastest) in the startup screen's **3D view** (Ctrl+F10 switches too).
 - **Game resolution that stays:** pick it on the startup screen (Automatic from your headset and PC, a size of your own, or the launcher's). FNVR puts it in the game's settings before the game reads them at every start, so the launcher or the game can't undo it. A new size needs one restart, and **Quit now** on the startup screen does that.
 

@@ -4,6 +4,16 @@ This is the default right-handed layout. With **Left-handed** turned on (setup s
 
 "Grip" is the side button under your middle finger. A "fist" is grip + trigger squeezed together.
 
+## Valve Index, Vive and Windows Mixed Reality controllers
+
+These are read through SteamVR's controller bindings, with FNVR's own default binding for each:
+
+- **Valve Index:** the thumbstick moves and turns (the trackpad does nothing unless you bind it), **squeezing** the handle is the grip (just resting your fingers on it isn't), A and B are A/X and B/Y, and every finger is tracked.
+- **Vive wands:** the trackpad is the stick, clicking it is A/X, the menu button is B/Y.
+- **Windows Mixed Reality:** the thumbstick moves and turns, clicking the trackpad is A/X, the menu button is B/Y.
+
+To change any button: SteamVR > Settings > Controllers > Manage Controller Bindings, then pick FNVR. Quest, Rift, Reverb G2 and Cosmos controllers are read directly, as before. Controls page > Controller input switches this (used from the next start).
+
 ## Seated play
 
 With **Play style: Seated** (setup screen or Body & profiles):

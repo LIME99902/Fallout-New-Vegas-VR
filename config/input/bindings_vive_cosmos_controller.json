@@ -1,0 +1,137 @@
+{
+  "controller_type": "vive_cosmos_controller",
+  "name": "FNVR - Vive Cosmos",
+  "description": "FNVR's default controls",
+  "action_manifest_version": 0,
+  "alias_info": {},
+  "bindings": {
+    "/actions/fnvr": {
+      "sources": [
+        {
+          "path": "/user/hand/left/input/joystick",
+          "mode": "joystick",
+          "inputs": {
+            "position": {
+              "output": "/actions/fnvr/in/stick"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/stickclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "pull": {
+              "output": "/actions/fnvr/in/trigger"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/triggerclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/grip",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/gripclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/x",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/primary"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/y",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/secondary"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/joystick",
+          "mode": "joystick",
+          "inputs": {
+            "position": {
+              "output": "/actions/fnvr/in/stick"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/stickclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/trigger",
+          "mode": "trigger",
+          "inputs": {
+            "pull": {
+              "output": "/actions/fnvr/in/trigger"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/triggerclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/grip",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/gripclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/a",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/primary"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/b",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/secondary"
+            }
+          }
+        }
+      ],
+      "chords": [],
+      "poses": [],
+      "haptics": [
+        {
+          "output": "/actions/fnvr/out/haptic",
+          "path": "/user/hand/left/output/haptic"
+        },
+        {
+          "output": "/actions/fnvr/out/haptic",
+          "path": "/user/hand/right/output/haptic"
+        }
+      ],
+      "skeleton": [
+        {
+          "output": "/actions/fnvr/in/skel_left",
+          "path": "/user/hand/left/input/skeleton/left"
+        },
+        {
+          "output": "/actions/fnvr/in/skel_right",
+          "path": "/user/hand/right/input/skeleton/right"
+        }
+      ]
+    }
+  }
+}
