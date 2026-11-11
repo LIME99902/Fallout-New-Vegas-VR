@@ -108,8 +108,8 @@ FNVR writes a log to `Fallout New Vegas\FNVR.log`. That's the first thing to loo
 - **Map:** the right stick moves the map cursor (at reduced strength, so the running world barely turns). A held button never carries over when the Pip-Boy closes, so fast travel won't make you jump.
 
 ### Weapons
-- **See-through scopes:** look through a scope on your gun for a magnified view. Raising a scoped gun to your eye brings up the game's scope view. (Works with New Vegas True Scopes.)
-- **Scope placement per gun:** the picture's height (in cm) and size can be set for each gun model; guns sharing a model share the setting. Models without a lens part start at the gun's highest point.
+- **See-through scopes:** look through a scope on your gun for a magnified view - in either hand (a rifle in your other hand is sighted with your other eye). Guns a scope can be put on only have one while the scope mod is on them. Raising a scoped gun to your eye brings up the game's scope view. (Works with New Vegas True Scopes.)
+- **Scope placement per gun:** the picture sits on the model's own scope lens, or its scope part's eyepiece; its height (in cm) and size can be set for each gun model; guns sharing a model share the setting.
 - **Fire rate:** a fire rate setting (25%-400%) for the gun in your hand.
 - **Fast revolvers:** revolvers (Ranger Sequoia, Lucky, That Gun, .44, Schofield, S&W 500...) fire as fast as you pull the trigger.
 - **Ranger Sequoia:** set back to its 5-round cylinder if another mod changed it.

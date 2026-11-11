@@ -33,7 +33,7 @@
 #include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.6.0 (Valve Index, Vive and Windows Mixed Reality controllers read through SteamVR Input with FNVR's own bindings - the Index thumbstick alone moves you, squeezing grabs, its fingers are tracked; buttons changeable in SteamVR's controller bindings; the left trigger on a weapon in the Pip-Boy's item list makes it your other hand's weapon again - the highlighted item is read from the game's own menu (the script function it used doesn't exist in New Vegas); the other hand's power fist is worn on that forearm - the exact mirror image of how the gun hand's sits on its forearm, drawn with your arms, your own hand and fingers moving inside it; its swing plays the weapon's swing sound and fires its piston; tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.6.1 (scopes: a gun a scope can be put on only has one while the scope mod is on it; a scoped rifle in the other hand can be sighted through too (with the other eye); the lens is found on the model by its scope part along the gun's own top, not the controller's - no more scope picture in the grip; Valve Index, Vive and Windows Mixed Reality controllers read through SteamVR Input with FNVR's own bindings - the Index thumbstick alone moves you, squeezing grabs, its fingers are tracked; buttons changeable in SteamVR's controller bindings; the left trigger on a weapon in the Pip-Boy's item list makes it your other hand's weapon again - the highlighted item is read from the game's own menu (the script function it used doesn't exist in New Vegas); the other hand's power fist is worn on that forearm - the exact mirror image of how the gun hand's sits on its forearm, drawn with your arms, your own hand and fingers moving inside it; its swing plays the weapon's swing sound and fires its piston; tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -1640,6 +1640,39 @@ static void *PlayerWeaponForm(void)
     return entry ? *(void **)(entry + 0x08) : NULL;
 }
 
+/* Is there a scope on the gun right now? A gun a scope can be put on (one of its three weapon mods does "zoom" - effect 14)
+   has one only while that mod is on it - its "has a scope" flag just says it can; any other gun goes by the flag. The mods
+   on a gun: its extra data's weapon mod flags (type 0x8D, the byte at +0x0C: bit 0 mod 1, bit 1 mod 2, bit 2 mod 3). */
+typedef char *(__attribute__((thiscall)) *XGet_t)(void *list, unsigned char type);
+static const char *WeapName(char *w) { const char *n = w && !IsBadReadPtr(w + 0x34, 4) ? *(const char **)(w + 0x34) : NULL; return n && !IsBadStringPtrA(n, 64) && *n ? n : "a gun"; }
+static int Xl_ModFlags(char *xl)   /* (an extra data list's weapon mods; -1 if there's no list) */
+{
+    if (!xl || IsBadReadPtr(xl, 0x10)) return -1;
+    char *x = ((XGet_t)0x00410220)(xl, 0x8D);   /* (BaseExtraList::GetExtraData) */
+    return x && !IsBadReadPtr(x, 0x10) ? *(uint8_t *)(x + 0x0C) : 0;
+}
+static int Entry_ModFlags(char *entry)   /* (an inventory entry's: its extra data lists are a simple list {data, next}) */
+{
+    if (!entry || IsBadReadPtr(entry, 12)) return -1;
+    char **lst = *(char ***)entry;
+    if (!lst || IsBadReadPtr(lst, 8)) return 0;
+    return Xl_ModFlags(lst[0]);
+}
+static bool Weap_Scoped(char *weap, int modFlags)
+{
+    if (!weap || IsBadReadPtr(weap, 0x190) || *(BYTE *)(weap + 0xF4) < 3) return false;
+    bool slot = false, on = false;
+    for (int i = 0; i < 3; i++) if (*(uint32_t *)(weap + 0x180 + 4 * i) == 14) { slot = true; if (modFlags > 0 && (modFlags & (1 << i))) on = true; }
+    bool r = slot ? on : (*(BYTE *)(weap + 0x100) & 4) != 0;
+    if (slot) {   /* (said when it changes, per gun) */
+        static struct { char *w; int f; } seen[4]; static int nSeen = 0, logs = 0;
+        int k = -1; for (int i = 0; i < nSeen; i++) if (seen[i].w == weap) k = i;
+        if (k < 0) { k = nSeen < 4 ? nSeen++ : 3; seen[k].w = weap; seen[k].f = -99; }
+        if (seen[k].f != modFlags) { seen[k].f = modFlags;
+            if (logs++ < 30) Log("Scope: %s takes a scope mod - %s", WeapName(weap), r ? "it's on, so it has a scope" : "it isn't on, so no scope (iron sights)"); }
+    }
+    return r;
+}
 static bool PlayerWeaponScoped(void)
 {
     char *player = (char *)GetPlayer();
@@ -1647,7 +1680,7 @@ static bool PlayerWeaponScoped(void)
     if (!process) return false;
     char *entry = (char *)((GetWeaponInfo_t)(*(void ***)process)[0x148 / 4])(process);
     char *weapon = entry ? *(char **)(entry + 0x08) : NULL;
-    return weapon && *(BYTE *)(weapon + 0xF4) >= 3 && (*(BYTE *)(weapon + 0x100) & 4);
+    return weapon && Weap_Scoped(weapon, Entry_ModFlags(entry));
 }
 
 /* Melee: a fast swing of a hand (punch, slash) presses attack for a moment. */
@@ -14799,37 +14832,6 @@ static void Scope_LensRender(char *player, const float *E, const float *f, const
     if (logs++ < 4) Log("Scope camera: %dpx view at %.1f deg into \"%s\" (%s)", px, fov, g_lensGeomName, ok ? "ran" : "FAILED");
 }
 
-/* The highest drawn part of the gun model (seen along the gun's "up"): on a scoped rifle that's the scope.
-   Gives the rear end of it along the barrel - where the eyepiece is. */
-static void TopPart_Walk(char *node, const float *up, const float *W, int depth, float *bestH, const float **best)
-{
-    if (!node || depth > 10 || IsBadReadPtr(node, 0xB0)) return;
-    const float *b = *(const float **)(node + 0x20);
-    char **kids = AsNode(node) ? *(char ***)(node + 0xA0) : NULL;
-    unsigned count = kids ? *(uint16_t *)(node + 0xA6) : 0;
-    if (!kids || !count) {   /* a drawn piece */
-        if (b && !IsBadReadPtr(b, 16) && b[3] > 0.3f && b[3] < 25.0f) {
-            float d[3] = { b[0] - W[0], b[1] - W[1], b[2] - W[2] };
-            float h = d[0] * up[0] + d[1] * up[1] + d[2] * up[2];
-            if (h > *bestH) { *bestH = h; *best = b; }
-        }
-        return;
-    }
-    for (unsigned i = 0; i < count && i < 64; i++) TopPart_Walk(kids[i], up, W, depth + 1, bestH, best);
-}
-static bool ScopeTopPart(char *weapNode, const float *up, const float *f, float *E, float *tubeR)
-{
-    if (!weapNode) return false;
-    const float *W = (const float *)(weapNode + NIAV_WORLD_TRANSLATE);
-    float bestH = 1.0f; const float *best = NULL;
-    TopPart_Walk(weapNode, up, W, 0, &bestH, &best);
-    if (!best) return false;
-    float R = best[3];
-    for (int i = 0; i < 3; i++) E[i] = best[i] - f[i] * R * 0.80f;
-    *tubeR = fminf(fmaxf(R * 0.16f, 1.0f), 2.6f);
-    static int nl = 0; if (nl++ < 6) Log("Scope: no lens part in the model - using its highest part (%.1f units above the grip, %.1f across)", bestH, R);
-    return true;
-}
 /* Scope picture placement, per gun (saved by the gun's name): height in cm along the gun's "up" ([ScopeHeightCm],
    + = higher) and size ([ScopeSize], 1 = the lens as the model has it). */
 static float g_scopeOffY = 0.0f, g_scopeSize = 1.0f, g_scopeOffZ = 0.0f; static char g_scopeKey[96] = "-";
@@ -14856,89 +14858,134 @@ static void ScopeHeight_Load(char *weap)
     if (!(g_scopeSize >= 0.2f && g_scopeSize <= 5.0f)) g_scopeSize = 1.0f;
     Log("Scope: '%s' (model %s) picture %+.1f cm high, %+.1f cm forward, size %.2f", nm, g_scopeKey, g_scopeOffY, g_scopeOffZ, g_scopeSize);
 }
-static void Scope_Prepare(char *player, char *cam)
+/* Where a gun's scope lens is (the eyepiece): the model's own ##ScopeLens if it has one; else its scope - a part named
+   "scope" (not its mount, not the whole gun) - at its rear end; else its highest drawn piece over the gun (not behind the
+   grip). "Up" is the gun's own top (from its shape), not the controller's - a gun sits tilted in the hand, and along the
+   controller's up its grip or stock could come out highest. */
+static void ScopeLens_Walk(char *n, const float *O, const float *fw, const float *up, float maxR, int depth,
+                           float *namedR, const float **named, float *topH, const float **top, const float **lensLike)
 {
-    g_scope.active = false; g_capWant = false; g_scopeSighting = false;
+    if (!n || depth > 14 || IsBadReadPtr(n, 0xB0) || !*(void **)n) return;
+    if (*(uint32_t *)(n + 0x30) & 1) return;   /* (hidden) */
+    const char *nm = *(const char **)(n + 0x08);
+    char low[96] = "";
+    if (nm && !IsBadStringPtrA(nm, 96)) { size_t i = 0; for (; nm[i] && i < sizeof low - 1; i++) low[i] = (char)tolower((unsigned char)nm[i]); low[i] = 0; }
+    const float *b = *(const float **)(n + 0x20);
+    bool isNode = AsNode(n) != NULL; unsigned kc = isNode ? *(uint16_t *)(n + 0xA6) : 0;
+    if (b && !IsBadReadPtr(b, 16) && b[3] > 0.2f && b[3] < maxR) {
+        float d[3]; V3Sub(d, b, O);
+        float h = V3Dot(d, up), al = V3Dot(d, fw);
+        if (strstr(low, "scopelens") && b[3] < 6.0f && !*lensLike) *lensLike = b;
+        else if (strstr(low, "scope") && !strstr(low, "mount") && !strstr(low, "rail") && !strstr(low, "##") && h > -1.0f && b[3] > 0.8f) {
+            if (b[3] > *namedR) { *namedR = b[3]; *named = b; }   /* (the biggest one: the tube) */
+        }
+        if (!kc && b[3] > 0.3f && h > *topH && al > -0.25f * maxR) { *topH = h; *top = b; }
+    }
+    char **kids = isNode ? *(char ***)(n + 0xA0) : NULL;
+    for (unsigned i = 0; kids && i < kc && i < 64; i++) ScopeLens_Walk(kids[i], O, fw, up, maxR, depth + 1, namedR, named, topH, top, lensLike);
+}
+static bool ScopeLens_Find(char *root, const float *fw, const float *up, float *E, float *tubeR, const char **how)
+{
+    if (!root || IsBadReadPtr(root, 0xB0)) return false;
+    char *ln = FindBone(root, "##ScopeLens", 0);
+    const float *b = ln ? *(const float **)(ln + 0x20) : NULL;
+    if (b && !IsBadReadPtr(b, 16) && b[3] > 0.2f && b[3] < 6.0f) { memcpy(E, b, 12); *tubeR = b[3]; *how = "the model's scope lens"; return true; }
+    const float *rb = *(const float **)(root + 0x20);
+    float gunR = rb && !IsBadReadPtr(rb, 16) && rb[3] > 2.0f && rb[3] < 300.0f ? rb[3] : 40.0f;
+    float maxR = fminf(gunR * 0.6f, 20.0f);
+    const float *O = (const float *)(root + NIAV_WORLD_TRANSLATE);
+    float namedR = 0, topH = 1.0f; const float *named = NULL, *top = NULL, *lensLike = NULL;
+    ScopeLens_Walk(root, O, fw, up, maxR, 0, &namedR, &named, &topH, &top, &lensLike);
+    if (lensLike) { memcpy(E, lensLike, 12); *tubeR = fmaxf(lensLike[3], 1.0f); *how = "a lens part"; return true; }
+    const float *p = named ? named : top;
+    if (!p) return false;
+    float R = p[3];
+    for (int i = 0; i < 3; i++) E[i] = p[i] - fw[i] * R * 0.80f;   /* (its rear end: the eyepiece) */
+    *tubeR = fminf(fmaxf(R * 0.16f, 1.0f), 2.6f);
+    *how = named ? "its scope part" : "its highest part over the gun";
+    return true;
+}
+/* Sighting through a scope - the gun hand's gun's, or the other hand's (a second rifle held there): when an eye is close
+   behind one's lens, looking straight down its barrel, a magnified picture of what it points at is drawn in the lens.
+   eye: which eye this picture is for in 3D (-1 = one picture for both) - the gun hand's scope is seen with that side's eye,
+   the other hand's with the other eye. */
+static bool g_scopeSighting1 = false;   /* (sighting through the other hand's gun's scope) */
+static void Scope_Prepare(char *player, char *cam, int eye)
+{
+    g_scope.active = false; g_capWant = false; g_scopeSighting = false; g_scopeSighting1 = false;
     { static bool lastOut = false; if (g_weaponOutThisFrame != lastOut) { lastOut = g_weaponOutThisFrame; Scope_Forget(); } }
-    if (!g_scopesEnabled || !g_weaponOutThisFrame || !g_weaponNode || !g_bbW || g_adsActive) return;
-    char *process = *(char **)(player + 0x68);
-    if (!process) return;
-    char *entry = (char *)((GetWeaponInfo_t)(*(void ***)process)[0x148 / 4])(process);
-    char *weap = entry ? *(char **)(entry + 0x08) : NULL;
-    if (!weap || *(BYTE *)(weap + 0xF4) < 3 || !(*(BYTE *)(weap + 0x100) & 4)) return;   /* gun with a scope */
-
-    /* the scope's eyepiece: the model's sighting node if it has one */
-    static unsigned searchTick = 0;
-    if (g_sightFor != g_weaponNode || (!g_sightNode && (searchTick++ % 60) == 0)) {
-        g_sightFor = g_weaponNode;
-        g_sightNode = FindBone(g_weaponNode, "##ScopeLens", 0);
-        if (!g_sightNode) g_sightNode = FindNodeContaining(g_weaponNode, "scope", 0);
-        if (g_sightNode && AsNode(g_sightNode)) {   /* the drawable lens is the node's first child */
-            char **kids = *(char ***)(g_sightNode + 0xA0);
-            unsigned count = *(uint16_t *)(g_sightNode + 0xA6);
-            for (unsigned i = 0; kids && i < count; i++) {
-                const char *kn = kids[i] ? *(const char **)(kids[i] + 0x08) : NULL;
-                if (kn && *kn && strlen(kn) < sizeof g_lensGeomName) {
-                    if (strcmp(g_lensGeomName, kn)) { strcpy(g_lensGeomName, kn); g_nProj = 0; }
-                    break;
-                }
+    if (!g_scopesEnabled || !g_bbW || g_adsActive || !player || !cam) return;
+    int aim = g_leftHanded ? 0 : 1, off = 1 - aim;
+    typedef struct { char *weap, *root; float E[3], f[3], up[3], tubeR; const char *how; } SGun;
+    SGun G[2]; bool have[2] = { false, false };
+    /* the gun hand's gun */
+    if ((eye < 0 || eye == aim) && g_weaponOutThisFrame && g_weaponNode && g_handWOk[aim]) {
+        char *process = *(char **)(player + 0x68);
+        char *entry = process ? (char *)((GetWeaponInfo_t)(*(void ***)process)[0x148 / 4])(process) : NULL;
+        char *weap = entry ? *(char **)(entry + 0x08) : NULL;
+        if (weap && Weap_Scoped(weap, Entry_ModFlags(entry))) {
+            SGun *g = &G[0]; g->weap = weap; g->root = g_weaponNode;
+            float h = g_handAimHeading + g_shotYawTrimDeg / RAD2DEG, pt = g_handAimPitch + g_shotPitchTrimDeg / RAD2DEG;
+            g->f[0] = sinf(h) * cosf(pt); g->f[1] = cosf(h) * cosf(pt); g->f[2] = -sinf(pt);   /* (where its shots go) */
+            {   /* its top, from its shape (kept per gun) */
+                static char *axFor = NULL; static void *axW = NULL; static float bl[3], ul[3]; static bool axOk = false;
+                if (axFor != g_weaponNode || axW != weap) { axFor = g_weaponNode; axW = weap; float len; axOk = LG_ModelAxes(g_weaponNode, bl, ul, &len); }
+                const float *W = (const float *)(g_weaponNode + NIAV_WORLD_ROTATE);
+                if (axOk) for (int i = 0; i < 3; i++) g->up[i] = W[i * 3] * ul[0] + W[i * 3 + 1] * ul[1] + W[i * 3 + 2] * ul[2];
+                else for (int i = 0; i < 3; i++) g->up[i] = g_handWR[aim][i][1];
+                float pd = V3Dot(g->up, g->f); for (int i = 0; i < 3; i++) g->up[i] -= pd * g->f[i];
+                float L = V3Len(g->up); if (L > 1e-3f) for (int i = 0; i < 3; i++) g->up[i] /= L; else for (int i = 0; i < 3; i++) g->up[i] = g_handWR[aim][i][1];
             }
-        }
-        static int partLogs = 0;
-        if (partLogs++ < 4) {
-            char line[1600] = ""; LogBoneTree(g_weaponNode, 0, line, sizeof line);
-            Log("Scope: weapon model parts: %s", line);
-            Log("Scope: scope part %s", g_sightNode ? *(const char **)(g_sightNode + 0x08) : "not found (using an estimate)");
+            have[0] = ScopeLens_Find(g_weaponNode, g->f, g->up, g->E, &g->tubeR, &g->how);
         }
     }
-    int aim = g_leftHanded ? 0 : 1;
-    if (!g_handWOk[aim]) return;
-    float h = g_handAimHeading + g_shotYawTrimDeg / RAD2DEG, pt = g_handAimPitch + g_shotPitchTrimDeg / RAD2DEG;
-    float f[3] = { sinf(h) * cosf(pt), cosf(h) * cosf(pt), -sinf(pt) };       /* where shots go */
-    float up[3] = { g_handWR[aim][0][1], g_handWR[aim][1][1], g_handWR[aim][2][1] };
-    float E[3], tubeR = 1.7f;
-    const float *bnd = g_sightNode ? *(const float **)(g_sightNode + 0x20) : NULL;
-    bool isLens = g_sightNode && !_stricmp(*(const char **)(g_sightNode + 0x08), "##ScopeLens");
-    if (bnd && isLens && bnd[3] > 0.2f && bnd[3] < 6.0f) {   /* the model's own scope lens */
-        memcpy(E, bnd, 12);
-        tubeR = bnd[3];
-    } else if (ScopeTopPart(g_weaponNode, up, f, E, &tubeR)) {   /* no lens in the model: the gun's highest part (where a scope sits) */
-    } else if (bnd && bnd[3] > 1.0f && bnd[3] < 40.0f) {   /* rear end of the scope part along the barrel */
-        float R = bnd[3];
-        for (int i = 0; i < 3; i++) E[i] = bnd[i] - f[i] * R * 0.80f;
-        tubeR = fminf(fmaxf(R * 0.16f, 1.0f), 2.6f);
-    } else { const float *W = (const float *)(g_weaponNode + NIAV_WORLD_TRANSLATE); for (int i = 0; i < 3; i++) E[i] = W[i] + up[i] * 5.0f + f[i] * 4.0f; }
+    /* the other hand's gun */
+    if ((eye < 0 || eye == off) && g_lg.on && !g_lg.melee && g_lg.ref && g_lg.base && g_handWOk[off]) {
+        char *weap = (char *)g_lg.base;
+        if (Weap_Scoped(weap, Xl_ModFlags(g_lg.ref + 0x44))) {
+            SGun *g = &G[1]; g->weap = weap; g->root = LG_Root(g_lg.ref);
+            float sd[3]; MR_GunWorldAxes(1, off, g->f, g->up, sd);
+            have[1] = g->root && ScopeLens_Find(g->root, g->f, g->up, g->E, &g->tubeR, &g->how);
+        }
+    }
+    {   static int lastHave = -1; int hv = (have[0] ? 1 : 0) | (have[1] ? 2 : 0);
+        if (hv != lastHave && eye <= 0) { lastHave = hv;
+            if (have[0]) Log("Scope: gun hand's %s - lens at %s", WeapName(G[0].weap), G[0].how);
+            if (have[1]) Log("Scope: other hand's %s - lens at %s", WeapName(G[1].weap), G[1].how); } }
+    if (!have[0] && !have[1]) return;
+    { static unsigned partLogs = 0; if (have[0] && partLogs++ < 2) { char line[1600] = ""; LogBoneTree(g_weaponNode, 0, line, sizeof line); Log("Scope: weapon model parts: %s", line); } }
 
+    /* which one an eye is behind: close behind its lens, looking straight down its barrel */
     const float *C = (const float *)(cam + NIAV_WORLD_TRANSLATE);
-    float d[3]; V3Sub(d, E, C);
-    float dist = V3Len(d);
-    /* only when you're really sighting: eye close behind the lens, looking straight down the barrel */
-    static bool sighting = false;
-    float alignNeed = sighting ? 0.970f : 0.985f, distMax = sighting ? 40.0f : 32.0f;
-    sighting = dist > 0.5f && dist < distMax && V3Dot(d, f) / dist > alignNeed;
-    static int sightLogs = 0;
-    static bool wasSighting = false;
-    if (sighting != wasSighting && sightLogs < 12) { sightLogs++; Log("Scope: %s (eye %.1f units from the lens, %.1f deg off the barrel)", sighting ? "sighting through the scope" : "stopped sighting", dist, acosf(fminf(V3Dot(d, f) / fmaxf(dist, 0.01f), 1.0f)) * RAD2DEG); }
-    if (sighting && !wasSighting) {
-        static int episodes = 0;
-        if (episodes++ < 2) g_capLogClears = 24;      /* log what the game clears while drawing (diagnostics) */
-        if (g_capSnaps < 1) { g_capSnaps++; g_capSnapWanted = true; }
+    static bool sighting[2] = { false, false };
+    int sel = -1; float selAl = 0;
+    for (int k = 0; k < 2; k++) {
+        if (!have[k]) { if (eye < 0 || eye == (k ? off : aim)) sighting[k] = false; continue; }
+        float d[3]; V3Sub(d, G[k].E, C); float dist = V3Len(d);
+        float alignNeed = sighting[k] ? 0.970f : 0.985f, distMax = sighting[k] ? 40.0f : 32.0f;
+        float al = dist > 0.5f ? V3Dot(d, G[k].f) / dist : 0.0f;
+        bool now = dist > 0.5f && dist < distMax && al > alignNeed;
+        if (now != sighting[k]) { static int sl = 0; if (sl++ < 16) Log("Scope: %s the %s scope (eye %.1f units from the lens, %.1f deg off the barrel)",
+            now ? "sighting through" : "stopped sighting", k ? "other hand's" : "gun hand's", dist, acosf(fminf(fmaxf(al, -1.0f), 1.0f)) * RAD2DEG); }
+        sighting[k] = now;
+        if (now && al > selAl) { sel = k; selAl = al; }
     }
-    wasSighting = sighting;
-    g_scopeSighting = sighting; memcpy(g_scopeEye, C, 12);
-    if (!sighting) return;
+    if (sel == 0) { g_scopeSighting = true; memcpy(g_scopeEye, C, 12); }
+    if (sel == 1) g_scopeSighting1 = true;
+    {   static bool was = false; bool any = sel >= 0;
+        if (any && !was) { static int episodes = 0; if (episodes++ < 2) g_capLogClears = 24; if (g_capSnaps < 1) { g_capSnaps++; g_capSnapWanted = true; } }
+        was = any; }
+    if (sel < 0) return;
+    SGun *g = &G[sel];
+    const float *E = g->E, *f = g->f, *up = g->up; char *weap = g->weap;
+    float d[3]; V3Sub(d, E, C);
     /* camera axes (head-driven camera, no roll) and the image's tangent range */
     M3 B; GameBasis(B, *PlayerRotZ(player), -*PlayerRotX(player));
     float R[3] = { B[0][0], B[1][0], B[2][0] }, U[3] = { B[0][1], B[1][1], B[2][1] }, F[3] = { -B[0][2], -B[1][2], -B[2][2] };
     {   /* use the camera's real orientation (what the picture was actually drawn with) */
         const float *Cw = (const float *)(cam + NIAV_WORLD_ROTATE);   /* columns: view, up, right */
         float cF[3] = { Cw[0], Cw[3], Cw[6] }, cU[3] = { Cw[1], Cw[4], Cw[7] }, cR[3] = { Cw[2], Cw[5], Cw[8] };
-        if (fabsf(V3Len(cF) - 1.0f) < 0.05f && fabsf(V3Len(cR) - 1.0f) < 0.05f) {
-            static int bl = 0;
-            if (bl++ < 3) Log("Scope: camera vs head basis: view %.2f deg apart, right %.2f deg apart",
-                              acosf(fminf(V3Dot(cF, F), 1.0f)) * RAD2DEG, acosf(fminf(V3Dot(cR, R), 1.0f)) * RAD2DEG);
-            memcpy(F, cF, 12); memcpy(U, cU, 12); memcpy(R, cR, 12);
-        }
+        if (fabsf(V3Len(cF) - 1.0f) < 0.05f && fabsf(V3Len(cR) - 1.0f) < 0.05f) { memcpy(F, cF, 12); memcpy(U, cU, 12); memcpy(R, cR, 12); }
     }
     const float *fr = (const float *)(cam + NICAMERA_FRUSTUM);
     float l = fr[0], r = fr[1], t = fr[2], b = fr[3];
@@ -14957,7 +15004,7 @@ static void Scope_Prepare(char *player, char *cam)
     if (!ok1 || !ok2) return;
     float z = V3Dot(d, F);
     float pxPerTan = g_bbW / (r - l);
-    float rad = tubeR / fmaxf(z, 1.0f) * pxPerTan;           /* the scope tube's opening */
+    float rad = g->tubeR / fmaxf(z, 1.0f) * pxPerTan;           /* the scope tube's opening */
     rad = fminf(rad, g_bbH * 0.30f * fmaxf(g_scopeSize, 1.0f));
     if (rad < 12.0f) return;
     float sfov = *(const float *)(weap + 0x110);
@@ -16397,7 +16444,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         if (g_inGameplay && cam && player && !g_menuCached && g_bodyValid) {
             if (armsDone) LG_Fingers();
             if (armsDone) Palm_Update();
-            if (armsDone && QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam); else g_scope.active = false;
+            g_scope.active = false;
             if (armsDone) PipScr_Prepare((char *)player, cam); else g_pipQuad.ok = false;
             /* sighting through the scope: leave the gun out of the picture so the magnified view shows
                the target instead of the inside of the scope (the scope view takes its place) */
@@ -16407,6 +16454,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             MR_Visual();   /* (manual reloading: the magazine out, in your hand) */
             Pf_Visual();   /* (power fists: the piston fires when a blow lands) */
             Mf_Tick();     /* (muzzle flash light) */
+            if (armsDone && QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam, -1); else g_scope.active = false;   /* (after the guns are placed in the hands) */
             if (armsDone) MeleeAngle_Apply();
             if (armsDone) Lighter_Apply((char *)player);   /* (the dynamite's lighter in your other hand) */
             if (armsDone) { RG_Capture(); Barrel_Capture(); }
@@ -16466,7 +16514,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                 }
                 for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }
                 if (armsDone && grabVis) {
-                    if (eye == aimEye && QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam); else { g_scope.active = false; g_capWant = false; }
+                    if (QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam, eye); else { g_scope.active = false; g_capWant = false; }
                     PipScr_Prepare((char *)player, cam);
                 }
                 double tr = QpcMs();
@@ -16476,7 +16524,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                 te[eye] = QpcMs() - tr;
                 if (te[eye] > 250.0 && g_fullPipNow) g_fullPipSlow = true;
                 for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }   /* (in case the game moved it while drawing) */
-                if (eye == aimEye) Scope_Draw(dev); else g_scope.active = false;
+                Scope_Draw(dev);   /* (only this eye's scope picture, if it has one) */
                 PipScr_Draw(dev);
                 g_rope.on = ropeOn; Rope_Draw(dev);
                 Ol_Collect(cam); Ol_Draw(dev);
@@ -16510,14 +16558,14 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             }
             for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }
             if (armsDone && grabVis) {
-                if (eye == aimEye && QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam); else { g_scope.active = false; g_capWant = false; }
+                if (QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam, eye); else { g_scope.active = false; g_capWant = false; }
                 PipScr_Prepare((char *)player, cam);
             }
             Lgd_FrameBegin();
             o_DoRenderFrame(osGlobals, renderer, a, b);
             Lgd_FrameEnd();
             for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }   /* (in case the game moved it while drawing) */
-            if (eye == aimEye) Scope_Draw(dev); else g_scope.active = false;
+            Scope_Draw(dev);
             PipScr_Draw(dev);
             g_rope.on = ropeOn; Rope_Draw(dev);
             Ol_Collect(cam); Ol_Draw(dev);
