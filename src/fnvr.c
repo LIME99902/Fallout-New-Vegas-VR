@@ -32,8 +32,8 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        211
-#define FNVR_VERSION_STR    "2.7.9 (3D: each eye's picture is taken at the end of the frame, so the HUD, scope and colour effects are in both eyes; 2.7.8: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION        212
+#define FNVR_VERSION_STR    "2.8.0 (full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -3219,8 +3219,10 @@ static void Rec_Release9(void);
 static void Far_UiTick(void);
 static void Holster_Tick(void);
 static void ZC_Release(void);
+static void F3_Release(void);
 static void Display_Release9(void)
 {
+    F3_Release();
     Scope_Release();
     HudEl_Release9();
     UI_Release9();
@@ -6315,10 +6317,94 @@ static long TF_Count2(IDirect3DDevice9 *dev)
     return n;
 }
 
+
+/* ---- Full 3D: both eyes drawn every frame ---------------------------------------------------------------------------
+   The game hands most of its scene culling to two worker threads that run once a frame - a second drawing of the world
+   in the same frame found them already finished and drew nothing new (both eyes came out the same). While full 3D is on,
+   the threads are switched off between frames (the game then culls on its own thread, for each eye); each eye's world
+   picture is kept, the HUD the game draws after it goes into its own picture, and at the end of the frame the HUD is laid
+   over both eyes. The first full 3D frame is checked: if the world didn't reach the screen picture inside the drawing, or
+   the right eye came out the same as the left, it falls back to alternating eyes and says why in the log. */
+#define MT_RENDER_FLAG ((volatile BYTE *)0x011F94B4)
+static bool g_f3Want = false;        /* (full 3D asked for this frame: the culling threads go off at the end of it) */
+static int  g_f3Mode = 0;            /* 0 not checked yet, 1 works, -1 doesn't here (alternating eyes instead) */
+static bool g_f3Pending = false;     /* (both eyes' pictures kept: the HUD goes over them at the end of the frame) */
+static bool g_f3UiOk = false;
+static BYTE g_mtOrig = 0xFF;
+static IDirect3DTexture9 *g_f3Tex[2]; static IDirect3DSurface9 *g_f3Surf[2]; static UINT g_f3W = 0, g_f3H = 0;
+static IDirect3DSurface9 *g_f3PrRT = NULL, *g_f3PrSys = NULL;
+static void F3_Release(void)
+{
+    for (int e = 0; e < 2; e++) { if (g_f3Surf[e]) { IDirect3DSurface9_Release(g_f3Surf[e]); g_f3Surf[e] = NULL; } if (g_f3Tex[e]) { IDirect3DTexture9_Release(g_f3Tex[e]); g_f3Tex[e] = NULL; } }
+    if (g_f3PrRT) { IDirect3DSurface9_Release(g_f3PrRT); g_f3PrRT = NULL; } if (g_f3PrSys) { IDirect3DSurface9_Release(g_f3PrSys); g_f3PrSys = NULL; }
+    g_f3W = g_f3H = 0; g_f3Pending = false;
+}
+static bool F3_Ensure(IDirect3DDevice9 *dev)
+{
+    IDirect3DSurface9 *bb = NULL; D3DSURFACE_DESC bd;
+    if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return false;
+    IDirect3DSurface9_GetDesc(bb, &bd); IDirect3DSurface9_Release(bb);
+    if (g_f3Surf[0] && g_f3Surf[1] && g_f3W == bd.Width && g_f3H == bd.Height) return true;
+    F3_Release();
+    for (int e = 0; e < 2; e++) {
+        if (FAILED(IDirect3DDevice9_CreateTexture(dev, bd.Width, bd.Height, 1, D3DUSAGE_RENDERTARGET, bd.Format, D3DPOOL_DEFAULT, &g_f3Tex[e], NULL))) { g_f3Tex[e] = NULL; F3_Release(); return false; }
+        IDirect3DTexture9_GetSurfaceLevel(g_f3Tex[e], 0, &g_f3Surf[e]);
+    }
+    IDirect3DDevice9_CreateRenderTarget(dev, 32, 32, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &g_f3PrRT, NULL);
+    IDirect3DDevice9_CreateOffscreenPlainSurface(dev, 32, 32, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &g_f3PrSys, NULL);
+    g_f3W = bd.Width; g_f3H = bd.Height;
+    Log("Full 3D: eye pictures %ux%u ready (format %d)", g_f3W, g_f3H, (int)bd.Format);
+    return g_f3Surf[0] && g_f3Surf[1];
+}
+/* (the check) the screen picture shrunk to 32x32: how much of it is still the magenta it was cleared to, and a sum of it */
+static bool F3_Probe(IDirect3DDevice9 *dev, float *magenta, uint32_t *sum)
+{
+    *magenta = 0; *sum = 0;
+    if (!g_f3PrRT || !g_f3PrSys) return false;
+    IDirect3DSurface9 *bb = NULL; if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return false;
+    HRESULT hr = IDirect3DDevice9_StretchRect(dev, bb, NULL, g_f3PrRT, NULL, D3DTEXF_POINT); IDirect3DSurface9_Release(bb);
+    if (FAILED(hr) || FAILED(IDirect3DDevice9_GetRenderTargetData(dev, g_f3PrRT, g_f3PrSys))) return false;
+    D3DLOCKED_RECT lr; if (FAILED(IDirect3DSurface9_LockRect(g_f3PrSys, &lr, NULL, D3DLOCK_READONLY))) return false;
+    int mg = 0; uint32_t h = 2166136261u;
+    for (int y = 0; y < 32; y++) { const uint32_t *row = (const uint32_t *)((const BYTE *)lr.pBits + y * lr.Pitch);
+        for (int x = 0; x < 32; x++) { uint32_t c = row[x] & 0xFFFFFF; int r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+            if (r > 230 && b > 230 && g < 25) mg++; h = (h ^ c) * 16777619u; } }
+    IDirect3DSurface9_UnlockRect(g_f3PrSys);
+    *magenta = mg / 1024.0f; *sum = h;
+    return true;
+}
+/* (end of a frame, the worker threads idle) the culling threads off while full 3D is wanted, back on when it isn't */
+static void F3_ThreadsBetweenFrames(void)
+{
+    bool off = g_f3Want && g_f3Mode >= 0;
+    g_f3Want = false;
+    if (off && *MT_RENDER_FLAG) { g_mtOrig = *MT_RENDER_FLAG; *MT_RENDER_FLAG = 0; static int n = 0; if (n++ < 3) Log("Full 3D: the game's culling threads switched off (each eye culls its own view)"); }
+    else if (!off && g_mtOrig != 0xFF) { *MT_RENDER_FLAG = g_mtOrig; g_mtOrig = 0xFF; static int n = 0; if (n++ < 3) Log("Full 3D: off - the game's culling threads back on"); }
+}
+/* (end of a full 3D frame) each eye's picture back on the screen picture, the HUD over it, taken for that eye */
+static void F3_Present(IDirect3DDevice9 *dev)
+{
+    g_f3Pending = false;
+    IDirect3DSurface9 *bb = NULL; if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
+    bool uiWas = g_uiReady; if (g_f3UiOk) g_uiReady = true;
+    bool ok0 = false, ok1 = false;
+    for (int e = 0; e < 2; e++) {
+        if (!g_f3Surf[e] || FAILED(IDirect3DDevice9_StretchRect(dev, g_f3Surf[e], NULL, bb, NULL, D3DTEXF_POINT))) break;
+        UI_CompositeTo(dev);
+        LHud_Draw(dev);
+        if (e == 0) ok0 = Capture_Eye(dev, 0); else ok1 = ok0 && Capture_Eye(dev, 1);
+    }
+    g_uiReady = uiWas; g_f3UiOk = false;
+    IDirect3DSurface9_Release(bb);
+    if (ok0 && ok1 && g_fillSlot) { g_fillSlot->targetEye = 2; g_stereoFramesSinceLog++; }
+    { static int n = 0; if (n++ == 0) Log("Full 3D: both eyes drawn this frame, the HUD laid over each (%s)", ok0 && ok1 ? "captured" : "capture failed"); }
+}
 static void Display_Frame_(IDirect3DDevice9 *dev);
 static void Display_Frame(IDirect3DDevice9 *dev) { double t = QpcMs(); Display_Frame_(dev); g_tmDisp += QpcMs() - t; g_tmN++; }
 static void Display_Frame_(IDirect3DDevice9 *dev)
 {
+    F3_ThreadsBetweenFrames();
+    if (g_f3Pending) { g_f3UiOk = g_uiDrewThisFrame; UI_EndPhase(dev); if (!g_curvedActive || !g_vrOverlay) g_uiDrewThisFrame = false; }   /* (the HUD went into its own picture) */
     UI_Present(dev);
     Settings_Frame();
     IntroSkip_Frame();
@@ -6342,9 +6428,10 @@ static void Display_Frame_(IDirect3DDevice9 *dev)
     Scope_Snapshot(dev, scopeShown);
     g_presentsSinceLog++;
     Aer_RestoreCam();   /* (a 3D frame: everything's drawn - the camera goes back to the head) */
-    if (!g_vrCompositor || g_displayFailed) { g_aerPendingEye = -1; return; }
-    if (Far_Frame(dev)) { g_stereoCapturedThisFrame = false; g_aerPendingEye = -1; return; }
-    if (!g_stereoCapturedThisFrame) {
+    if (!g_vrCompositor || g_displayFailed) { g_aerPendingEye = -1; g_f3Pending = false; return; }
+    if (Far_Frame(dev)) { g_stereoCapturedThisFrame = false; g_aerPendingEye = -1; g_f3Pending = false; return; }
+    if (g_f3Pending) F3_Present(dev);
+    else if (!g_stereoCapturedThisFrame) {
         UI_CompositeTo(dev);   /* (the interface went into its own picture this frame: laid back over it) */
         int pe = g_aerPendingEye; g_aerPendingEye = -1;
         bool ok = Capture_Eye(dev, 0);
@@ -12717,6 +12804,7 @@ enum { LGP_SLIDE = 1, LGP_BOLT, LGP_CYL, LGP_MAG, LGP_HAMMER, LGP_TRIGGER, LGP_S
 #define LGP_MAX 16
 typedef struct { char *node; int kind; float L[12]; float dir[3], sid[3], piv[3]; bool hid; } LGPart;
 static struct { char *forRoot; void *forBase; LGPart p[LGP_MAX]; int n; float cylFrom, cylTo; double cylAt; bool applied; } g_lga;
+static int g_lgaChambers = 6; static bool g_lgaCylHome = false;   /* (the reload code: how many holes; the cylinder back at hole 1 on top - open, or not numbered yet) */
 static uint32_t g_lgaRef = 0;   /* (the gun the parts were found on - a new gun's model can reuse an old one's memory) */
 static bool LGA_Under(char *n, char *top)   /* (still a part of this gun?) */
 {
@@ -12788,7 +12876,7 @@ static void LGA_Shot(void)
     double now = QpcMs();
     g_lgKickAt = now;
     float cur = LGA_CylAng(now); if (cur >= 360.0f) cur -= 360.0f;
-    g_lga.cylFrom = cur; g_lga.cylTo = cur + 60.0f; g_lga.cylAt = now + 15.0;
+    g_lga.cylFrom = cur; g_lga.cylTo = cur + 360.0f / (float)(g_lgaChambers >= 3 && g_lgaChambers <= 8 ? g_lgaChambers : 6); g_lga.cylAt = now + 15.0;   /* (one hole on: 72 degrees on a five-shot Sequoia) */
 }
 /* the whole gun: kicked up and back by a shot, tipped over while reloading (turning about its grip) */
 static void LGA_Pose(float *org, M3 W)
@@ -12848,6 +12936,7 @@ static void LGA_Apply(void)
             float travel = q->kind == LGP_SLIDE ? 1.8f : 2.6f;
             for (int a = 0; a < 3; a++) Lt[a] -= q->dir[a] * travel * e / ps;
         } else if (q->kind == LGP_CYL) {
+            if (g_lgaCylHome) { g_lga.cylFrom = g_lga.cylTo = 0; g_lga.cylAt = 0; }   /* (opened to reload: hole 1 back on top, like the gun hand's) */
             float ang = LGA_CylAng(now);
             if (ang != 0) {
                 float v[3]; for (int a = 0; a < 3; a++) v[a] = q->dir[a] * (ang / RAD2DEG);
@@ -12992,6 +13081,7 @@ typedef struct {
     bool magWOk; float magW[3]; M3 magRel;   /* the magazine in the gun, in the gun hand's frame (render) */
     float magOff[3];                         /* where it sits, in the gun hand's controller frame (m) */
     bool magOffOk;
+    float magDepth;                          /* how far the magazine sits up inside the gun (its top above the bottom of the well, m; 0 = not measured) */
     double ejectAt; float ejT[3]; M3 ejR;    /* the dropped magazine falling */
     char *cylNode, *slideNode, *pumpNode, *leverNode, *barrelNode, *itemNode[5];   /* (moving parts; shells / speedloader / round parts by item kind) */
     double since; bool insOk; float insOff[3];     /* where things go in, measured on the gun's own shape (gun hand's controller frame, m) */
@@ -13187,8 +13277,11 @@ static int MR_Fill(int g, int have, int n)
 }
 
 /* ---- the steps ---- */
-#define MR_SEAT_MS 170.0
-static float MR_MagSlide(const MRGun *G) { return G->cls == MRC_BOX ? 0.06f : (G->t == 3 || G->t == 4) ? 0.075f : 0.10f; }   /* (how far a magazine travels in its well, m) */
+/* how far a magazine travels in its well (m): from its top touching the bottom of the gun to all the way in - measured on
+   the gun's shape, guessed when it couldn't be */
+static float MR_MagSlide(const MRGun *G) { return G->magDepth > 0.01f ? G->magDepth + 0.005f : G->cls == MRC_BOX ? 0.06f : (G->t == 3 || G->t == 4) ? 0.075f : 0.10f; }
+static double MR_SeatMs(const MRGun *G) { double t = 110.0 + MR_MagSlide(G) * 900.0; return t > 320.0 ? 320.0 : t; }   /* (pushed up the whole way: longer for a longer well) */
+#define MR_SEAT_MS MR_SeatMs(G)
 static void MR_Eject(int g)   /* B / Y: the magazine out, or the gun opened */
 {
     MRGun *G = &g_mr.g[g]; int h = MR_GunHand(g); int r = MR_Rounds(g);
@@ -13656,6 +13749,29 @@ static void MR_MeasureGun(int g, char *top)
     }
     G->insOk = ok && V3Len(best) < 0.6f;
     if (G->insOk) memcpy(G->insOff, best, 12);
+    G->magDepth = 0;
+    if ((G->cls == MRC_MAG || G->cls == MRC_CELL || G->cls == MRC_BOX) && MR_Ok(G->magNode)) {
+        /* the magazine's top, and the bottom of the gun around it (the gun without the magazine): the part of it that goes up inside */
+        uint32_t fl = *(uint32_t *)(G->magNode + 0x30); *(uint32_t *)(G->magNode + 0x30) = fl & ~1u;
+        g_lgPtN = 0; LG_PtsWalk(G->magNode, NULL, NULL, 0);
+        float mTop = -1e9f, mBot = 1e9f, aMin = 1e9f, aMax = -1e9f, sMin = 1e9f, sMax = -1e9f, sdv[3]; V3Cross(sdv, f, u);
+        for (int k = 0; k < g_lgPtN; k++) { float w[3], o[3]; MR_WorldOf(G->magNode, g_lgPts[k], w); MR_ToHand(h, w, o); if (V3Len(o) > 0.8f) continue;
+            float a = V3Dot(o, f), up = V3Dot(o, u), sv = V3Dot(o, sdv);
+            if (up > mTop) mTop = up; if (up < mBot) mBot = up; if (a < aMin) aMin = a; if (a > aMax) aMax = a; if (sv < sMin) sMin = sv; if (sv > sMax) sMax = sv; }
+        int nMag = g_lgPtN;
+        *(uint32_t *)(G->magNode + 0x30) = fl | 1u;   /* (the gun without it) */
+        g_lgPtN = 0; LG_PtsWalk(top, NULL, NULL, 0);
+        *(uint32_t *)(G->magNode + 0x30) = fl;
+        float wellBot = 1e9f; int nIn = 0;
+        float ia = (aMax - aMin) * 0.15f, is = (sMax - sMin) * 0.15f;
+        for (int k = 0; k < g_lgPtN && nMag > 4; k++) { float w[3], o[3]; MR_WorldOf(top, g_lgPts[k], w); MR_ToHand(h, w, o); if (V3Len(o) > 0.8f) continue;
+            float a = V3Dot(o, f), up = V3Dot(o, u), sv = V3Dot(o, sdv);
+            if (a < aMin + ia || a > aMax - ia || sv < sMin - 0.01f || sv > sMax + 0.01f || up > mTop + 0.01f || up < mBot) continue;   /* (right round the magazine, below its top) */
+            nIn++; if (up < wellBot) wellBot = up; }
+        if (nIn > 3 && wellBot < mTop) { float d = mTop - wellBot; if (d > 0.012f && d < 0.30f) G->magDepth = d; }
+        Log("Reload: %s gun's magazine goes %s into it%s", g ? "other hand's" : "gun hand's", G->magDepth > 0 ? "measured" : "(not measured - guessed)", "");
+        if (G->magDepth > 0) Log("Reload:   %.1f cm of it up inside the gun (%.1f cm long)", G->magDepth * 100.0f, (mTop - mBot) * 100.0f);
+    }
     Log("Reload: %s gun - where things go in %s (%.2f m in front, %.2f m up of the hand)", g ? "other hand's" : "gun hand's", G->insOk ? "measured on its shape" : "not found - guessed",
         G->insOk ? V3Dot(best, f) : 0.0f, G->insOk ? V3Dot(best, u) : 0.0f);
 }
@@ -13770,6 +13886,7 @@ static void MR_VisualGun(int g, char *top)
     if (!G->insOk && G->st == MRS_READY && now - G->since > 700.0) { MR_MeasureGun(g, top); if (!G->insOk) G->insOk = false; G->since = now + 1e9; }
     float fw[3], up[3], sd[3]; MR_GunWorldAxes(g, h, fw, up, sd);
     float U = g_unitsPerMeter;
+    if (g == 1) { g_lgaCylHome = G->cls == MRC_REVOLVER && (G->st != MRS_READY || !G->ordOk); if (G->shellCnt >= 3) g_lgaChambers = G->shellCnt; }
     if (!G->ordOk && G->st == MRS_READY && G->shellCnt >= 2 && G->cls == MRC_REVOLVER) {
         /* the holes numbered the same way on every gun: clockwise as you look down the gun from behind, starting at the top -
            the models number their case and round parts in no particular order. Live rounds take the first holes, so the same
@@ -17048,7 +17165,9 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
            end of the frame, after its colour effects and the HUD - capturing in between took the same old picture for both
            eyes, without HUD or scope. So each frame is drawn from one eye and taken whole at the end of the frame, the eyes in
            turn.) */
-        if (full) { full = false; alt = true; static bool said = false; if (!said) { said = true; Log("3D: each frame drawn from one eye, taken whole at the end of the frame (eyes in turn) - HUD, scope and effects in both eyes"); } }
+        g_f3Want = full;
+        if (full && g_f3Mode < 0) { full = false; alt = true; }   /* (full 3D doesn't work here: alternating eyes) */
+        else if (full && (*MT_RENDER_FLAG || !F3_Ensure(dev))) full = false;   /* (the culling threads go off at the end of this frame: one picture until then) */
         g_uiIntoEyes = false;
         if (full) {
             /* Full 3D: the frame is drawn twice, from the left eye and then the right (the camera moved along its own
@@ -17064,6 +17183,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             float half = 0.5f * g_ipdMeters * g_unitsPerMeter;
             int aimEye = g_leftHanded ? 0 : 1;
             bool ropeOn = g_rope.on; bool ok0 = false, ok1 = false;
+            bool probe = g_f3Mode == 0; bool prOk[2] = { false, false }; float prMag[2] = { 0, 0 }; uint32_t prSum[2] = { 0, 0 };
             double te[2] = { 0, 0 };
             float f3hand[2][3] = { { 1e30f, 0, 0 }, { 1e30f, 0, 0 } };
             bool f3snap = false;
@@ -17089,10 +17209,13 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                     PipScr_Prepare((char *)player, cam);
                 }
                 double tr = QpcMs();
+                if (probe && eye == 0) { IDirect3DSurface9 *bbm = NULL;   /* (the check: the screen picture magenta first) */
+                    if (SUCCEEDED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bbm)) && bbm) { IDirect3DDevice9_ColorFill(dev, bbm, NULL, 0xFFFF00FF); IDirect3DSurface9_Release(bbm); } }
                 Lgd_FrameBegin();
                 o_DoRenderFrame(osGlobals, renderer, a, b);
                 Lgd_FrameEnd();
                 te[eye] = QpcMs() - tr;
+                if (probe) { prOk[eye] = F3_Probe(dev, &prMag[eye], &prSum[eye]); }
                 {   /* (check: does your drawn body move with each eye? where the left hand was drawn, per eye) */
                     char *hb = g_bones[0][B_HAND];
                     if (hb && !IsBadReadPtr(hb, 0x98)) memcpy(f3hand[eye], hb + NIAV_WORLD_TRANSLATE, 12); else f3hand[eye][0] = 1e30f;
@@ -17103,9 +17226,14 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                 PipScr_Draw(dev);
                 g_rope.on = ropeOn; Rope_Draw(dev);
                 Ol_Collect(cam); Ol_Draw(dev);
-                UI_CompositeTo(dev);   /* (the HUD: last frame's interface, over this eye) */
                 if (f3snap) SaveBackbuffer(dev, g_fullPipNow ? (eye ? "FNVR_full3d_pip_right.bmp" : "FNVR_full3d_pip_left.bmp") : (eye ? "FNVR_full3d_right.bmp" : "FNVR_full3d_left.bmp"));
-                if (eye == 0) ok0 = Capture_Eye(dev, 0); else ok1 = ok0 && Capture_Eye(dev, 1);
+                {   /* this eye's picture kept (the HUD goes over it at the end of the frame) */
+                    IDirect3DSurface9 *bbk = NULL;
+                    if (SUCCEEDED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bbk)) && bbk) {
+                        bool k = SUCCEEDED(IDirect3DDevice9_StretchRect(dev, bbk, NULL, g_f3Surf[eye], NULL, D3DTEXF_POINT)); IDirect3DSurface9_Release(bbk);
+                        if (eye == 0) ok0 = k; else ok1 = ok0 && k;
+                    }
+                }
             }
             if (f3hand[0][0] < 1e29f && f3hand[1][0] < 1e29f) {
                 static int hl = 0; static double hn = 0;
@@ -17117,10 +17245,18 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
             NodeUpdate(cam);
             g_fullDrawnAt = QpcMs();
-            if (ok0 && ok1 && g_fillSlot) g_fillSlot->targetEye = 2;
-            g_stereoCapturedThisFrame = ok0;
+            if (probe) {   /* (the check, once) */
+                if (!prOk[0] || !prOk[1]) Log("Full 3D check: couldn't read the picture back - assuming it works");
+                else Log("Full 3D check: left eye %.0f%% still magenta, right eye %.0f%%, the eyes %s", prMag[0] * 100.0f, prMag[1] * 100.0f, prSum[0] == prSum[1] ? "THE SAME" : "different");
+                if (prOk[0] && prOk[1] && prMag[0] > 0.5f) { g_f3Mode = -1; Log("Full 3D: the world doesn't reach the screen picture while it's drawn here - alternating eyes instead"); }
+                else if (prOk[0] && prOk[1] && prSum[0] == prSum[1]) { g_f3Mode = -1; Log("Full 3D: the right eye came out the same as the left - alternating eyes instead"); }
+                else g_f3Mode = 1;
+            }
+            g_f3Pending = ok0 && ok1 && g_f3Mode >= 0;
+            if (g_f3Pending) UI_BeginPhase(dev);   /* (everything the game draws from here to the end of the frame - the HUD - into its own picture) */
+            g_stereoCapturedThisFrame = false;
             {   static int fl = 0; static double nl = 0;
-                if (QpcMs() > nl) { nl = QpcMs() + 10000.0; if (fl++ < 30) Log("Full 3D: left eye drawn in %.1f ms, right eye %.1f ms (%s)", te[0], te[1], ok0 && ok1 ? "both captured" : "capture failed"); } }
+                if (QpcMs() > nl) { nl = QpcMs() + 10000.0; if (fl++ < 30) Log("Full 3D: left eye drawn in %.1f ms, right eye %.1f ms (%s)", te[0], te[1], ok0 && ok1 ? "both kept" : "keeping failed"); } }
         } else if (alt) {
             /* Alternating eyes: one picture a frame, from the left and the right eye in turn, with the same frame work as
                full 3D (hands, Pip-Boy screen, scope, rope, outlines); the headset shows each eye's newest picture */
