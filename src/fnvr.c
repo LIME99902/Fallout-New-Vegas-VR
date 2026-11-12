@@ -33,7 +33,7 @@
 #include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.7.2 (menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_STR    "2.7.3 (the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -20658,21 +20658,28 @@ static DWORD WINAPI WatchdogThread(LPVOID unused)
         if (stalled < 800 || dumps >= 16 || last == lastDumpTick) continue;
         lastDumpTick = last;
         dumps++;
+        /* Only copy while the main thread is stopped - no logging, no lookups: it may be holding a lock those need (the log's,
+           the heap's, the loader's), and waiting on it with the thread stopped would freeze the game for good. */
+        static DWORD stk[1024]; int nStk = 0; DWORD eip = 0, esp = 0;
         if (SuspendThread(g_mainThread) == (DWORD)-1) continue;
         CONTEXT ctx;
         memset(&ctx, 0, sizeof ctx);
         ctx.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (GetThreadContext(g_mainThread, &ctx)) {
+            eip = ctx.Eip; esp = ctx.Esp;
+            DWORD *sp = (DWORD *)(uintptr_t)esp;
+            while (nStk < 1024 && !IsBadReadPtr(sp + nStk, 4)) { stk[nStk] = sp[nStk]; nStk++; }
+        }
+        ResumeThread(g_mainThread);
+        if (!eip) continue;
+        {
             char d[128];
-            DescribeAddress(ctx.Eip, d, sizeof d);
+            DescribeAddress(eip, d, sizeof d);
             Log("WATCHDOG: main loop stalled %.1fs (inside FNVR work: %ld). Main thread at %s", stalled / 1000.0f, g_inMainLoopWork, d);
             /* Return addresses on the stack that point into code */
-            DWORD *sp = (DWORD *)(uintptr_t)ctx.Esp;
             int found = 0;
-            for (int i = 0; i < 1024 && found < 16; i++) {
-                DWORD v;
-                if (IsBadReadPtr(sp + i, 4)) break;
-                v = sp[i];
+            for (int i = 0; i < nStk && found < 16; i++) {
+                DWORD v = stk[i];
                 MEMORY_BASIC_INFORMATION mbi;
                 if (v < 0x10000 || !VirtualQuery((void *)(uintptr_t)v, &mbi, sizeof mbi)) continue;
                 if (!(mbi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY))) continue;
@@ -20681,7 +20688,6 @@ static DWORD WINAPI WatchdogThread(LPVOID unused)
                 found++;
             }
         }
-        ResumeThread(g_mainThread);
     }
     return 0;
 }
