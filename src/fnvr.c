@@ -33,7 +33,7 @@
 #include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.7.5 (full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_STR    "2.7.6 (magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -12962,6 +12962,9 @@ typedef struct {
     char *bulN[8]; int bulIdx[8], bulCnt;          /* (the live rounds in the cylinder / breech, by their number) */
     int shellIdx[8];                               /* (each case's number: the holes they sit in) */
     bool slideDown;                                /* (the Fat Man: its round slides down onto it from the top) */
+    double seatAt;                                 /* (a new magazine sliding up into the gun: when it started) */
+    bool noSlide, relOk; float relT[3], relV[3]; double relAt;   /* (the dropped magazine: free of the gun, flying / falling) */
+    float lastP[3], lastV[3]; double lastPAt;      /* (where the magazine was drawn last frame, and its speed - flung with the gun) */
 } MRGun;
 static struct {
     MRGun g[2];                 /* 0 = the gun hand's gun, 1 = the other hand's gun */
@@ -13144,6 +13147,8 @@ static int MR_Fill(int g, int have, int n)
 }
 
 /* ---- the steps ---- */
+#define MR_SEAT_MS 170.0
+static float MR_MagSlide(const MRGun *G) { return G->cls == MRC_BOX ? 0.06f : (G->t == 3 || G->t == 4) ? 0.075f : 0.10f; }   /* (how far a magazine travels in its well, m) */
 static void MR_Eject(int g)   /* B / Y: the magazine out, or the gun opened */
 {
     MRGun *G = &g_mr.g[g]; int h = MR_GunHand(g); int r = MR_Rounds(g);
@@ -13154,7 +13159,7 @@ static void MR_Eject(int g)   /* B / Y: the magazine out, or the gun opened */
         {   int keep = (G->cls == MRC_MAG && MR_Ballistic(G) && r > 0) ? 1 : 0;   /* (a round stays in the chamber) */
             if (g == 1 && r - keep > 0 && g_mrScr[MRS_GIVE]) g_scriptIntf->CallFunctionAlt(g_mrScr[MRS_GIVE], GetPlayer(), 2, g_lg.base, r - keep);
             MR_SetRounds(g, keep); }
-        G->st = MRS_MAGOUT; G->ejectAt = QpcMs();
+        G->st = MRS_MAGOUT; G->ejectAt = QpcMs(); G->noSlide = false; G->relOk = false; G->seatAt = 0;
         MR_Buzz(h, 2000);
         MR_Hint(1, g_mr.quick[g] ? "Magazine out - touch the gun to your left pocket" : "Magazine out - take a new one from your left pocket (grip)");
         break;
@@ -13371,7 +13376,7 @@ static void MR_Tick(void)
             }
             if (g_mr.oldMag && g_mr.oldMagGun == g) {
                 if (g_mr.oldMagHand == fh) g_mr.eatGrip[fh] = true;
-                if (!g_mr.gripRaw[g_mr.oldMagHand] || G->st != MRS_MAGOUT) { g_mr.oldMag = false; G->ejectAt = now; }   /* (let go: it drops) */
+                if (!g_mr.gripRaw[g_mr.oldMagHand] || G->st != MRS_MAGOUT) { g_mr.oldMag = false; G->ejectAt = now; G->noSlide = true; G->relOk = false; }   /* (let go: it drops - thrown if you threw it) */
             }
         }
         /* taking something out of the pocket */
@@ -13404,9 +13409,14 @@ static void MR_Tick(void)
                     else if (V3Len(d) > r * 3.0f) g_mr.seated = false;
                     else if (hu > g_mr.seatUp) g_mr.seatUp = hu;   /* (measured from the highest point it sat at) */
                 }
-                else if (V3Len(d) < r) { g_mr.item = MRI_NONE; MR_Load(g, false); }
+                else if (V3Len(d) < r) {
+                    g_mr.item = MRI_NONE;
+                    if (G->cls == MRC_MAG || G->cls == MRC_CELL || G->cls == MRC_BOX) { G->seatAt = now; MR_Buzz(fh, 900); }   /* (it slides up into the well first) */
+                    else MR_Load(g, false);
+                }
             }
         }
+        if (G->seatAt > 0 && now - G->seatAt >= MR_SEAT_MS) { G->seatAt = 0; MR_Load(g, false); }   /* (all the way in: locked) */
         /* rounds in an open gun: a quick flick shuts it - a revolver's cylinder to the gun's right, a break-open gun (top-break
            revolver, double-barrel / single shotgun) up */
         if ((G->cls == MRC_REVOLVER || G->cls == MRC_TOPBREAK || G->cls == MRC_BREAK || G->cls == MRC_LAUNCHER) && G->st == MRS_OPEN && G->stored > 0 && !(g_mr.item && g_mr.itemGun == g) && g_vrHandOk[gh]) {
@@ -13636,6 +13646,14 @@ static void MR_Turn(char *n, const float *axis, const float *pivot, float deg)
     MR_Move(n, org, Wn);
 }
 /* a part carried in the free hand's palm, turned the way it sat in the gun */
+/* (where the magazine is drawn this frame: its speed, for when it comes free of the gun) */
+static void MR_MagTrack(MRGun *G, const float *p, double now)
+{
+    if (G->lastPAt > 0) { float dt = (float)((now - G->lastPAt) / 1000.0);
+        if (dt > 0.004f && dt < 0.2f) for (int i = 0; i < 3; i++) G->lastV[i] = G->lastV[i] * 0.4f + 0.6f * (p[i] - G->lastP[i]) / dt;
+        else if (dt >= 0.2f) memset(G->lastV, 0, 12); }
+    memcpy(G->lastP, p, 12); G->lastPAt = now;
+}
 static void MR_InHand(char *n, int fh, M3 rel, const float *mid)
 {
     if (!MR_Ok(n) || !g_handWOk[fh]) return;
@@ -13720,6 +13738,7 @@ static void MR_VisualGun(int g, char *top)
             float cw[3]; MR_WorldOf(n, G->magMid, cw); MR_ToHand(h, cw, G->magOff); G->magOffOk = V3Len(G->magOff) < 0.5f;
             M3 HT, Wm; M3T(HT, g_handWR[h]); memcpy(Wm, n + NIAV_WORLD_ROTATE, sizeof Wm); M3Mul(G->magRel, HT, Wm);
             memcpy(G->ejT, n + NIAV_WORLD_TRANSLATE, 12); memcpy(G->ejR, n + NIAV_WORLD_ROTATE, sizeof G->ejR); G->magWOk = true;
+            MR_MagTrack(G, (const float *)(n + NIAV_WORLD_TRANSLATE), now);
         } else if (G->st == MRS_MAGOUT) {
             double ft = (now - G->ejectAt) / 1000.0;
             if (g_mr.oldMag && g_mr.oldMagGun == g && G->magWOk && g_handWOk[g_mr.oldMagHand]) {   /* the old one, pulled out, in your hand - it drops from there when you let go */
@@ -13729,11 +13748,49 @@ static void MR_VisualGun(int g, char *top)
                 float sc = *(const float *)(n + NIAV_WORLD_SCALE); if (!(sc > 0.0001f)) sc = 1.0f;
                 for (int i = 0; i < 3; i++) G->ejT[i] = palm[i] - sc * (W[i][0] * G->magMid[0] + W[i][1] * G->magMid[1] + W[i][2] * G->magMid[2]);
                 memcpy(G->ejR, W, sizeof W); G->ejectAt = now + 1e9;
+                MR_MagTrack(G, G->ejT, now);
                 MR_Show(n); MR_Move(n, G->ejT, W);
             }
+            else if (G->seatAt > 0 && G->magWOk) {   /* the new one: lined up under its well, pushed up along it until it locks */
+                float p = (float)((now - G->seatAt) / MR_SEAT_MS); if (p > 1.0f) p = 1.0f;
+                float d = MR_MagSlide(G) * U * (1.0f - p) * (1.0f - p * 0.5f), org[3]; M3 Wn; memcpy(Wn, n + NIAV_WORLD_ROTATE, sizeof Wn);
+                const float *Wt = (const float *)(n + NIAV_WORLD_TRANSLATE);
+                for (int i = 0; i < 3; i++) org[i] = Wt[i] - up[i] * d;
+                MR_Show(n); MR_Move(n, org, Wn);
+            }
             else if (g_mr.item == MRI_MAG && g_mr.itemGun == g && g_mr.itemHand == fh && G->magWOk) MR_InHand(n, fh, G->magRel, G->magMid);   /* the new one in your free hand */
-            else if (G->magWOk && ft >= 0 && ft < 0.6) { float org[3]; memcpy(org, G->ejT, 12); org[2] -= (float)(0.5 * 9.8 * ft * ft) * U; MR_Move(n, org, G->ejR); }   /* dropping out */
+            else if (G->magWOk && ft >= 0 && ft < 4.0) {   /* dropping out: it slides down out of its well with the gun, then it's free -
+                                                             flying on with the speed the gun gave it (a fling throws it), falling to the ground */
+                float L = G->noSlide ? 0.0f : MR_MagSlide(G), tS = L > 0 ? sqrtf(2.0f * L / 9.8f) : 0.0f, org[3];
+                if ((float)ft < tS) {
+                    float d = 0.5f * 9.8f * (float)(ft * ft) * U; const float *Wt = (const float *)(n + NIAV_WORLD_TRANSLATE);
+                    for (int i = 0; i < 3; i++) org[i] = Wt[i] - up[i] * d;
+                    memcpy(G->ejR, n + NIAV_WORLD_ROTATE, sizeof G->ejR);
+                    MR_MagTrack(G, org, now);
+                } else {
+                    if (!G->relOk) {
+                        G->relOk = true; G->relAt = now;
+                        if (G->lastPAt > 0 && now - G->lastPAt < 150.0) { memcpy(G->relT, G->lastP, 12); memcpy(G->relV, G->lastV, 12); }
+                        else { memcpy(G->relT, G->ejT, 12); memset(G->relV, 0, 12); }
+                        float sp = V3Len(G->relV), mx = 14.0f * U; if (sp > mx) for (int i = 0; i < 3; i++) G->relV[i] *= mx / sp;
+                    }
+                    float tt = (float)((now - G->relAt) / 1000.0);
+                    for (int i = 0; i < 3; i++) org[i] = G->relT[i] + G->relV[i] * tt;
+                    org[2] -= 0.5f * 9.8f * tt * tt * U;
+                    char *pl = (char *)GetPlayer(); float floorZ = pl && !IsBadReadPtr(pl, 0x3C) ? *(float *)(pl + 0x38) + 1.0f : -1e30f;
+                    if (org[2] < floorZ) {   /* (on the ground: it stays where it landed) */
+                        float a = 0.5f * 9.8f * U, b = -G->relV[2], c = floorZ - G->relT[2];   /* (when it hit: relT.z + vz t - a t^2 = floor) */
+                        float disc = b * b - 4.0f * a * c, tl = disc >= 0 ? (-b + sqrtf(disc)) / (2.0f * a) : tt;
+                        if (!(tl >= 0 && tl <= tt)) tl = tt;
+                        for (int i = 0; i < 2; i++) org[i] = G->relT[i] + G->relV[i] * tl;
+                        org[2] = floorZ;
+                    }
+                    if (tt > 2.5f) { MR_Hide(n); goto magDone; }
+                }
+                MR_Show(n); MR_Move(n, org, G->ejR);
+            }
             else MR_Hide(n);
+            magDone: ;
         }
     }
     /* shells / speedloader / round in your free hand (when the model has such a part) */
