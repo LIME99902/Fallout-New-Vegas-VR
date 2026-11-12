@@ -33,7 +33,7 @@
 #include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.7.4 (full 3D: the Pip-Boy menu stays on its screen; revolver cases come out one by one clockwise; full 3D checks in the log; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_STR    "2.7.5 (full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -4427,6 +4427,9 @@ static DevSetRT_t o_SetRT = NULL; static DevSetDS_t o_SetDS = NULL; static DevSe
 static IDirect3DTexture9 *g_uiTex = NULL; static IDirect3DSurface9 *g_uiSurf = NULL, *g_uiDepth = NULL, *g_uiSmall = NULL, *g_uiSys = NULL;
 static IDirect3DSurface9 *g_curRT0 = NULL, *g_bbPtr = NULL, *g_uiSavedDS = NULL;
 static bool g_uiPhase = false, g_uiDrewThisFrame = false;
+static bool g_uiIntoEyes = false;   /* full 3D in the world: the interface goes into its own picture and is laid over each eye's picture */
+static bool g_uiReady = false;      /* (that picture holds the latest interface) */
+static IDirect3DStateBlock9 *g_uiSB = NULL;
 static UINT g_uiW = 0, g_uiH = 0;
 #define UI_OUT_W 1920
 #define UI_OUT_H 1080
@@ -4434,6 +4437,8 @@ static ID3D11Texture2D *g_uiTex11 = NULL;
 
 static void UI_Release9(void)
 {
+    if (g_uiSB) { IDirect3DStateBlock9_Release(g_uiSB); g_uiSB = NULL; }
+    g_uiReady = false;
     if (g_uiSurf) { IDirect3DSurface9_Release(g_uiSurf); g_uiSurf = NULL; }
     if (g_uiTex) { IDirect3DTexture9_Release(g_uiTex); g_uiTex = NULL; }
     if (g_uiDepth) { IDirect3DSurface9_Release(g_uiDepth); g_uiDepth = NULL; }
@@ -4483,6 +4488,46 @@ static void UI_EndPhase(IDirect3DDevice9 *dev)
     if (g_bbPtr) o_SetRT(dev, 0, g_bbPtr);
     o_SetDS(dev, g_uiSavedDS);
     if (g_uiSavedDS) { IDirect3DSurface9_Release(g_uiSavedDS); g_uiSavedDS = NULL; }
+}
+
+/* the interface picture laid over the picture being drawn (premultiplied: what's under it shows where it's see-through) */
+typedef struct { float x, y, z, rhw, u, v; } UiVtx;
+static void UI_CompositeTo(IDirect3DDevice9 *dev)
+{
+    if (!g_uiReady || !g_uiTex || !g_uiW || !g_uiH) return;
+    IDirect3DStateBlock9 *sb = g_uiSB;
+    if (!sb && FAILED(IDirect3DDevice9_CreateStateBlock(dev, D3DSBT_ALL, &sb))) { sb = NULL; return; }
+    g_uiSB = sb;
+    IDirect3DStateBlock9_Capture(sb);
+    IDirect3DSurface9 *bb = NULL; if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
+    IDirect3DSurface9 *rtWas = NULL; IDirect3DDevice9_GetRenderTarget(dev, 0, &rtWas);
+    if (o_SetRT) o_SetRT(dev, 0, bb); else IDirect3DDevice9_SetRenderTarget(dev, 0, bb);
+    D3DVIEWPORT9 vp = { 0, 0, g_uiW, g_uiH, 0.0f, 1.0f }; IDirect3DDevice9_SetViewport(dev, &vp);
+    IDirect3DDevice9_SetVertexShader(dev, NULL); IDirect3DDevice9_SetPixelShader(dev, NULL);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ZENABLE, FALSE); IDirect3DDevice9_SetRenderState(dev, D3DRS_ZWRITEENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_STENCILENABLE, FALSE); IDirect3DDevice9_SetRenderState(dev, D3DRS_SCISSORTESTENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_CULLMODE, D3DCULL_NONE); IDirect3DDevice9_SetRenderState(dev, D3DRS_LIGHTING, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_FOGENABLE, FALSE); IDirect3DDevice9_SetRenderState(dev, D3DRS_ALPHATESTENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_SRGBWRITEENABLE, FALSE); IDirect3DDevice9_SetRenderState(dev, D3DRS_COLORWRITEENABLE, 0x7);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_ALPHABLENDENABLE, TRUE); IDirect3DDevice9_SetRenderState(dev, D3DRS_SEPARATEALPHABLENDENABLE, FALSE);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_SRCBLEND, D3DBLEND_ONE); IDirect3DDevice9_SetRenderState(dev, D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+    IDirect3DDevice9_SetRenderState(dev, D3DRS_BLENDOP, D3DBLENDOP_ADD);
+    IDirect3DDevice9_SetTexture(dev, 0, (IDirect3DBaseTexture9 *)g_uiTex);
+    IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_COLOROP, D3DTOP_SELECTARG1); IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+    IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1); IDirect3DDevice9_SetTextureStageState(dev, 0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+    IDirect3DDevice9_SetTextureStageState(dev, 1, D3DTSS_COLOROP, D3DTOP_DISABLE);
+    IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MINFILTER, D3DTEXF_POINT); IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+    IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_MIPFILTER, D3DTEXF_NONE); IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_SRGBTEXTURE, FALSE);
+    IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_ADDRESSU, D3DTADDRESS_CLAMP); IDirect3DDevice9_SetSamplerState(dev, 0, D3DSAMP_ADDRESSV, D3DTADDRESS_CLAMP);
+    IDirect3DDevice9_SetFVF(dev, D3DFVF_XYZRHW | D3DFVF_TEX1);
+    float W = (float)g_uiW - 0.5f, H = (float)g_uiH - 0.5f;
+    UiVtx q[4] = { { -0.5f, -0.5f, 0, 1, 0, 0 }, { W, -0.5f, 0, 1, 1, 0 }, { W, H, 0, 1, 1, 1 }, { -0.5f, H, 0, 1, 0, 1 } };
+    bool began = SUCCEEDED(IDirect3DDevice9_BeginScene(dev));   /* (fails if a scene is already open - drawing works then too) */
+    IDirect3DDevice9_DrawPrimitiveUP(dev, D3DPT_TRIANGLEFAN, 2, q, sizeof(UiVtx));
+    if (began) IDirect3DDevice9_EndScene(dev);
+    IDirect3DStateBlock9_Apply(sb);
+    if (rtWas) { if (o_SetRT) o_SetRT(dev, 0, rtWas); else IDirect3DDevice9_SetRenderTarget(dev, 0, rtWas); IDirect3DSurface9_Release(rtWas); }
+    IDirect3DSurface9_Release(bb);
 }
 
 /* ---- One-frame drawing trace (Pip-Boy) ----------------------------------------------------------
@@ -4624,6 +4669,13 @@ static void UI_Present(IDirect3DDevice9 *dev)
     bool drew = drewUi && !g_setOpen; g_uiDrewThisFrame = false;
     HudEl_Present(dev, drewUi);   /* (HUD parts moved off the HUD: onto their own panels, their spots on it cleared) */
     static bool shown = false;
+    g_uiReady = drewUi;
+    if (drewUi) {   /* (the interface was drawn into its own picture: it's laid over the eyes' pictures, not shown on a panel) */
+        if (g_fpsShow && !g_pipOpen) { Fps_DrawTo(dev, g_uiSurf); g_fpsInUi = true; }
+        if (shown) { g_vrOverlay->HideOverlay(g_uiOverlay); shown = false; }
+        { static int n = 0; if (n++ == 0) Log("Full 3D: the HUD is drawn into its own picture and laid over both eyes"); }
+        return;
+    }
     if (!drew) { if (shown) { g_vrOverlay->HideOverlay(g_uiOverlay); shown = false; } return; }
     if (g_fpsShow && !g_pipOpen) { Fps_DrawTo(dev, g_uiSurf); g_fpsInUi = true; }   /* (the frame rate counter on the HUD panel: in the headset in 3D as well) */
     if (OvZc_Set(dev, &g_uiZc, g_uiSurf, NULL, UI_OUT_W, UI_OUT_H, D3DFMT_A8R8G8B8, g_uiOverlay, EColorSpace_ColorSpace_Auto, D3DTEXF_LINEAR, -1.0f)) goto uiPlaced;
@@ -5291,6 +5343,11 @@ static void Seq_Walk(char *n, const float Rp[9], const float Tp[3], float Sp, in
         T[i] = Tp[i] + (Rp[i * 3 + 0] * Lt[0] + Rp[i * 3 + 1] * Lt[1] + Rp[i * 3 + 2] * Lt[2]) * Sp;
     }
     if (*(uint32_t *)(n + 0x30) & 1) return;   /* hidden */
+    {   /* (the reload props in the model - the speedloader sits behind the cylinder in its resting spot: left out) */
+        const char *nm = *(const char **)(n + 0x08);
+        if (nm && !IsBadStringPtrA(nm, 64)) { char lo[64]; snprintf(lo, sizeof lo, "%s", nm); for (char *c = lo; *c; c++) *c = (char)tolower((unsigned char)*c);
+            if (strstr(lo, "speedloader") || strstr(lo, "speed loader") || strstr(lo, "loader")) return; }
+    }
     uintptr_t vt = *(uintptr_t *)n;
     if (vt == 0x0109D454 || vt == 0x0109CD44) {
         char *gd = *(char **)(n + 0xB8);
@@ -6278,7 +6335,7 @@ static void Display_Frame_(IDirect3DDevice9 *dev)
     g_presentsSinceLog++;
     if (!g_vrCompositor || g_displayFailed) return;
     if (Far_Frame(dev)) { g_stereoCapturedThisFrame = false; return; }
-    if (!g_stereoCapturedThisFrame) Capture_Eye(dev, 0);
+    if (!g_stereoCapturedThisFrame) { UI_CompositeTo(dev); Capture_Eye(dev, 0); }   /* (the interface went into its own picture this frame: laid back over it) */
     g_stereoCapturedThisFrame = false;
     Capture_FinishAndSubmit(dev);
 }
@@ -13736,24 +13793,8 @@ static void MR_VisualGun(int g, char *top)
             int idx = G->shellIdx[k] > 0 ? G->shellIdx[k] : k + 1;
             if (idx <= G->stored) { MR_Show(s); continue; }   /* (a round in that hole - left in, or loaded) */
             if (G->stored > 0 && G->cls != MRC_REVOLVER && ft >= 0.5f) { MR_Hide(s); continue; }
-            float ftc = ft;
-            if (rev) {   /* a revolver's cases come out one hole after the other, clockwise round the cylinder as you look down the
-                            gun, starting from the top hole */
-                float cen[3] = { 0, 0, 0 }, th[8]; int nc = 0;
-                for (int j = 0; j < G->shellCnt; j++) if (MR_Ok(G->shellN[j])) { const float *P = (const float *)(G->shellN[j] + NIAV_WORLD_TRANSLATE); for (int i = 0; i < 3; i++) cen[i] += P[i]; nc++; }
-                if (nc) for (int i = 0; i < 3; i++) cen[i] /= (float)nc;
-                for (int j = 0; j < G->shellCnt; j++) { th[j] = 0;
-                    if (!MR_Ok(G->shellN[j])) continue;
-                    const float *P = (const float *)(G->shellN[j] + NIAV_WORLD_TRANSLATE); float d[3] = { P[0] - cen[0], P[1] - cen[1], P[2] - cen[2] };
-                    float a = atan2f(V3Dot(d, sd), V3Dot(d, up)); if (a < -0.05f) a += 2.0f * PI_F; th[j] = a; }
-                int rank = 0;
-                for (int j = 0; j < G->shellCnt; j++) { int ij = G->shellIdx[j] > 0 ? G->shellIdx[j] : j + 1;
-                    if (j != k && ij > G->stored && (th[j] < th[k] || (th[j] == th[k] && j < k))) rank++; }
-                ftc = ft - 0.14f * (float)rank;
-                if (ftc < 0) { MR_Show(s); continue; }   /* (still in its hole, waiting its turn) */
-            }
-            if (ftc >= 0 && ftc < 0.5f) { float ft = ftc; const float *St = (const float *)(s + NIAV_WORLD_TRANSLATE); M3 Ws; memcpy(Ws, s + NIAV_WORLD_ROTATE, sizeof Ws);
-                float org[3], spread = rev ? 0.0f : 0.12f * (float)(k - G->shellCnt / 2);
+            if (ft >= 0 && ft < 0.5f) { const float *St = (const float *)(s + NIAV_WORLD_TRANSLATE); M3 Ws; memcpy(Ws, s + NIAV_WORLD_ROTATE, sizeof Ws);
+                float org[3], spread = 0.12f * (float)(k - G->shellCnt / 2);
                 for (int i = 0; i < 3; i++) org[i] = rev ? St[i] - fw[i] * (0.9f * ft * U) + sd[i] * (spread * ft * U)
                                                          : St[i] - fw[i] * (1.2f * ft * U) + up[i] * (1.4f * ft * U) + sd[i] * (spread * ft * U);
                 org[2] -= 0.5f * 9.8f * ft * ft * U; MR_Show(s); MR_Move(s, org, Ws); }
@@ -16604,8 +16645,9 @@ static void UI_Viewport(void)
         char *c = sgk ? *(char **)(sgk + 0xAC) : NULL;
         if (!c || IsBadReadPtr(c, 0x110)) continue;
         float *v = (float *)(c + 0x100);
-        static const float full[4] = { 0.0f, 1.0f, 1.0f, 0.0f };
-        if (memcmp(v, full, sizeof full)) memcpy(v, full, sizeof full);
+        static const float full[4] = { 0.0f, 1.0f, 1.0f, 0.0f }, mark[4] = { 0.0005f, 0.9995f, 0.9995f, 0.0005f };
+        const float *vw = g_uiIntoEyes && g_curvedActive && g_inGameplay ? mark : full;   /* (full 3D: the marker - the interface is drawn into its own picture, then into each eye) */
+        if (memcmp(v, vw, sizeof full)) memcpy(v, vw, sizeof full);
         float *f = (float *)(c + NICAMERA_FRUSTUM);
         if (!haveBase[k] || memcmp(f, lastSet[k], sizeof lastSet[k])) {   /* (the game's own values - first time, or it changed them) */
             if (f[1] > f[0] && f[2] > f[3]) { memcpy(base[k], f, sizeof base[k]); haveBase[k] = true; }
@@ -16880,9 +16922,11 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             bool pipOk = pipSteady && !pipBad && QpcMs() - pipSteadySince > 700.0;
             bool quiet = !g_pipOpen && !g_wristUp && g_pipModeRaw == 0 && PipBoyMode() == 0 && QpcMs() > g_pipExpectUntil + 300.0 && !g_liveMenuNow && !IsMenuMode();
             if (!(pipOk || quiet)) full = alt = false;   /* (menus, conversations, the Pip-Boy opening or closing: one picture for both eyes) */
+            (void)pipOk; if (pipSteady || g_pipOpen) full = false;   /* (the Pip-Boy open: one picture - its menu screen only reaches the picture drawn at the end of the frame) */
             g_fullPipNow = full && pipSteady;
             if (g_fullPipSlow) { g_fullPipSlow = false; if (!pipBad) { pipBad = true; Log("Full 3D: drawing the open Pip-Boy twice was too slow - one picture while it's open from now on"); } }
         }
+        g_uiIntoEyes = full;
         if (full) {
             /* Full 3D: the frame is drawn twice, from the left eye and then the right (the camera moved along its own
                right-hand side by half your eye distance each way). Each eye gets its own Pip-Boy screen and rope; the
@@ -16935,6 +16979,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                 PipScr_Draw(dev);
                 g_rope.on = ropeOn; Rope_Draw(dev);
                 Ol_Collect(cam); Ol_Draw(dev);
+                UI_CompositeTo(dev);   /* (the HUD: last frame's interface, over this eye) */
                 if (f3snap) SaveBackbuffer(dev, g_fullPipNow ? (eye ? "FNVR_full3d_pip_right.bmp" : "FNVR_full3d_pip_left.bmp") : (eye ? "FNVR_full3d_right.bmp" : "FNVR_full3d_left.bmp"));
                 if (eye == 0) ok0 = Capture_Eye(dev, 0); else ok1 = ok0 && Capture_Eye(dev, 1);
             }
