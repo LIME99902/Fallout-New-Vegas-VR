@@ -72,3 +72,18 @@ matrix as is). The reflection turns the faces round, so each piece gets a NiSten
 - FNVR measures a part from the corners of its visible shapes (culled nodes, visible = 0, alpha = 0 left out; clip
   windows as their box), copies that rectangle of the interface picture onto the part's own SteamVR overlay, then clears
   it from the picture before the curved HUD gets it.
+
+## The gun hand's model: first-person object vs world model (2.7.2)
+- TESObjectWEAP +0x250..+0x26C: eight first-person objects (TESObjectSTAT*: no mods, mod 1, 2, 3, 1+2, 1+3, 2+3, 1+2+3;
+  `@fnv 0x004ab500` picks one by the mod bits). The STAT's model path is at STAT +0x34.
+- `BipedAnim::SetWeaponModel` (`@fnv 0x004ab400`): starts from the weapon's own (world) model for its mods, and only for
+  the player's two bodies (first and third person) swaps in the first-person object when there is one. With those
+  pointers cleared the player's hand gets the world model - which is all FNVR's "World model in your hand" does.
+- BipedAnim: `object[20]` at +0x2C, 16 bytes each `{pParent form, m_pModel, m_pSceneObject, bHasAnimation}`; the weapon
+  is slot 5 (+0x7C). Player +0x68C = first-person BipedAnim, Character +0x1B4 = third-person.
+- `Actor::AttachWeapon(TESObjectWEAP*)` (`@fnv 0x00571760`, thiscall): attaches the weapon to both of the player's
+  bodies through `BipedAnim::AttachBipedWeapon` (`@fnv 0x004ab750`), which skips a slot already holding that weapon with
+  a drawn part. Clearing the slot's pParent first makes it rebuild: `SetWeaponModel` then removes the old part itself
+  (`RemovePart` `@fnv 0x004aaff0` -> `ClearBipedObject` `@fnv 0x004ab020`, which releases the old model file).
+- The script command EquipItem does nothing for an item that's already worn (`Cmd_EquipItem_Execute` checks the
+  ExtraWorn flag first), so "EquipItem the equipped weapon" never rebuilds it.

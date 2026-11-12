@@ -121,8 +121,8 @@ Once saved, the menu stays in that spot every time.
 
 | Control | What it does |
 |---|---|
-| Point the right hand | The menu revolver points at the screen |
-| Right trigger | Select what you point at |
+| Point either hand | Each hand's menu revolver points at the screen (the one fired last moves the cursor) |
+| Either trigger | Select what that revolver points at |
 | Right A or right grip | Select |
 | Right B | Back |
 | Left X | The pad's X: accept a trade, take all |
