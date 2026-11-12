@@ -32,8 +32,8 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.7.8 (raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION        211
+#define FNVR_VERSION_STR    "2.7.9 (3D: each eye's picture is taken at the end of the frame, so the HUD, scope and colour effects are in both eyes; 2.7.8: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -3196,6 +3196,9 @@ static bool  g_monoImage = true;         /* latest upload was a mono frame */
 static bool  g_haveEye[2] = { false, false };
 static HmdMatrix34_t g_eyePose[2];       /* head pose each eye texture was rendered for */
 static int   g_aerEye = 0;               /* which eye the next stereo frame renders */
+static int   g_aerPendingEye = -1;       /* (this frame was drawn from that eye: taken whole at the end of the frame) */
+static char *g_aerCam = NULL; static float g_aerSavedT[3], g_aerSavedL[3];
+static void Aer_RestoreCam(void);
 
 static bool g_loggedFrustum = false;
 static bool g_inPresent = false;
@@ -6338,9 +6341,18 @@ static void Display_Frame_(IDirect3DDevice9 *dev)
     Pip_Record(dev);
     Scope_Snapshot(dev, scopeShown);
     g_presentsSinceLog++;
-    if (!g_vrCompositor || g_displayFailed) return;
-    if (Far_Frame(dev)) { g_stereoCapturedThisFrame = false; return; }
-    if (!g_stereoCapturedThisFrame) { UI_CompositeTo(dev); Capture_Eye(dev, 0); }   /* (the interface went into its own picture this frame: laid back over it) */
+    Aer_RestoreCam();   /* (a 3D frame: everything's drawn - the camera goes back to the head) */
+    if (!g_vrCompositor || g_displayFailed) { g_aerPendingEye = -1; return; }
+    if (Far_Frame(dev)) { g_stereoCapturedThisFrame = false; g_aerPendingEye = -1; return; }
+    if (!g_stereoCapturedThisFrame) {
+        UI_CompositeTo(dev);   /* (the interface went into its own picture this frame: laid back over it) */
+        int pe = g_aerPendingEye; g_aerPendingEye = -1;
+        bool ok = Capture_Eye(dev, 0);
+        if (pe >= 0) {   /* (a 3D frame: the picture is that eye's; the camera goes back to the head) */
+            if (ok && g_fillSlot) { g_fillSlot->targetEye = pe; g_stereoFramesSinceLog++; }
+            g_aerDrewEye = ok ? pe : -1;
+        }
+    }
     g_stereoCapturedThisFrame = false;
     Capture_FinishAndSubmit(dev);
 }
@@ -7160,6 +7172,12 @@ static void NodeUpdate(char *node)
 {
     UpdateDownwardPass_t f = (UpdateDownwardPass_t)(*(void ***)node)[0xA4 / 4];
     f(node, g_niUpdateData, 0);
+}
+static void Aer_RestoreCam(void)
+{
+    if (!g_aerCam) return;
+    if (!IsBadReadPtr(g_aerCam, 0xA0)) { memcpy(g_aerCam + NIAV_WORLD_TRANSLATE, g_aerSavedT, 12); memcpy(g_aerCam + NIAV_LOCAL_TRANSLATE, g_aerSavedL, 12); NodeUpdate(g_aerCam); }
+    g_aerCam = NULL;
 }
 
 /* Rotate the first-person arms/weapon about the camera from the head's direction to the hand's. */
@@ -17026,7 +17044,12 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             g_fullPipNow = full && pipSteady;
             if (g_fullPipSlow) { g_fullPipSlow = false; if (!pipBad) { pipBad = true; Log("Full 3D: drawing the open Pip-Boy twice was too slow - one picture while it's open from now on"); } }
         }
-        g_uiIntoEyes = full;
+        /* (both eyes inside one frame doesn't work in this game: the world it draws here only reaches the screen picture at the
+           end of the frame, after its colour effects and the HUD - capturing in between took the same old picture for both
+           eyes, without HUD or scope. So each frame is drawn from one eye and taken whole at the end of the frame, the eyes in
+           turn.) */
+        if (full) { full = false; alt = true; static bool said = false; if (!said) { said = true; Log("3D: each frame drawn from one eye, taken whole at the end of the frame (eyes in turn) - HUD, scope and effects in both eyes"); } }
+        g_uiIntoEyes = false;
         if (full) {
             /* Full 3D: the frame is drawn twice, from the left eye and then the right (the camera moved along its own
                right-hand side by half your eye distance each way). Each eye gets its own Pip-Boy screen and rope; the
@@ -17101,6 +17124,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
         } else if (alt) {
             /* Alternating eyes: one picture a frame, from the left and the right eye in turn, with the same frame work as
                full 3D (hands, Pip-Boy screen, scope, rope, outlines); the headset shows each eye's newest picture */
+            Aer_RestoreCam();   /* (in case last frame never reached the screen) */
             float *T = (float *)(cam + NIAV_WORLD_TRANSLATE), *L = (float *)(cam + NIAV_LOCAL_TRANSLATE);
             char *parent = *(char **)(cam + NIAV_PARENT);
             const float *Cw = (const float *)(cam + NIAV_WORLD_ROTATE);
@@ -17109,7 +17133,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             for (int k = 0; k < 3; k++) rgt[k] /= rl;
             float savedT[3] = { T[0], T[1], T[2] }, savedL[3] = { L[0], L[1], L[2] };
             float half = 0.5f * g_ipdMeters * g_unitsPerMeter;
-            int aimEye = g_leftHanded ? 0 : 1, eye = g_aerEye & 1;
+            int eye = g_aerEye & 1;
             bool ropeOn = g_rope.on;
             float side = eye == 0 ? -1.0f : 1.0f, w[3], l[3];
             for (int k = 0; k < 3; k++) w[k] = rgt[k] * side * half;
@@ -17127,19 +17151,13 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             Lgd_FrameBegin();
             o_DoRenderFrame(osGlobals, renderer, a, b);
             Lgd_FrameEnd();
-            for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }   /* (in case the game moved it while drawing) */
-            Scope_Draw(dev);
-            PipScr_Draw(dev);
-            g_rope.on = ropeOn; Rope_Draw(dev);
-            Ol_Collect(cam); Ol_Draw(dev);
-            bool ok = Capture_Eye(dev, 0);
-            for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
-            NodeUpdate(cam);
-            if (ok && g_fillSlot) g_fillSlot->targetEye = eye;
-            g_aerDrewEye = ok ? eye : -1;
+            (void)ropeOn;
+            /* the camera stays on this eye until the frame is finished (its effects, the HUD) - put back at the end of the frame,
+               where the whole picture is taken for this eye */
+            g_aerCam = cam; memcpy(g_aerSavedT, savedT, 12); memcpy(g_aerSavedL, savedL, 12);
+            g_aerPendingEye = eye;
             g_aerEye ^= 1;
-            g_stereoCapturedThisFrame = ok;
-            if (ok) g_stereoFramesSinceLog++;
+            g_stereoCapturedThisFrame = false;
             if (!g_loggedStereoActive) { g_loggedStereoActive = true; Log("Alternating eyes: on, with the full frame work - eye separation %.2f game units (IPD %.1f mm x %.1f units/m)", half * 2.0f, g_ipdMeters * 1000.0f, g_unitsPerMeter); }
         } else { Lgd_FrameBegin(); o_DoRenderFrame(osGlobals, renderer, a, b); Lgd_FrameEnd(); if (grabVis) Ol_Collect(cam); }
         g_inRenderFrame = false; g_lgdWant = false;
