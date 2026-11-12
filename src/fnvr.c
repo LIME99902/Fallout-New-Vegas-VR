@@ -33,7 +33,7 @@
 #include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.7.6 (magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_STR    "2.7.7 (full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -315,6 +315,7 @@ static void MR_EatInput(bool menu, int amH, int mvH, bool *gripNow, bool *rB, bo
 static bool g_pfGameSwing = true;   /* [Weapons] bPowerFistGameSwing */
 static bool g_mfOn = true; static float g_mfScale = 1.0f;   /* [Weapons] bMuzzleLight / fMuzzleLight */
 static void *g_pf1Right = NULL;   /* (the power fist last seen on the gun hand) */
+static char g_pf1RightPath[260] = "";   /* (and the model the game put on the gun hand for it) */
 static float g_pchScale = 1.0f, g_pchTurn = 0.0f;   /* [Reload] fPouchModelScale / fPouchModelTurn (degrees) */
 static bool g_olOn = false;   /* [Reload] bOutlines */ static bool g_mrShowPouch = true;   /* [Reload] bShowPouches */ static void Ol_Draw(IDirect3DDevice9 *dev); static void Ol_Collect(char *cam);
 static void Pf_Blow(int h); static void Pf_Visual(void); static void Mf_Shot(int h, void *weap, float len); static float Mf_LenNode(char *n);
@@ -4642,6 +4643,10 @@ static HRESULT STDMETHODCALLTYPE Hook_SetDS(IDirect3DDevice9 *dev, IDirect3DSurf
 static HRESULT STDMETHODCALLTYPE Hook_SetVP(IDirect3DDevice9 *dev, const D3DVIEWPORT9 *vp)
 {
     if (g_trOn && vp && g_trLines <= 600) { Tr_Flush(); g_trLines++; Log("TRACE   viewport %lu,%lu %lux%lu", (unsigned long)vp->X, (unsigned long)vp->Y, (unsigned long)vp->Width, (unsigned long)vp->Height); }
+    if (g_uiIntoEyes && g_inGameplay && vp) {   /* (check: the viewports a full 3D frame uses - is the interface's marker among them?) */
+        static double startAt = 0; static int n = 0; if (!startAt) startAt = QpcMs();
+        if (n < 40 && QpcMs() - startAt > 15000.0) { n++; Log("UIDIAG viewport %lu,%lu %lux%lu (picture %p, screen %p, ui phase %d, curved %d)", (unsigned long)vp->X, (unsigned long)vp->Y, (unsigned long)vp->Width, (unsigned long)vp->Height, (void *)g_curRT0, (void *)g_bbPtr, (int)g_uiPhase, (int)g_curvedActive); }
+    }
     if (g_curvedActive && !g_uiPhase && vp && g_bbW && g_bbH && HeadsetDisplayActive() && (g_inGameplay || !g_farMenu)) {
         /* the interface camera's marker viewport: a hair inside the full frame */
         DWORD mx = (DWORD)(0.0005f * g_bbW), my = (DWORD)(0.0005f * g_bbH);
@@ -12230,7 +12235,15 @@ static void RG_Capture(void)
     if (V3Len(g) > 30.0f) return;   /* (the gun isn't in the hand right now) */
     int c = RG_Class(t);
     RGrip *r = &g_rg[c];
-    if (c == 2) { g_pf1Right = PlayerWeaponForm(); Mdl_Dump("gun hand's power fist (first person)", g_weaponNode); char *pr = *(char **)(g_weaponNode + NIAV_PARENT); if (pr) Mdl_Dump("gun hand's power fist: its parent", pr); }
+    if (c == 2) { g_pf1Right = PlayerWeaponForm();
+        {   /* (the model the game itself put on the gun hand for it: the gauntlet the other hand borrows) */
+            char *pl = (char *)GetPlayer(); char *bip = pl && !IsBadReadPtr(pl, 0x690) ? *(char **)(pl + 0x68C) : NULL;
+            if (bip && !IsBadReadPtr(bip + 0x7C, 12) && *(void **)(bip + 0x7C) == g_pf1Right) {
+                char *mdl = *(char **)(bip + 0x80); const char *q = mdl && !IsBadReadPtr(mdl, 8) ? *(const char **)(mdl + 4) : NULL;
+                if (q && !IsBadStringPtrA(q, 260) && *q && strcmp(q, g_pf1RightPath)) { snprintf(g_pf1RightPath, sizeof g_pf1RightPath, "%s", q);
+                    char k[16]; snprintf(k, sizeof k, "%08X", *(uint32_t *)((char *)g_pf1Right + 0x0C) & 0x00FFFFFF);
+                    WritePrivateProfileStringA("PowerFistModel", k, q, g_iniPath);
+                    Log("Power fist: the gun hand wears %s - the other hand will wear the same", q); } } } Mdl_Dump("gun hand's power fist (first person)", g_weaponNode); char *pr = *(char **)(g_weaponNode + NIAV_PARENT); if (pr) Mdl_Dump("gun hand's power fist: its parent", pr); }
     if (c == 2) {   /* ...and how it sits on the forearm bone it hangs from (the other hand's is the mirror image of this) */
         char *par = *(char **)(g_weaponNode + NIAV_PARENT), *mr = NULL;
         {   char **kids = *(char ***)(g_weaponNode + 0xA0); unsigned kc = *(uint16_t *)(g_weaponNode + 0xA6);
@@ -12485,6 +12498,14 @@ static bool Pf1_Ensure(void)
             for (int k = 0; k < 8 && !path; k++) { char *t = WM_FirstPersonObj(w, k);   /* (as the game had it, also while "world model" is on for it) */
                 if (t && !IsBadReadPtr(t, 0x40)) { const char *q = *(const char **)(t + 0x34);
                     if (q && !IsBadStringPtrA(q, 260) && *q) { path = q; st = t; snprintf(why, sizeof why, "%s weapon's 1st person object %d", c ? "the gun hand's" : "its own", k); } } } }
+        static char saved[260];
+        if (!path) {   /* the model the game put on the gun hand for this very power fist (seen this session, or remembered) */
+            char k[16]; snprintf(k, sizeof k, "%08X", *(uint32_t *)((char *)g_lg.base + 0x0C) & 0x00FFFFFF);
+            GetPrivateProfileStringA("PowerFistModel", k, "", saved, sizeof saved, g_iniPath);
+            if (!saved[0] && g_pf1Right == g_lg.base && g_pf1RightPath[0]) snprintf(saved, sizeof saved, "%s", g_pf1RightPath);
+            const char *ql = *(const char **)((char *)g_lg.base + 0x40);
+            if (saved[0] && (!ql || IsBadStringPtrA(ql, 260) || _stricmp(saved, ql))) { path = saved; snprintf(why, sizeof why, "the model the game puts on the gun hand"); }
+        }
         if (!path && g_pf1Right && g_pf1Right != g_lg.base && !IsBadReadPtr(g_pf1Right, 0x48)) {
             const char *q = *(const char **)((char *)g_pf1Right + 0x40), *ql = *(const char **)((char *)g_lg.base + 0x40);
             if (q && !IsBadStringPtrA(q, 260) && *q && (!ql || IsBadStringPtrA(ql, 260) || _stricmp(q, ql))) { path = q; snprintf(why, sizeof why, "the gun hand's power fist model"); }
@@ -12963,6 +12984,7 @@ typedef struct {
     int shellIdx[8];                               /* (each case's number: the holes they sit in) */
     bool slideDown;                                /* (the Fat Man: its round slides down onto it from the top) */
     double seatAt;                                 /* (a new magazine sliding up into the gun: when it started) */
+    bool ordOk;                                    /* (the cases and rounds numbered clockwise round the cylinder) */
     bool noSlide, relOk; float relT[3], relV[3]; double relAt;   /* (the dropped magazine: free of the gun, flying / falling) */
     float lastP[3], lastV[3]; double lastPAt;      /* (where the magazine was drawn last frame, and its speed - flung with the gun) */
 } MRGun;
@@ -13714,7 +13736,7 @@ static void MR_VisualGun(int g, char *top)
     if (G->magFor != top) {
         G->magFor = top; G->magNode = G->cylNode = G->slideNode = G->pumpNode = G->leverNode = G->barrelNode = NULL; memset(G->itemNode, 0, sizeof G->itemNode); G->shellCnt = 0; G->bulCnt = 0;
         memset(G->itemRestOk, 0, sizeof G->itemRestOk); G->magMidOk = false; G->magOffOk = false; G->insOk = false; G->since = QpcMs();
-        MR_PartsWalk(top, 0, G);
+        MR_PartsWalk(top, 0, G); G->ordOk = false;
         if (G->shellCnt == 0 && (G->cls == MRC_REVOLVER || G->cls == MRC_TOPBREAK || G->cls == MRC_BREAK || G->cls == MRC_LAUNCHER)) {
             char all[900] = ""; MR_NameDump(top, 0, all, sizeof all);
             Log("Reload: %s gun has no separate case parts - its parts:%s", g ? "other hand's" : "gun hand's", all);
@@ -13730,6 +13752,27 @@ static void MR_VisualGun(int g, char *top)
     if (!G->insOk && G->st == MRS_READY && now - G->since > 700.0) { MR_MeasureGun(g, top); if (!G->insOk) G->insOk = false; G->since = now + 1e9; }
     float fw[3], up[3], sd[3]; MR_GunWorldAxes(g, h, fw, up, sd);
     float U = g_unitsPerMeter;
+    if (!G->ordOk && G->st == MRS_READY && G->shellCnt >= 2 && G->cls == MRC_REVOLVER) {
+        /* the holes numbered the same way on every gun: clockwise as you look down the gun from behind, starting at the top -
+           the models number their case and round parts in no particular order. Live rounds take the first holes, so the same
+           holes empty the same way in either hand. */
+        float cen[3] = { 0, 0, 0 }, th[8]; int nc = 0;
+        for (int j = 0; j < G->shellCnt; j++) if (MR_Ok(G->shellN[j])) { const float *P = (const float *)(G->shellN[j] + NIAV_WORLD_TRANSLATE); for (int i = 0; i < 3; i++) cen[i] += P[i]; nc++; }
+        if (nc >= 2) {
+            for (int i = 0; i < 3; i++) cen[i] /= (float)nc;
+            for (int j = 0; j < G->shellCnt; j++) { th[j] = 99.0f; if (!MR_Ok(G->shellN[j])) continue;
+                const float *P = (const float *)(G->shellN[j] + NIAV_WORLD_TRANSLATE); float d[3] = { P[0] - cen[0], P[1] - cen[1], P[2] - cen[2] };
+                float a = atan2f(V3Dot(d, sd), V3Dot(d, up)); if (a < -0.2f) a += 2.0f * PI_F; th[j] = a; }
+            for (int j = 0; j < G->shellCnt; j++) { int r = 0; for (int q = 0; q < G->shellCnt; q++) if (th[q] < th[j] || (th[q] == th[j] && q < j)) r++; G->shellIdx[j] = r + 1; }
+            for (int b = 0; b < G->bulCnt; b++) { if (!MR_Ok(G->bulN[b])) continue;   /* (each round goes with the case nearest it) */
+                const float *B = (const float *)(G->bulN[b] + NIAV_WORLD_TRANSLATE); float best = 1e30f; int bi = -1;
+                for (int j = 0; j < G->shellCnt; j++) { if (!MR_Ok(G->shellN[j])) continue; const float *P = (const float *)(G->shellN[j] + NIAV_WORLD_TRANSLATE);
+                    float dd = (B[0] - P[0]) * (B[0] - P[0]) + (B[1] - P[1]) * (B[1] - P[1]) + (B[2] - P[2]) * (B[2] - P[2]); if (dd < best) { best = dd; bi = j; } }
+                if (bi >= 0) G->bulIdx[b] = G->shellIdx[bi]; }
+            G->ordOk = true;
+            Log("Reload: %s gun's %d holes numbered clockwise from the top", g ? "other hand's" : "gun hand's", G->shellCnt);
+        }
+    }
     /* the magazine */
     char *n = G->magNode;
     if (MR_Ok(n)) {
@@ -17017,6 +17060,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                     for (int k = 0; k < 3; k++) l[k] = (R[0 * 3 + k] * w[0] + R[1 * 3 + k] * w[1] + R[2 * 3 + k] * w[2]) / sc;
                 }
                 for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }
+                NodeUpdate(cam);   /* (the camera keeps its own world-to-view matrix: worked out again, or the eye never moves) */
                 if (armsDone && grabVis) {
                     if (QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam, eye); else { g_scope.active = false; g_capWant = false; }
                     PipScr_Prepare((char *)player, cam);
@@ -17048,6 +17092,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                         V3Len(d), V3Dot(d, rgt), 2.0f * half, fabsf(V3Dot(d, rgt)) > 0.5f * half ? "your body moves with each eye" : "your body stays put (right)"); }
             }
             for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
+            NodeUpdate(cam);
             g_fullDrawnAt = QpcMs();
             if (ok0 && ok1 && g_fillSlot) g_fillSlot->targetEye = 2;
             g_stereoCapturedThisFrame = ok0;
@@ -17074,6 +17119,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                 for (int k = 0; k < 3; k++) l[k] = (R[0 * 3 + k] * w[0] + R[1 * 3 + k] * w[1] + R[2 * 3 + k] * w[2]) / sc;
             }
             for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }
+            NodeUpdate(cam);
             if (armsDone && grabVis) {
                 if (QpcMs() >= g_weaponSettleUntil) Scope_Prepare((char *)player, cam, eye); else { g_scope.active = false; g_capWant = false; }
                 PipScr_Prepare((char *)player, cam);
@@ -17088,6 +17134,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             Ol_Collect(cam); Ol_Draw(dev);
             bool ok = Capture_Eye(dev, 0);
             for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
+            NodeUpdate(cam);
             if (ok && g_fillSlot) g_fillSlot->targetEye = eye;
             g_aerDrewEye = ok ? eye : -1;
             g_aerEye ^= 1;
