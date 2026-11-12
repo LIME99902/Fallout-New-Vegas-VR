@@ -33,7 +33,7 @@
 #include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.7.3 (the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_STR    "2.7.4 (full 3D: the Pip-Boy menu stays on its screen; revolver cases come out one by one clockwise; full 3D checks in the log; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -8519,6 +8519,12 @@ static void PM_TakeFinal(void)
     if (cur == bb) ok = false; if (bb) IDirect3DSurface9_Release(bb);
     static int why = 0;
     if (!ok) { if (why++ < 5) Log("Pip-Boy menu: the draw step ended on an unexpected picture (%ux%u) - skipped", d.Width, d.Height); IDirect3DSurface9_Release(cur); return; }
+    /* Full 3D runs the game's frame twice, and the second run of the draw step ends on a small picture of its own (the
+       screen's dark background, no menu) - copying that blanked the screen. Only a screen-size picture is the menu. */
+    if (g_bbW && g_bbH && (d.Width != g_bbW || d.Height != g_bbH)) {
+        static int sk = 0; if (sk++ < 3) Log("Pip-Boy menu: the draw step ended on a %ux%u picture, not the screen-size menu - kept the last menu picture", d.Width, d.Height);
+        IDirect3DSurface9_Release(cur); return;
+    }
     D3DSURFACE_DESC want = d; want.Width = d.Width > 2048 ? d.Width / 2 : d.Width; want.Height = d.Width > 2048 ? d.Height / 2 : d.Height;
     if (PM_EnsureCopy(dev, 0, &want) && SUCCEEDED(IDirect3DDevice9_StretchRect(dev, cur, NULL, g_pmCopySurf[0], NULL, D3DTEXF_LINEAR))) {
         g_pmLock = 0; g_pmLockSurf = NULL; g_pmLockAlpha = false; g_pmCopyN = 1; g_pmCopyAt = QpcMs();
@@ -13730,8 +13736,24 @@ static void MR_VisualGun(int g, char *top)
             int idx = G->shellIdx[k] > 0 ? G->shellIdx[k] : k + 1;
             if (idx <= G->stored) { MR_Show(s); continue; }   /* (a round in that hole - left in, or loaded) */
             if (G->stored > 0 && G->cls != MRC_REVOLVER && ft >= 0.5f) { MR_Hide(s); continue; }
-            if (ft >= 0 && ft < 0.5f) { const float *St = (const float *)(s + NIAV_WORLD_TRANSLATE); M3 Ws; memcpy(Ws, s + NIAV_WORLD_ROTATE, sizeof Ws);
-                float org[3], spread = 0.12f * (float)(k - G->shellCnt / 2);
+            float ftc = ft;
+            if (rev) {   /* a revolver's cases come out one hole after the other, clockwise round the cylinder as you look down the
+                            gun, starting from the top hole */
+                float cen[3] = { 0, 0, 0 }, th[8]; int nc = 0;
+                for (int j = 0; j < G->shellCnt; j++) if (MR_Ok(G->shellN[j])) { const float *P = (const float *)(G->shellN[j] + NIAV_WORLD_TRANSLATE); for (int i = 0; i < 3; i++) cen[i] += P[i]; nc++; }
+                if (nc) for (int i = 0; i < 3; i++) cen[i] /= (float)nc;
+                for (int j = 0; j < G->shellCnt; j++) { th[j] = 0;
+                    if (!MR_Ok(G->shellN[j])) continue;
+                    const float *P = (const float *)(G->shellN[j] + NIAV_WORLD_TRANSLATE); float d[3] = { P[0] - cen[0], P[1] - cen[1], P[2] - cen[2] };
+                    float a = atan2f(V3Dot(d, sd), V3Dot(d, up)); if (a < -0.05f) a += 2.0f * PI_F; th[j] = a; }
+                int rank = 0;
+                for (int j = 0; j < G->shellCnt; j++) { int ij = G->shellIdx[j] > 0 ? G->shellIdx[j] : j + 1;
+                    if (j != k && ij > G->stored && (th[j] < th[k] || (th[j] == th[k] && j < k))) rank++; }
+                ftc = ft - 0.14f * (float)rank;
+                if (ftc < 0) { MR_Show(s); continue; }   /* (still in its hole, waiting its turn) */
+            }
+            if (ftc >= 0 && ftc < 0.5f) { float ft = ftc; const float *St = (const float *)(s + NIAV_WORLD_TRANSLATE); M3 Ws; memcpy(Ws, s + NIAV_WORLD_ROTATE, sizeof Ws);
+                float org[3], spread = rev ? 0.0f : 0.12f * (float)(k - G->shellCnt / 2);
                 for (int i = 0; i < 3; i++) org[i] = rev ? St[i] - fw[i] * (0.9f * ft * U) + sd[i] * (spread * ft * U)
                                                          : St[i] - fw[i] * (1.2f * ft * U) + up[i] * (1.4f * ft * U) + sd[i] * (spread * ft * U);
                 org[2] -= 0.5f * 9.8f * ft * ft * U; MR_Show(s); MR_Move(s, org, Ws); }
@@ -16876,6 +16898,15 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             int aimEye = g_leftHanded ? 0 : 1;
             bool ropeOn = g_rope.on; bool ok0 = false, ok1 = false;
             double te[2] = { 0, 0 };
+            float f3hand[2][3] = { { 1e30f, 0, 0 }, { 1e30f, 0, 0 } };
+            bool f3snap = false;
+            {   /* (one pair of eye pictures for checking: in the world ~20 s into full 3D, and the Pip-Boy open) */
+                static double since = 0; static bool w1 = false, w2 = false;
+                if (!since) since = QpcMs();
+                if (!w1 && QpcMs() - since > 20000.0 && !g_fullPipNow) { w1 = true; f3snap = true; }
+                else if (!w2 && g_fullPipNow) { static double ps = 0; if (!ps) ps = QpcMs(); if (QpcMs() - ps > 1500.0) { w2 = true; f3snap = true; } }
+                if (f3snap) Log("Full 3D: saving both eyes' pictures (FNVR_full3d_left.bmp / _right.bmp)%s", g_fullPipNow ? " - Pip-Boy open" : "");
+            }
             for (int eye = 0; eye < 2; eye++) {
                 float side = eye == 0 ? -1.0f : 1.0f, w[3], l[3];
                 for (int k = 0; k < 3; k++) w[k] = rgt[k] * side * half;
@@ -16894,13 +16925,25 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                 o_DoRenderFrame(osGlobals, renderer, a, b);
                 Lgd_FrameEnd();
                 te[eye] = QpcMs() - tr;
+                {   /* (check: does your drawn body move with each eye? where the left hand was drawn, per eye) */
+                    char *hb = g_bones[0][B_HAND];
+                    if (hb && !IsBadReadPtr(hb, 0x98)) memcpy(f3hand[eye], hb + NIAV_WORLD_TRANSLATE, 12); else f3hand[eye][0] = 1e30f;
+                }
                 if (te[eye] > 250.0 && g_fullPipNow) g_fullPipSlow = true;
                 for (int k = 0; k < 3; k++) { T[k] = savedT[k] + w[k]; L[k] = savedL[k] + l[k]; }   /* (in case the game moved it while drawing) */
                 Scope_Draw(dev);   /* (only this eye's scope picture, if it has one) */
                 PipScr_Draw(dev);
                 g_rope.on = ropeOn; Rope_Draw(dev);
                 Ol_Collect(cam); Ol_Draw(dev);
+                if (f3snap) SaveBackbuffer(dev, g_fullPipNow ? (eye ? "FNVR_full3d_pip_right.bmp" : "FNVR_full3d_pip_left.bmp") : (eye ? "FNVR_full3d_right.bmp" : "FNVR_full3d_left.bmp"));
                 if (eye == 0) ok0 = Capture_Eye(dev, 0); else ok1 = ok0 && Capture_Eye(dev, 1);
+            }
+            if (f3hand[0][0] < 1e29f && f3hand[1][0] < 1e29f) {
+                static int hl = 0; static double hn = 0;
+                if (hl < 6 && QpcMs() > hn) { hl++; hn = QpcMs() + 15000.0;
+                    float d[3] = { f3hand[1][0] - f3hand[0][0], f3hand[1][1] - f3hand[0][1], f3hand[1][2] - f3hand[0][2] };
+                    Log("Full 3D check: the left hand was drawn %.2f units apart between the eyes (along your right %.2f; the eyes are %.2f apart) - %s",
+                        V3Len(d), V3Dot(d, rgt), 2.0f * half, fabsf(V3Dot(d, rgt)) > 0.5f * half ? "your body moves with each eye" : "your body stays put (right)"); }
             }
             for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
             g_fullDrawnAt = QpcMs();
