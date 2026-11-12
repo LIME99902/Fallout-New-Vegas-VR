@@ -30,7 +30,7 @@ static struct VR_IVRInput_FnTable *I; static VrInHandles g_in;
 static VR_InitInternal2_t pInit; static VR_ShutdownInternal_t pShut; static VR_GetGenericInterface_t pGet; static VR_ErrStr_t pErr;
 static ID3D11Device *g_dev; static ID3D11DeviceContext *g_ctx;
 typedef struct { uint64_t h; ID3D11Texture2D *t; } Opened;
-static Opened g_open[32]; static int g_openN;
+static Opened g_open[96]; static int g_openN;   /* (the game's shared pictures, opened once each: eyes, HUD, Pip-Boy, the HUD parts' own panels) */
 
 static void Log(const char *fmt, ...)
 {
@@ -62,7 +62,7 @@ static ID3D11Texture2D *Tex_Open(const IpcTex *it)
     ID3D11Texture2D *t = NULL;
     HRESULT hr = ID3D11Device_OpenSharedResource(g_dev, (HANDLE)(uintptr_t)it->shared, &IID_ID3D11Texture2D, (void **)&t);
     if (FAILED(hr) || !t) { static int n = 0; if (n++ < 10) Log("couldn't open the game's picture %llX (%08lX)", (unsigned long long)it->shared, (unsigned long)hr); return NULL; }
-    if (g_openN >= 32) { ID3D11Texture2D_Release(g_open[0].t); memmove(g_open, g_open + 1, sizeof g_open[0] * 31); g_openN = 31; }
+    if (g_openN >= 96) { ID3D11Texture2D_Release(g_open[0].t); memmove(g_open, g_open + 1, sizeof g_open[0] * 95); g_openN = 95; }
     g_open[g_openN].h = it->shared; g_open[g_openN].t = t; g_openN++;
     Log("opened the game's picture %ux%u", it->w, it->h);
     return t;

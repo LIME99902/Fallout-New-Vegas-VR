@@ -143,6 +143,25 @@ Message boxes with an OK button (tutorial prompts, quest messages) are normal me
 
 Size, height and the look-away angle are on the **HUD & menus** settings page.
 
+## HUD layout
+
+Pick it on the startup screen (**HUD**) or under **HUD & menus → HUD layout**:
+
+- **Classic:** the game's HUD in front of you, as before.
+- **VR:** the compass sits on the back of your Pip-Boy hand (just in front of the Pip-Boy), health and AP sit on your other wrist like a watch, and each gun's ammo shows right beside the hand holding it (turned to face you, to the inside so it doesn't cover the sights). Turn your wrist toward you to read it.
+- **Custom:** your own choices, set under **HUD & menus → HUD parts: move & resize**:
+
+| Row | What it does |
+|---|---|
+| Part | Which part the rows below change: compass, health, action points, ammo (gun hand), other hand's weapon, sneak indicator. It pulses while you change it. |
+| Show it | Off: the part isn't shown anywhere. |
+| Where | On the HUD (where the game draws it), In front of you (its own small panel that moves with your head), Left wrist, Right wrist, Left hand, Right hand |
+| Size | Bigger or smaller (100% = its normal size for that spot) |
+| Move left / right, down / up, in / out | Nudge it into place (centimetres). On a wrist, left/right is along your forearm and in/out is off your skin; by a hand, in/out is forward and back. |
+| Reset this part's size and spot | Back to 100% and no nudges |
+
+Changing any part makes the layout **Custom**. Picking Classic or VR again sets every part back to that layout. The whole HUD can still be switched off with **Show the HUD**. (Parts off the HUD need **Curved menus and HUD**, which is on as standard.)
+
 ## Quick-loot window (looking at a container or body)
 
 Needs Just Assorted Mods' quick-loot menu.

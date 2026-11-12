@@ -33,7 +33,7 @@
 #include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.6.1 (scopes: a gun a scope can be put on only has one while the scope mod is on it; a scoped rifle in the other hand can be sighted through too (with the other eye); the lens is found on the model by its scope part along the gun's own top, not the controller's - no more scope picture in the grip; Valve Index, Vive and Windows Mixed Reality controllers read through SteamVR Input with FNVR's own bindings - the Index thumbstick alone moves you, squeezing grabs, its fingers are tracked; buttons changeable in SteamVR's controller bindings; the left trigger on a weapon in the Pip-Boy's item list makes it your other hand's weapon again - the highlighted item is read from the game's own menu (the script function it used doesn't exist in New Vegas); the other hand's power fist is worn on that forearm - the exact mirror image of how the gun hand's sits on its forearm, drawn with your arms, your own hand and fingers moving inside it; its swing plays the weapon's swing sound and fires its piston; tap left Y opens the Pip-Boy with its menu floating in front of your face - on as standard, it was off unless switched on; the log says why a Y tap didn't open it, and when the Pip-Boy HUD gets no menu picture; alternating-eyes 3D no longer skips FNVR's frame work - the hands, the Pip-Boy screen and the menu pictures work in both 3D views; full 3D is the standard view: both eyes drawn every frame, picked on the startup screen as 3D view - full 3D, alternating eyes or 2D; the game resolution stays: FNVR sets it before the game reads its settings at every start, the automatic size no longer wobbles between starts, sizes of your own or the launcher's, Quit now to start at a new one; the Resolution percent setting is kept between starts; live pop-ups with no button found; grip talks to people only with your hand on them; the gun hand's bullets start at the drawn muzzle; the other hand's revolver cylinder swings to its own right; loaded rounds fill the cylinder holes again; launchers break open (rocket in, flick shut), the Fat Man takes its nuke slid down from the top, ammo boxes found on heavy weapons; guns hit as clubs (weight, x3 with Melee Weapons); knockouts and knockdowns on anyone but companions; frame rate counter; top-break revolvers (Schofield) and break-action shotguns: open, cases out, speedload, flick up to shut; slides cycle with each shot and lock back on the last round - a short pull and let go chambers; a grip used for reloading never grabs or draws until you let go; Pip-Boy HUD mode (PR #4) with see-through done on the graphics card; zero copy for the menu room; eye pictures freed on the graphics card under zero copy; grab people / drag bodies; sky follows your head; zero copy for the HUD and Pip-Boy screen; render resolution + sharpening; FNVR runs the game clock - no NVTF frame limit; game frame rate: unlimited / 120 / 90 / 60 / 30; FNVR Stereo: zero-copy Direct3D 9Ex pictures, fast alternate eyes; pop-up messages with just OK stay live; FNVR Stereo: OpenVR in its own 64-bit process; pull the magazine out by hand; bolt pulled back and let go to chamber; revolver flicked shut; other hand's weapon from the Pip-Boy fixed; no Pip-Boy while reloading; Sequoia cylinder slides right; power fist: the game's own punch animation and sounds; ammo held in your hand; pouches from the game's own models; no orange outlines; gun-hand bullets straight down the barrel; muzzle flash light in each weapon's own colour; Pip-Boy: Y to open with the menu in front, hold Y for the light, hold still while open; ammo pouches you can see on your belt; looking down no longer crouches; no arm-swing running while aiming)"
+#define FNVR_VERSION_STR    "2.7.0 (HUD layout: each HUD part - compass, health, AP, ammo, the other hand's weapon, sneak - on the HUD, in front of you, on a wrist or by a hand, moved and sized as you like; a VR layout: compass on the Pip-Boy wrist, health and AP on the other wrist, each gun's ammo by its hand)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -304,6 +304,8 @@ static void Fps_Draw(IDirect3DDevice9 *dev); static void Fps_Tick(void);
 static bool g_lgDropForSwap = false; static bool g_lhudShow = true; static float g_lhudX = 0.30f, g_lhudY = 0.62f;
 static volatile bool g_lgAssignReq;
 static void LHud_Draw(IDirect3DDevice9 *dev);
+static bool g_lhudInUi = false;   /* (this frame's other-hand readout went into the curved HUD's picture or onto its own panel - not into the frame) */
+static void HudEl_Present(IDirect3DDevice9 *dev, bool drewUi); static void HudEl_Release9(void); static void HudEl_Load(void);   /* (HUD parts where you want them) */
 static void Gun_Palm(int h, float *palm); static char *LG_Root(char *ref); static bool LG_Pose(float *org, M3 W, float *aim);
 static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket */
 static bool  g_mrPocket2 = true;   /* [Reload] bSecondPocket: an ammo pocket on both hips */
@@ -3213,6 +3215,7 @@ static void ZC_Release(void);
 static void Display_Release9(void)
 {
     Scope_Release();
+    HudEl_Release9();
     UI_Release9();
     Far_Release9();
     PipOv_Release9();
@@ -4614,9 +4617,11 @@ static void UI_Present(IDirect3DDevice9 *dev)
 {
     if (!g_curvedActive || !g_vrOverlay) return;
     UI_EndPhase(dev);
-    bool drew = g_uiDrewThisFrame && !g_farActive && !g_setOpen; g_uiDrewThisFrame = false;
+    bool drewUi = g_uiDrewThisFrame && !g_farActive && g_uiSurf && g_d11;
+    bool drew = drewUi && !g_setOpen; g_uiDrewThisFrame = false;
+    HudEl_Present(dev, drewUi);   /* (HUD parts moved off the HUD: onto their own panels, their spots on it cleared) */
     static bool shown = false;
-    if (!drew || !g_uiSurf || !g_d11) { if (shown) { g_vrOverlay->HideOverlay(g_uiOverlay); shown = false; } return; }
+    if (!drew) { if (shown) { g_vrOverlay->HideOverlay(g_uiOverlay); shown = false; } return; }
     if (OvZc_Set(dev, &g_uiZc, g_uiSurf, NULL, UI_OUT_W, UI_OUT_H, D3DFMT_A8R8G8B8, g_uiOverlay, EColorSpace_ColorSpace_Auto, D3DTEXF_LINEAR, -1.0f)) goto uiPlaced;
     if (FAILED(IDirect3DDevice9_StretchRect(dev, g_uiSurf, NULL, g_uiSmall, NULL, D3DTEXF_LINEAR))) return;
     if (FAILED(IDirect3DDevice9_GetRenderTargetData(dev, g_uiSmall, g_uiSys))) return;
@@ -14418,45 +14423,97 @@ static void LHud_Tick(void)
     double c = 100; if (cnd && LookupForm(g_lg.id) == (void *)g_lg.ref) Scr_Num(cnd, g_lg.ref, &c);
     snprintf(g_lhud[2], sizeof g_lhud[2], "CND  %d%%", (int)(c + 0.5));
 }
-/* (present) drawn into the frame like the game's own HUD */
-static void LHud_Draw(IDirect3DDevice9 *dev)
+/* (present) the readout's font: one for the frame and the HUD's picture (slot 0), one for its own panel (slot 1) */
+static void *LHud_Font(IDirect3DDevice9 *dev, int slot, int px)
 {
-    if (!g_lhudOn || !g_lhudShow || ScreenModeNow() || g_pipOpen) return;
-    static void *font = NULL; static bool failed = false; static UINT fontFor = 0;
+    static void *font[2]; static int fpx[2]; static bool failed = false;
     typedef HRESULT (WINAPI *CreateFont_t)(IDirect3DDevice9 *, INT, UINT, UINT, UINT, BOOL, DWORD, DWORD, DWORD, DWORD, LPCSTR, void **);
+    if (failed || slot < 0 || slot > 1) return NULL;
+    if (font[slot] && fpx[slot] == px) return font[slot];
+    if (font[slot]) { ((ULONG (__stdcall *)(void *))(*(void ***)font[slot])[2])(font[slot]); font[slot] = NULL; }
+    HMODULE m = GetModuleHandleA("d3dx9_43.dll"); if (!m) m = LoadLibraryA("d3dx9_43.dll");
+    CreateFont_t cf = m ? (CreateFont_t)GetProcAddress(m, "D3DXCreateFontA") : NULL;
+    if (!cf || FAILED(cf(dev, px, 0, FW_BOLD, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Arial", &font[slot])) || !font[slot]) {
+        font[slot] = NULL; failed = true; Log("Other hand's HUD: couldn't make a font (d3dx9_43.dll) - no readout"); return NULL; }
+    fpx[slot] = px; return font[slot];
+}
+/* its lines into a picture from (x, y), lh apart (amber with a shadow, like the HUD); returns the widest line's width */
+static int LHud_Text(IDirect3DDevice9 *dev, IDirect3DSurface9 *target, void *font, int x, int y, int lh, int w)
+{
     typedef INT (__stdcall *DrawText_t)(void *, void *, LPCSTR, INT, RECT *, DWORD, DWORD);
-    if (failed) return;
-    UINT H = g_bbH ? g_bbH : 1080, W = g_bbW ? g_bbW : 1920;
-    UINT fkey = H * 1000 + (UINT)(g_uiScale * 100.0f);
-    if (font && fontFor != fkey) { ((ULONG (__stdcall *)(void *))(*(void ***)font)[2])(font); font = NULL; }
-    if (!font) {
-        HMODULE m = GetModuleHandleA("d3dx9_43.dll"); if (!m) m = LoadLibraryA("d3dx9_43.dll");
-        CreateFont_t cf = m ? (CreateFont_t)GetProcAddress(m, "D3DXCreateFontA") : NULL;
-        if (!cf || FAILED(cf(dev, (INT)fmaxf(H / 38.0f * g_uiScale, 12.0f), 0, FW_BOLD, 1, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Arial", &font)) || !font) {
-            failed = true; Log("Other hand's HUD: couldn't make a font (d3dx9_43.dll) - no readout"); return; }
-        fontFor = fkey;
-    }
-    IDirect3DSurface9 *bb = NULL, *old = NULL; D3DVIEWPORT9 vp;
-    if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
+    IDirect3DSurface9 *old = NULL; D3DVIEWPORT9 vp; int widest = 0;
     IDirect3DDevice9_GetRenderTarget(dev, 0, &old); IDirect3DDevice9_GetViewport(dev, &vp);
-    IDirect3DDevice9_SetRenderTarget(dev, 0, bb);
+    IDirect3DDevice9_SetRenderTarget(dev, 0, target);
     DrawText_t dt = (DrawText_t)(*(void ***)font)[14];
-    /* sized and placed like the game's HUD (HUD size): above where the health bar sits, toward the middle as the HUD shrinks */
-    float sc = g_uiScale;
-    int lh = (int)fmaxf(H / 34.0f * sc, 14.0f);
-    float px = 0.5f + (0.06f - 0.5f) * sc + (g_lhudX - 0.30f), py = 0.5f + (0.78f - 0.5f) * sc + (g_lhudY - 0.62f);
     for (int i = 0; i < 3; i++) {
         if (!g_lhud[i][0]) continue;
-        RECT r = { (LONG)(W * px), (LONG)(H * py) + i * lh, (LONG)(W * px) + (LONG)(W / 3), (LONG)(H * py) + (i + 1) * lh };
+        RECT cr = { 0, 0, 0, 0 }; dt(font, NULL, g_lhud[i], -1, &cr, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_CALCRECT, 0);
+        if (cr.right - cr.left > widest) widest = cr.right - cr.left;
+        RECT r = { x, y + i * lh, x + w, y + (i + 1) * lh };
         RECT rs = r; OffsetRect(&rs, 2, 2);
         dt(font, NULL, g_lhud[i], -1, &rs, DT_LEFT | DT_TOP | DT_NOCLIP, 0xC0000000);
         dt(font, NULL, g_lhud[i], -1, &r, DT_LEFT | DT_TOP | DT_NOCLIP, 0xFFFFB642);   /* (the HUD's amber) */
     }
-    IDirect3DDevice9_SetRenderTarget(dev, 0, old ? old : bb); IDirect3DDevice9_SetViewport(dev, &vp);
+    IDirect3DDevice9_SetRenderTarget(dev, 0, old ? old : target); IDirect3DDevice9_SetViewport(dev, &vp);
     if (old) IDirect3DSurface9_Release(old);
-    IDirect3DSurface9_Release(bb);
     D3D9_CheckHooks();   /* (D3DX's text drawing records the device's state, and on Windows' own Direct3D that puts the device's
                             function table back to its originals - FNVR's hooks go straight back on) */
+    return widest;
+}
+/* (present) drawn into the frame like the game's own HUD - when the curved HUD didn't take it (g_lhudInUi) */
+static void LHud_Draw(IDirect3DDevice9 *dev)
+{
+    bool inUi = g_lhudInUi; g_lhudInUi = false;
+    if (inUi || !g_lhudOn || !g_lhudShow || ScreenModeNow() || g_pipOpen) return;
+    UINT H = g_bbH ? g_bbH : 1080, W = g_bbW ? g_bbW : 1920;
+    void *font = LHud_Font(dev, 0, (int)fmaxf(H / 38.0f * g_uiScale, 12.0f)); if (!font) return;
+    IDirect3DSurface9 *bb = NULL;
+    if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
+    /* sized and placed like the game's HUD (HUD size): above where the health bar sits, toward the middle as the HUD shrinks */
+    float sc = g_uiScale;
+    int lh = (int)fmaxf(H / 34.0f * sc, 14.0f);
+    float px = 0.5f + (0.06f - 0.5f) * sc + (g_lhudX - 0.30f), py = 0.5f + (0.78f - 0.5f) * sc + (g_lhudY - 0.62f);
+    LHud_Text(dev, bb, font, (int)(W * px), (int)(H * py), lh, (int)(W / 3));
+    IDirect3DSurface9_Release(bb);
+}
+/* the interface's size now (1 = the game's own; HUD size makes it smaller) */
+static float HudEl_ScNow(void)
+{
+    float b = g_uiXfBase[1] - g_uiXfBase[0], c = g_uiXfCur[1] - g_uiXfCur[0];
+    return (g_uiXfOn && b > 0 && c > 0) ? fminf(fmaxf(b / c, 0.1f), 1.0f) : 1.0f;
+}
+/* (present) into the HUD's own picture, at its spot - so it's on the curved HUD with the rest (and in 3D) */
+static void LHud_IntoUi(IDirect3DDevice9 *dev)
+{
+    if (!g_uiSurf || !g_uiW || !g_uiH) return;
+    float sc = HudEl_ScNow(); UINT W = g_uiW, H = g_uiH;
+    void *font = LHud_Font(dev, 0, (int)fmaxf(H / 38.0f * sc, 12.0f)); if (!font) return;
+    int lh = (int)fmaxf(H / 34.0f * sc, 14.0f);
+    float px = 0.5f + (0.06f - 0.5f) * sc + (g_lhudX - 0.30f), py = 0.5f + (0.78f - 0.5f) * sc + (g_lhudY - 0.62f);
+    LHud_Text(dev, g_uiSurf, font, (int)(W * px), (int)(H * py), lh, (int)(W / 3));
+}
+/* (present) its own panel's picture (by a hand, on a wrist, in front of you): drawn again when the text changes; the part
+   of it in use goes in *rc */
+#define LH_W 640
+#define LH_H 160
+static IDirect3DTexture9 *g_lhTex = NULL; static IDirect3DSurface9 *g_lhSurf = NULL; static char g_lhDrawn[3][96]; static int g_lhUsedW = 0;
+static void LHud_Release9(void) { Release9(&g_lhSurf); if (g_lhTex) { IDirect3DTexture9_Release(g_lhTex); g_lhTex = NULL; } g_lhUsedW = 0; }
+static bool LHud_Panel(IDirect3DDevice9 *dev, RECT *rc)
+{
+    if (!g_lhTex) {
+        if (FAILED(IDirect3DDevice9_CreateTexture(dev, LH_W, LH_H, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &g_lhTex, NULL))) { g_lhTex = NULL; return false; }
+        IDirect3DTexture9_GetSurfaceLevel(g_lhTex, 0, &g_lhSurf); g_lhUsedW = 0;
+    }
+    if (!g_lhSurf) return false;
+    if (!g_lhUsedW || memcmp(g_lhDrawn, g_lhud, sizeof g_lhDrawn)) {
+        void *font = LHud_Font(dev, 1, 40); if (!font) return false;
+        IDirect3DDevice9_ColorFill(dev, g_lhSurf, NULL, 0x00000000);
+        int w = LHud_Text(dev, g_lhSurf, font, 6, 6, 48, LH_W - 12);
+        memcpy(g_lhDrawn, g_lhud, sizeof g_lhDrawn);
+        int uw = (w + 6 + 8 + 31) / 32 * 32; g_lhUsedW = uw < 64 ? 64 : uw > LH_W ? LH_W : uw;
+    }
+    rc->left = 0; rc->top = 0; rc->right = g_lhUsedW; rc->bottom = LH_H;
+    return g_lhud[0][0] != 0;
 }
 /* (present) the frame rate counter: top middle of the view, like the HUD */
 static float g_fpsVal = 0, g_fpsMs = 0;
@@ -17923,6 +17980,7 @@ static void Hud_Load(void)
     g_hudCompass = GetPrivateProfileIntA("HUD", "bCompass", 1, g_iniPath) != 0;
     g_hudAmmo = GetPrivateProfileIntA("HUD", "bAmmo", 1, g_iniPath) != 0;
     g_hudCross = GetPrivateProfileIntA("HUD", "bCrosshair", 1, g_iniPath) != 0;
+    HudEl_Load();
 }
 static char *Hud_Child(char *t, const char *name, int idx, int *count)
 {   /* the idx-th child named 'name' (or any child but 'name' when name starts with '*-') */
@@ -17969,6 +18027,445 @@ static void Hud_Tick(void)
         }
         hp->hidden = hide;
     }
+}
+/* ---- HUD parts where you want them: on the HUD, in front of you, on a wrist, by a hand --------------------------------
+   Each part of the HUD - compass, health, action points, ammo, the other hand's weapon readout, sneak - can stay where the
+   game draws it, or be cut out of the interface picture onto a small SteamVR panel of its own: floating in front of you
+   (moved and sized as you like), on the back of a wrist like a watch, or beside a hand turned to face your eyes. Its spot
+   on the HUD is cleared, so it only shows in its new place. A part's rectangle is measured every frame from what the game
+   really draws for it: the corners of its visible shapes (a clip window such as the compass counts as its own box), seen
+   through the interface camera. Nothing of the game's HUD is changed, so HUD mods keep working (a part a HUD mod renames
+   just stays on the HUD).
+   [HUD] iLayout: 0 classic (everything on the HUD), 1 VR (compass on the Pip-Boy wrist, health and AP on the other wrist,
+   each gun's ammo by its hand), 2 custom. Per part (Compass, Health, AP, Ammo, OtherAmmo, Sneak): i<Part>Place (0 HUD,
+   1 in front of you, 2 left wrist, 3 right wrist, 4 left hand, 5 right hand), i<Part>Size (%), f<Part>X / Y / Z (cm). */
+enum { HE_COMPASS, HE_HEALTH, HE_AP, HE_AMMO, HE_LAMMO, HE_SNEAK, HE_N };
+enum { HP_HUD, HP_VIEW, HP_LWRIST, HP_RWRIST, HP_LHAND, HP_RHAND, HP_N };
+typedef struct { IDirect3DSurface9 *rt, *sys; ID3D11Texture2D *t11; UINT w, h; } OvCpu;
+typedef struct {
+    const char *key, *name; int part; float stackW, stackH;   /* (its HUD part (-1: FNVR's own readout); how far up it sits on a wrist / by a hand) */
+    int place, size; float off[3];                           /* (settings: where, size %, nudges in cm) */
+    VROverlayHandle_t ov; bool ovFailed, shown, said, saidBad, vis; float alpha;
+    OvZc zc; OvCpu cpu;
+    RECT sticky; bool have; double shrinkSince;
+    float wM; TrackedDeviceIndex_t dev; bool haveM; HmdMatrix34_t m;
+} HudEl;
+static HudEl g_hudEl[HE_N] = {
+    { .key = "Compass", .name = "compass", .part = 3, .stackW = 0.0f, .stackH = 0.06f },
+    { .key = "Health", .name = "health", .part = 0, .stackW = 0.011f, .stackH = 0.04f },
+    { .key = "AP", .name = "action points", .part = 1, .stackW = -0.011f, .stackH = 0.02f },
+    { .key = "Ammo", .name = "ammo (gun hand)", .part = 4, .stackW = -0.03f, .stackH = 0.0f },
+    { .key = "OtherAmmo", .name = "other hand's weapon", .part = -1, .stackW = -0.03f, .stackH = 0.0f },
+    { .key = "Sneak", .name = "sneak indicator", .part = 2, .stackW = 0.03f, .stackH = 0.08f },
+};
+static int g_hudLayout = 0;   /* [HUD] iLayout */
+static int g_hudEdSel = 0, g_hudEdPlace = 0, g_hudEdSize = 100; static bool g_hudEdOn = true; static float g_hudEdX = 0, g_hudEdY = 0, g_hudEdZ = 0;   /* (the menu's rows for one part) */
+static bool g_hudEditing = false, g_hudEditParts = false;   /* (the menu's HUD pages are open: moved parts show while you set them) */
+static bool g_hudSnapWant = false;
+static float IniF(const char *sec, const char *key, float def); static void IniFW(const char *sec, const char *key, float v, const char *fmt);
+static const char *const k_hudPlace[HP_N] = { "on the HUD", "in front of you", "on your left wrist", "on your right wrist", "by your left hand", "by your right hand" };
+static bool *HudEl_On(int i) { return g_hudEl[i].part >= 0 ? g_hudParts[g_hudEl[i].part].on : &g_lhudShow; }
+static void HudEl_SaveOne(int i)
+{
+    HudEl *e = &g_hudEl[i]; char k[40]; static const char ax[3] = { 'X', 'Y', 'Z' };
+    snprintf(k, sizeof k, "i%sPlace", e->key); SaveInt("HUD", k, e->place);
+    snprintf(k, sizeof k, "i%sSize", e->key); SaveInt("HUD", k, e->size);
+    for (int a = 0; a < 3; a++) { snprintf(k, sizeof k, "f%s%c", e->key, ax[a]); IniFW("HUD", k, e->off[a], "%.1f"); }
+}
+static void HudEd_Load(void)
+{
+    if (g_hudEdSel < 0 || g_hudEdSel >= HE_N) g_hudEdSel = 0;
+    HudEl *e = &g_hudEl[g_hudEdSel];
+    g_hudEdOn = *HudEl_On(g_hudEdSel); g_hudEdPlace = e->place; g_hudEdSize = e->size; g_hudEdX = e->off[0]; g_hudEdY = e->off[1]; g_hudEdZ = e->off[2];
+}
+/* the classic HUD, or the VR one: the compass on the Pip-Boy's wrist, health and AP on the gun hand's wrist, each gun's
+   ammo by the hand holding it (custom keeps your own choices) */
+static void HudLayout_Apply(int lay)
+{
+    if (lay != 0 && lay != 1) return;
+    int pipW = g_leftHanded ? HP_RWRIST : HP_LWRIST, gunW = g_leftHanded ? HP_LWRIST : HP_RWRIST;
+    int gunH = g_leftHanded ? HP_LHAND : HP_RHAND, othH = g_leftHanded ? HP_RHAND : HP_LHAND;
+    for (int i = 0; i < HE_N; i++) { HudEl *e = &g_hudEl[i]; e->place = HP_HUD; e->size = 100; e->off[0] = e->off[1] = e->off[2] = 0; e->have = false; e->said = e->saidBad = false; }
+    if (lay == 1) { g_hudEl[HE_COMPASS].place = pipW; g_hudEl[HE_HEALTH].place = gunW; g_hudEl[HE_AP].place = gunW; g_hudEl[HE_AMMO].place = gunH; g_hudEl[HE_LAMMO].place = othH; }
+    for (int i = 0; i < HE_N; i++) HudEl_SaveOne(i);
+    g_hudSnapWant = lay == 1;
+    Log("HUD layout: %s", lay == 1 ? "VR - compass on your Pip-Boy wrist, health and AP on your other wrist, each gun's ammo by its hand" : "classic - everything on the HUD in front of you");
+    HudEd_Load();
+}
+static void HudEl_Load(void)
+{
+    g_hudLayout = GetPrivateProfileIntA("HUD", "iLayout", 0, g_iniPath); if (g_hudLayout < 0 || g_hudLayout > 2) g_hudLayout = 0;
+    static const char ax[3] = { 'X', 'Y', 'Z' };
+    for (int i = 0; i < HE_N; i++) {
+        HudEl *e = &g_hudEl[i]; char k[40];
+        snprintf(k, sizeof k, "i%sPlace", e->key); e->place = GetPrivateProfileIntA("HUD", k, HP_HUD, g_iniPath); if (e->place < 0 || e->place >= HP_N) e->place = HP_HUD;
+        snprintf(k, sizeof k, "i%sSize", e->key); e->size = GetPrivateProfileIntA("HUD", k, 100, g_iniPath); if (e->size < 25 || e->size > 400) e->size = 100;
+        for (int a = 0; a < 3; a++) { snprintf(k, sizeof k, "f%s%c", e->key, ax[a]); e->off[a] = fminf(fmaxf(IniF("HUD", k, 0.0f), -50.0f), 50.0f); }
+    }
+    if (g_hudLayout == 1 && (int)GetPrivateProfileIntA("HUD", "iCompassPlace", -1, g_iniPath) == -1) HudLayout_Apply(1);   /* (iLayout=1 written by hand: its parts) */
+    HudEd_Load();
+    int moved = 0; for (int i = 0; i < HE_N; i++) if (g_hudEl[i].place != HP_HUD) moved++;
+    Log("HUD layout: %s (%d part%s off the HUD)", g_hudLayout == 1 ? "VR (wrists and hands)" : g_hudLayout == 2 ? "custom" : "classic", moved, moved == 1 ? "" : "s");
+}
+/* (menu) a row for the chosen part changed */
+static void HudEd_Store(const void *var)
+{
+    if (g_hudEdSel < 0 || g_hudEdSel >= HE_N) return;
+    HudEl *e = &g_hudEl[g_hudEdSel];
+    if (var == &g_hudEdOn) {
+        static const char *const bk[HE_N] = { "bCompass", "bHealth", "bActionPoints", "bAmmo", NULL, "bSneak" };
+        *HudEl_On(g_hudEdSel) = g_hudEdOn;
+        if (bk[g_hudEdSel]) SaveInt("HUD", bk[g_hudEdSel], g_hudEdOn ? 1 : 0); else SaveInt("Display", "bLeftHud", g_hudEdOn ? 1 : 0);
+        return;
+    }
+    if (var == &g_hudEdPlace && e->place != g_hudEdPlace) { e->have = false; e->said = e->saidBad = false; g_hudSnapWant = g_hudEdPlace != HP_HUD; }
+    e->place = g_hudEdPlace; e->size = g_hudEdSize; e->off[0] = g_hudEdX; e->off[1] = g_hudEdY; e->off[2] = g_hudEdZ;
+    HudEl_SaveOne(g_hudEdSel);
+    if (g_hudLayout != 2) { g_hudLayout = 2; SaveInt("HUD", "iLayout", 2); }
+}
+static void HudEd_Reset(void)
+{
+    if (g_hudEdSel < 0 || g_hudEdSel >= HE_N) return;
+    HudEl *e = &g_hudEl[g_hudEdSel]; e->size = 100; e->off[0] = e->off[1] = e->off[2] = 0;
+    HudEl_SaveOne(g_hudEdSel); HudEd_Load();
+}
+
+/* -- measuring: where a part is drawn in the interface picture -- */
+typedef struct { float C[3], R[3], U[3], F[3], f[4]; bool ortho; } UiCam;
+static bool UiCam_Get(UiCam *c)
+{   /* the camera the game draws its HUD through (the interface's first one - the frustum FNVR sets for HUD size) */
+    char *im = *(char **)0x011D8A80; if (!Rd(im, 0x10)) return false;
+    char *sg = *(char **)(im + 4); char *cam = Rd(sg, 0xB0) ? *(char **)(sg + 0xAC) : NULL;
+    if (!Rd(cam, 0x110)) return false;
+    const float *T = (const float *)(cam + NIAV_WORLD_TRANSLATE), *W = (const float *)(cam + NIAV_WORLD_ROTATE);
+    for (int i = 0; i < 3; i++) { c->C[i] = T[i]; c->F[i] = W[i * 3]; c->U[i] = W[i * 3 + 1]; c->R[i] = W[i * 3 + 2]; }
+    memcpy(c->f, cam + NICAMERA_FRUSTUM, sizeof c->f); c->ortho = *(uint8_t *)(cam + 0xF4) != 0;
+    if (!(c->f[1] > c->f[0] && c->f[2] > c->f[3]) || !(V3Len(c->R) > 0.5f && V3Len(c->U) > 0.5f)) return false;
+    static bool said = false;
+    if (!said) { said = true; Log("HUD parts: interface camera at %.0f %.0f %.0f, right %.2f %.2f %.2f, up %.2f %.2f %.2f, view %.0f..%.0f x %.0f..%.0f (%s)",
+        c->C[0], c->C[1], c->C[2], c->R[0], c->R[1], c->R[2], c->U[0], c->U[1], c->U[2], c->f[0], c->f[1], c->f[3], c->f[2], c->ortho ? "flat" : "perspective"); }
+    return true;
+}
+static void UiCam_UV(const UiCam *c, const float *P, float *u, float *v)
+{
+    float q[3]; V3Sub(q, P, c->C);
+    float x = V3Dot(q, c->R), y = V3Dot(q, c->U);
+    if (!c->ortho) { float z = V3Dot(q, c->F); if (z > 1e-3f) { x /= z; y /= z; } }
+    *u = (x - c->f[0]) / (c->f[1] - c->f[0]); *v = (c->f[2] - y) / (c->f[2] - c->f[3]);
+}
+typedef void *(__attribute__((thiscall)) *NiGetRTTI_t)(void *obj);
+static bool Ni_IsA(char *obj, const char *cls)
+{   /* the object's class, or one it comes from, is cls (the class names on the game's own type records) */
+    if (!Rd(obj, 8)) return false;
+    void **vt = *(void ***)obj; if (!Rd(vt, 16)) return false;
+    char **rt = (char **)((NiGetRTTI_t)vt[2])(obj);
+    for (int k = 0; rt && k < 12 && Rd(rt, 8); k++, rt = (char **)rt[1]) { const char *nm = rt[0]; if (Rd(nm, 4) && !strcmp(nm, cls)) return true; }
+    return false;
+}
+#define HR_EXN 48
+typedef struct { const UiCam *c; float u0, v0, u1, v1; int n, exn; char *ex[HR_EXN]; } HRect;
+static void HR_Pt(HRect *r, const float *P)
+{
+    float u, v; UiCam_UV(r->c, P, &u, &v);
+    if (!(u > -1.0f && u < 2.0f && v > -1.0f && v < 2.0f)) return;
+    if (!r->n++) { r->u0 = r->u1 = u; r->v0 = r->v1 = v; return; }
+    if (u < r->u0) r->u0 = u; if (u > r->u1) r->u1 = u; if (v < r->v0) r->v0 = v; if (v > r->v1) r->v1 = v;
+}
+static void HR_Box(HRect *r, char *t)
+{   /* a piece's own box from its values: top-left at its node (a "locus" piece) or offset from it, width x height */
+    float *w = Tile_Val(t, 0xFB1), *h = Tile_Val(t, 0xFB0);
+    char *node = Rd(t, 0x30) ? *(char **)(t + 0x2C) : NULL;
+    if (!w || !h || !(*w > 0.5f) || !(*h > 0.5f) || !Rd(node, 0x9C)) return;
+    float *lo = Tile_Val(t, 0xFA8), *x = Tile_Val(t, 0xFA1), *y = Tile_Val(t, 0xFA2);
+    bool locus = lo && *lo != 0.0f;
+    float ox = locus ? 0.0f : (x ? *x : 0.0f), oz = locus ? 0.0f : -(y ? *y : 0.0f);
+    const float *R = (const float *)(node + NIAV_WORLD_ROTATE), *T = (const float *)(node + NIAV_WORLD_TRANSLATE);
+    float S = *(const float *)(node + NIAV_WORLD_SCALE); if (!(S > 1e-4f && S < 1e4f)) S = 1.0f;
+    for (int k = 0; k < 4; k++) {
+        float L[3] = { ox + ((k & 1) ? *w : 0.0f), 0.0f, oz - ((k & 2) ? *h : 0.0f) }, P[3];
+        for (int i = 0; i < 3; i++) P[i] = T[i] + S * (R[i * 3] * L[0] + R[i * 3 + 1] * L[1] + R[i * 3 + 2] * L[2]);
+        HR_Pt(r, P);
+    }
+}
+static void HR_Tiles(HRect *r, char *t, int depth, int *count)
+{   /* hidden pieces are left out; a clip window (its contents cut to its box) counts as its box */
+    if (!Rd(t, 0x30) || depth > 12 || ++*count > 400) return;
+    char *node = *(char **)(t + 0x2C);
+    float *vis = Tile_Val(t, 0xFA3), *al = Tile_Val(t, 0xFA9), *cw = Tile_Val(t, 0xFA6);
+    bool hidden = (vis && *vis == 0.0f) || (al && *al <= 0.0f), clip = cw && *cw != 0.0f;
+    if (hidden || clip) { if (node && r->exn < HR_EXN) r->ex[r->exn++] = node; if (clip && !hidden) HR_Box(r, t); return; }
+    char *ch = *(char **)(t + 0x04);
+    for (int k = 0; ch && k < 200 && Rd(ch, 12); k++, ch = *(char **)ch) HR_Tiles(r, *(char **)(ch + 8), depth + 1, count);
+}
+static void HR_Node(HRect *r, char *n, int depth, int *count)
+{   /* every visible shape under a piece's node: its corners where they're drawn */
+    if (!Rd(n, 0xA8) || depth > 16 || ++*count > 4000) return;
+    if (*(uint32_t *)(n + 0x30) & 1) return;
+    for (int i = 0; i < r->exn; i++) if (r->ex[i] == n) return;
+    if (AsNode(n)) {
+        char **kids = *(char ***)(n + 0xA0); unsigned kc = *(uint16_t *)(n + 0xA6);
+        if (!kc || kc > 512 || !Rd(kids, (size_t)kc * 4)) return;
+        for (unsigned i = 0; i < kc; i++) if (kids[i]) HR_Node(r, kids[i], depth + 1, count);
+        return;
+    }
+    if (!Rd(n, 0xC0) || !Ni_IsA(n, "NiGeometry")) return;
+    char *gd = *(char **)(n + 0xB8); if (!Rd(gd, 0x24)) return;
+    unsigned nv = *(uint16_t *)(gd + 0x08); const float *V = *(const float **)(gd + 0x20);
+    if (!nv || nv > 20000 || !Rd(V, (size_t)nv * 12)) return;
+    const float *R = (const float *)(n + NIAV_WORLD_ROTATE), *T = (const float *)(n + NIAV_WORLD_TRANSLATE);
+    float S = *(const float *)(n + NIAV_WORLD_SCALE); if (!(S > 1e-4f && S < 1e4f)) S = 1.0f;
+    for (unsigned q = 0; q < nv; q++) {
+        const float *v = V + q * 3; float P[3];
+        for (int i = 0; i < 3; i++) P[i] = T[i] + S * (R[i * 3] * v[0] + R[i * 3 + 1] * v[1] + R[i * 3 + 2] * v[2]);
+        HR_Pt(r, P);
+    }
+}
+static bool HR_ToPx(const HRect *r, RECT *o)
+{
+    if (!r->n || !g_uiW || !g_uiH) return false;
+    float pad = fmaxf(2.0f, g_uiH / 540.0f);
+    LONG x0 = (LONG)floorf(r->u0 * g_uiW - pad), x1 = (LONG)ceilf(r->u1 * g_uiW + pad);
+    LONG y0 = (LONG)floorf(r->v0 * g_uiH - pad), y1 = (LONG)ceilf(r->v1 * g_uiH + pad);
+    if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0; if (x1 > (LONG)g_uiW) x1 = (LONG)g_uiW; if (y1 > (LONG)g_uiH) y1 = (LONG)g_uiH;
+    if (x1 - x0 < 4 || y1 - y0 < 4) return false;
+    o->left = x0; o->top = y0; o->right = x1; o->bottom = y1; return true;
+}
+/* a HUD part's rectangle in the interface picture (pixels); why: 1 nothing drawn, 2 too big, 3 from the pieces' boxes */
+static bool Hud_PartRect(int part, RECT *out, const UiCam *c, int *why)
+{
+    HudPart *hp = &g_hudParts[part]; *why = 1;
+    if (!hp->n || hp->hidden) return false;
+    HRect r; memset(&r, 0, sizeof r); r.c = c;
+    int cnt = 0;
+    for (int q = 0; q < hp->n; q++) HR_Tiles(&r, hp->tile[q], 0, &cnt);
+    for (int q = 0; q < hp->n; q++) { char *t = hp->tile[q]; char *node = Rd(t, 0x30) ? *(char **)(t + 0x2C) : NULL; int nn = 0; if (node) HR_Node(&r, node, 0, &nn); }
+    RECT o;
+    if (!HR_ToPx(&r, &o)) return false;
+    *why = 0;
+    if ((o.right - o.left) > (LONG)(g_uiW / 2) || (o.bottom - o.top) > (LONG)(g_uiH * 2 / 5)) {
+        /* (too big for one part - something long inside it counted: its pieces' own boxes instead) */
+        HRect b; memset(&b, 0, sizeof b); b.c = c;
+        for (int q = 0; q < hp->n; q++) { char *t = hp->tile[q]; float *vis = Tile_Val(t, 0xFA3); if (vis && *vis == 0.0f) continue; HR_Box(&b, t); }
+        RECT ob;
+        if (!HR_ToPx(&b, &ob) || (ob.right - ob.left) > (LONG)(g_uiW / 2) || (ob.bottom - ob.top) > (LONG)(g_uiH * 2 / 5)) { *why = 2; return false; }
+        o = ob; *why = 3;
+    }
+    *out = o; return true;
+}
+
+/* -- the panels -- */
+static void OvCpu_Release(OvCpu *c)
+{
+    Release9(&c->rt); Release9(&c->sys);
+    if (c->t11) { ID3D11Texture2D_Release(c->t11); c->t11 = NULL; }
+    c->w = c->h = 0;
+}
+/* (no zero copy) the picture through the CPU to a texture of our own */
+static bool OvCpu_Set(IDirect3DDevice9 *dev, OvCpu *c, IDirect3DSurface9 *src, const RECT *r, UINT w, UINT h, VROverlayHandle_t ov)
+{
+    if (!g_d11 || !src || !ov) return false;
+    if (c->rt && (c->w != w || c->h != h)) OvCpu_Release(c);
+    if (!c->rt) {
+        D3D11_TEXTURE2D_DESC td = { w, h, 1, 1, DXGI_FORMAT_B8G8R8A8_UNORM, { 1, 0 }, D3D11_USAGE_DEFAULT, D3D11_BIND_SHADER_RESOURCE, 0, 0 };
+        if (FAILED(IDirect3DDevice9_CreateRenderTarget(dev, w, h, D3DFMT_A8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE, &c->rt, NULL)) ||
+            FAILED(IDirect3DDevice9_CreateOffscreenPlainSurface(dev, w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &c->sys, NULL)) ||
+            FAILED(ID3D11Device_CreateTexture2D(g_d11, &td, NULL, &c->t11))) { c->t11 = NULL; OvCpu_Release(c); return false; }
+        c->w = w; c->h = h;
+    }
+    if (FAILED(IDirect3DDevice9_StretchRect(dev, src, r, c->rt, NULL, D3DTEXF_POINT)) || FAILED(IDirect3DDevice9_GetRenderTargetData(dev, c->rt, c->sys))) return false;
+    D3DLOCKED_RECT lr;
+    if (FAILED(IDirect3DSurface9_LockRect(c->sys, &lr, NULL, D3DLOCK_READONLY))) return false;
+    ID3D11DeviceContext_UpdateSubresource(g_d11ctx, (ID3D11Resource *)c->t11, 0, NULL, lr.pBits, (UINT)lr.Pitch, 0);
+    IDirect3DSurface9_UnlockRect(c->sys);
+    ID3D11DeviceContext_Flush(g_d11ctx);
+    Texture_t t = { c->t11, ETextureType_TextureType_DirectX, EColorSpace_ColorSpace_Auto };
+    g_vrOverlay->SetOverlayTexture(ov, &t);
+    return true;
+}
+static bool HudEl_Ov(HudEl *e)
+{
+    if (e->ov) return true;
+    if (e->ovFailed || !g_vrOverlay) return false;
+    char key[48], nm[64]; snprintf(key, sizeof key, "fnvr.hud.%s", e->key); snprintf(nm, sizeof nm, "FNVR HUD %s", e->name);
+    if (g_vrOverlay->CreateOverlay(key, nm, &e->ov) != EVROverlayError_VROverlayError_None) { e->ov = 0; e->ovFailed = true; Log("HUD parts: no panel for the %s (SteamVR overlay)", e->name); return false; }
+    g_vrOverlay->SetOverlayFlag(e->ov, VROverlayFlags_IsPremultiplied, true);
+    g_vrOverlay->SetOverlaySortOrder(e->ov, 1);
+    e->wM = 0; e->haveM = false; e->alpha = 1.0f;
+    return true;
+}
+static void HudEl_Hide(HudEl *e)
+{
+    if (e->shown && g_vrOverlay && e->ov) g_vrOverlay->HideOverlay(e->ov);
+    e->shown = false;
+}
+/* the rectangle grows at once and shrinks only after a few seconds (text such as the ammo count changes width) */
+static void HudEl_Sticky(HudEl *e, const RECT *m, double now)
+{
+    RECT *s = &e->sticky;
+    if (!e->have) { *s = *m; e->have = true; e->shrinkSince = 0; return; }
+    bool overlap = m->left < s->right && m->right > s->left && m->top < s->bottom && m->bottom > s->top;
+    if (!overlap) { *s = *m; e->shrinkSince = 0; return; }
+    bool inside = m->left >= s->left && m->right <= s->right && m->top >= s->top && m->bottom <= s->bottom;
+    if (!inside) {
+        if (m->left < s->left) s->left = m->left; if (m->top < s->top) s->top = m->top;
+        if (m->right > s->right) s->right = m->right; if (m->bottom > s->bottom) s->bottom = m->bottom;
+        e->shrinkSince = 0; return;
+    }
+    long am = (m->right - m->left) * (m->bottom - m->top), as = (s->right - s->left) * (s->bottom - s->top);
+    if (am * 10 < as * 8) { if (!e->shrinkSince) e->shrinkSince = now; else if (now - e->shrinkSince > 3000.0) { *s = *m; e->shrinkSince = 0; } }
+    else e->shrinkSince = 0;
+}
+/* (by a hand) turned to face your eyes: its axes in the controller's own frame */
+static bool HudEl_Face(int hand, const float *Pc, HmdMatrix34_t *m)
+{
+    if (!g_haveWaitPose || g_handIdx[hand] >= 16) return false;
+    const TrackedDevicePose_t *hp = &g_waitPoses[0], *cp = &g_waitPoses[g_handIdx[hand]];
+    if (!hp->bPoseIsValid || !cp->bPoseIsValid) return false;
+    const float (*H)[4] = hp->mDeviceToAbsoluteTracking.m, (*C)[4] = cp->mDeviceToAbsoluteTracking.m;
+    float A[3], Z[3], X[3], Y[3], up[3] = { H[0][1], H[1][1], H[2][1] };
+    for (int k = 0; k < 3; k++) { A[k] = C[k][3] + C[k][0] * Pc[0] + C[k][1] * Pc[1] + C[k][2] * Pc[2]; Z[k] = H[k][3] - A[k]; }
+    if (V3Len(Z) < 0.05f) return false;
+    V3_Norm(Z); V3_Cross(X, up, Z); if (V3Len(X) < 1e-3f) return false; V3_Norm(X); V3_Cross(Y, Z, X);
+    for (int r = 0; r < 3; r++) {
+        float cr[3] = { C[0][r], C[1][r], C[2][r] };
+        m->m[r][0] = V3Dot(cr, X); m->m[r][1] = V3Dot(cr, Y); m->m[r][2] = V3Dot(cr, Z); m->m[r][3] = Pc[r];
+    }
+    return true;
+}
+/* size and place one part's panel: wPx x hPx pixels of the picture, from (uC, vC) on the HUD; mppNat = metres per pixel
+   at the HUD's full size (its size on the HUD in front of you at HUD size 1) */
+static bool HudEl_Place(HudEl *e, UINT wPx, float uC, float vC, float mppNat)
+{
+    int pl = e->place;
+    float arc = g_uiArcDeg / RAD2DEG, d = g_uiDist, panelW = d * arc;
+    float F = pl == HP_VIEW ? HudEl_ScNow() : (pl == HP_LWRIST || pl == HP_RWRIST) ? 0.55f : 0.6f;
+    float wM = fminf(fmaxf(wPx * mppNat * F * e->size / 100.0f, 0.01f), 2.0f);
+    if (fabsf(wM - e->wM) > 0.003f * wM) { g_vrOverlay->SetOverlayWidthInMeters(e->ov, wM); e->wM = wM; }
+    float ox = e->off[0] / 100.0f, oy = e->off[1] / 100.0f, oz = e->off[2] / 100.0f;
+    HmdMatrix34_t m; TrackedDeviceIndex_t dev = 0;
+    if (pl == HP_VIEW) {   /* where it was on the wrap-around HUD, flat, facing you - then your nudges */
+        float th = (uC - 0.5f) * arc, y = -0.02f * d / 0.45f + (0.5f - vC) * panelW * (float)UI_OUT_H / (float)UI_OUT_W;
+        float X[3] = { cosf(th), 0, sinf(th) }, Y[3] = { 0, 1, 0 }, Z[3] = { -sinf(th), 0, cosf(th) }, P[3] = { sinf(th) * d, y, -cosf(th) * d };
+        for (int k = 0; k < 3; k++) { P[k] += X[k] * ox + Y[k] * oy - Z[k] * oz; m.m[k][0] = X[k]; m.m[k][1] = Y[k]; m.m[k][2] = Z[k]; m.m[k][3] = P[k]; }
+    } else {
+        int hand = (pl == HP_LWRIST || pl == HP_LHAND) ? 0 : 1;
+        dev = g_handIdx[hand]; if (dev >= 16) return false;
+        float o = g_aimPitchOffsetDeg / RAD2DEG, co = cosf(o), so = sinf(o);
+        float Xl[3] = { 1, 0, 0 }, Yt[3] = { 0, co, so }, Zt[3] = { 0, -so, co };   /* (right; up and back along your forearm, tilted like the aim) */
+        if (pl == HP_LWRIST || pl == HP_RWRIST) {
+            /* like a watch on the back of the wrist, read along the forearm; on the Pip-Boy's wrist it sits over the back
+               of the hand, just in front of the Pip-Boy */
+            float s = hand ? 1.0f : -1.0f, ovX[3], ovY[3], ovZ[3], P[3];
+            bool pipWrist = hand == (g_leftHanded ? 1 : 0);
+            float along = pipWrist ? 0.0f : 0.06f, out = 0.045f;
+            for (int k = 0; k < 3; k++) { ovZ[k] = s * Xl[k]; ovX[k] = s * Zt[k]; }
+            V3_Cross(ovY, ovZ, ovX);
+            for (int k = 0; k < 3; k++) P[k] = Zt[k] * along + ovZ[k] * (out + oz) + ovY[k] * (e->stackW + oy) + ovX[k] * ox;
+            for (int k = 0; k < 3; k++) { m.m[k][0] = ovX[k]; m.m[k][1] = ovY[k]; m.m[k][2] = ovZ[k]; m.m[k][3] = P[k]; }
+        } else {
+            /* beside the hand, a little forward and to the inside (clear of the sights), turned to your eyes */
+            float side = hand ? -0.05f : 0.05f, P[3];
+            for (int k = 0; k < 3; k++) P[k] = -Zt[k] * (0.06f + oz) + Yt[k] * (0.035f + e->stackH + oy) + Xl[k] * (side + ox);
+            if (!HudEl_Face(hand, P, &m)) {
+                float Y[3]; V3_Cross(Y, Zt, Xl);
+                for (int k = 0; k < 3; k++) { m.m[k][0] = Xl[k]; m.m[k][1] = Y[k]; m.m[k][2] = Zt[k]; m.m[k][3] = P[k]; }
+            }
+        }
+    }
+    if (!e->haveM || e->dev != dev || memcmp(&m, &e->m, sizeof m)) {
+        g_vrOverlay->SetOverlayTransformTrackedDeviceRelative(e->ov, dev, &m);   /* (device 0: the headset) */
+        e->m = m; e->dev = dev; e->haveM = true;
+    }
+    return true;
+}
+/* ([Debug] bSavePhotos) the interface picture with each moved part's box outlined - FNVR_hud_parts.bmp */
+static void HudEl_Snapshot(IDirect3DDevice9 *dev, const RECT *rc, const int *ids, int n)
+{
+    if (!g_savePhotos || !g_uiSurf) return;
+    IDirect3DSurface9 *sys = NULL;
+    if (FAILED(IDirect3DDevice9_CreateOffscreenPlainSurface(dev, g_uiW, g_uiH, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &sys, NULL)) || !sys) return;
+    if (SUCCEEDED(IDirect3DDevice9_GetRenderTargetData(dev, g_uiSurf, sys))) {
+        D3DLOCKED_RECT lr;
+        if (SUCCEEDED(IDirect3DSurface9_LockRect(sys, &lr, NULL, 0))) {
+            static const uint32_t col[HE_N] = { 0xFF00FFFF, 0xFFFF4040, 0xFF40FF40, 0xFFFFFF00, 0xFFFF80FF, 0xFF8080FF };
+            for (int k = 0; k < n; k++) {
+                const RECT *r = &rc[k]; uint32_t cc = col[ids[k] % HE_N];
+                for (LONG y = r->top; y < r->bottom; y++) {
+                    uint32_t *row = (uint32_t *)((BYTE *)lr.pBits + y * lr.Pitch);
+                    for (LONG x = r->left; x < r->right; x++) if (y < r->top + 2 || y >= r->bottom - 2 || x < r->left + 2 || x >= r->right - 2) row[x] = cc;
+                }
+            }
+            SaveBMP("FNVR_hud_parts.bmp", (const BYTE *)lr.pBits, lr.Pitch, (int)g_uiW, (int)g_uiH);
+            IDirect3DSurface9_UnlockRect(sys);
+            Log("HUD parts: picture saved (FNVR_hud_parts.bmp) - each moved part's box outlined");
+        }
+    }
+    IDirect3DSurface9_Release(sys);
+}
+/* (present, after the interface pass) each moved part: measured, copied onto its panel and placed; its spot on the HUD
+   cleared. drewUi: the interface was drawn this frame. */
+static void HudEl_Present(IDirect3DDevice9 *dev, bool drewUi)
+{
+    double now = QpcMs(); static unsigned frame = 0; frame++;
+    if (drewUi) g_lhudInUi = true;   /* (the other hand's readout goes into the HUD's picture or onto its own panel, not into the frame) */
+    bool play = drewUi && g_inGameplay && !g_pipOpen && !IsMenuMode() && !g_liveMenuNow && (!g_setOpen || g_hudEditing) && g_uiW && g_uiH && g_vrOverlay;
+    UiCam cam; bool camOk = false, camTried = false;
+    RECT clr[HE_N]; int clrId[HE_N], nclr = 0;
+    float panelW = g_uiDist * (g_uiArcDeg / RAD2DEG), mppHud = g_uiW ? panelW / (float)g_uiW : 0.0f, sc = HudEl_ScNow();
+    for (int i = 0; i < HE_N; i++) {
+        HudEl *e = &g_hudEl[i];
+        IDirect3DSurface9 *src = NULL; RECT rc; float uC = 0.5f, vC = 0.5f, mpp = mppHud / sc;
+        if (e->part < 0) {   /* the other hand's weapon: FNVR's own readout */
+            bool on = play && g_lhudOn && g_lhudShow;
+            if (on && e->place == HP_HUD) { if (!g_setOpen) LHud_IntoUi(dev); }
+            else if (on && LHud_Panel(dev, &rc)) {
+                /* (one line of its own picture is 48 pixels; on the HUD a line is 1/34 of the picture's height at full size) */
+                src = g_lhSurf; mpp = mppHud * ((float)g_uiH / 34.0f) / 48.0f;
+                float k = (float)g_uiH / 34.0f * sc / 48.0f;   /* (HUD pixels per pixel of its picture, now) */
+                float px = 0.5f + (0.06f - 0.5f) * sc + (g_lhudX - 0.30f), py = 0.5f + (0.78f - 0.5f) * sc + (g_lhudY - 0.62f);
+                uC = px + rc.right * k / g_uiW * 0.5f; vC = py + rc.bottom * k / g_uiH * 0.5f;
+            }
+        } else if (play && e->place != HP_HUD && g_hudShow && *g_hudParts[e->part].on) {
+            /* (measured every 4th frame, the parts in turn; between, the last rectangle - it grows at once, shrinks late) */
+            if (((frame + (unsigned)i) & 3) == 0) {
+                if (!camTried) { camTried = true; camOk = UiCam_Get(&cam); }
+                RECT m; int why = 1;
+                e->vis = camOk && Hud_PartRect(e->part, &m, &cam, &why);
+                if (e->vis) {
+                    HudEl_Sticky(e, &m, now);
+                    if (!e->said) { e->said = true; Log("HUD parts: the %s goes %s - drawn at %ld,%ld %ldx%ld of the %ux%u interface picture%s", e->name, k_hudPlace[e->place],
+                        m.left, m.top, m.right - m.left, m.bottom - m.top, g_uiW, g_uiH, why == 3 ? " (from its pieces' boxes)" : ""); }
+                } else if (why == 2 && !e->saidBad) { e->saidBad = true; Log("HUD parts: the %s covers too much of the screen to cut out (a HUD mod?) - it stays on the HUD", e->name); }
+                else if (!camOk && !e->saidBad) { e->saidBad = true; Log("HUD parts: the interface camera wasn't found - the %s stays on the HUD", e->name); }
+            }
+            if (e->vis && e->have) {
+                rc = e->sticky;
+                /* (copied in sizes of 8 pixels, so a few pixels' change doesn't make new pictures) */
+                LONG w = (rc.right - rc.left + 7) & ~7, h = (rc.bottom - rc.top + 7) & ~7;
+                if (rc.left + w > (LONG)g_uiW) rc.left = (LONG)g_uiW - w; if (rc.top + h > (LONG)g_uiH) rc.top = (LONG)g_uiH - h;
+                if (rc.left < 0) rc.left = 0; if (rc.top < 0) rc.top = 0;
+                rc.right = rc.left + w; rc.bottom = rc.top + h; if (rc.right > (LONG)g_uiW) rc.right = (LONG)g_uiW; if (rc.bottom > (LONG)g_uiH) rc.bottom = (LONG)g_uiH;
+                src = g_uiSurf; uC = (rc.left + rc.right) * 0.5f / g_uiW; vC = (rc.top + rc.bottom) * 0.5f / g_uiH;
+                if (nclr < HE_N) { clr[nclr] = e->sticky; clrId[nclr++] = i; }
+            }
+        }
+        if (!src || !HudEl_Ov(e)) { HudEl_Hide(e); continue; }
+        UINT w = (UINT)(rc.right - rc.left), h = (UINT)(rc.bottom - rc.top);
+        if (w < 4 || h < 4) { HudEl_Hide(e); continue; }
+        bool ok = OvZc_Set(dev, &e->zc, src, &rc, w, h, D3DFMT_A8R8G8B8, e->ov, EColorSpace_ColorSpace_Auto, D3DTEXF_POINT, -1.0f) || OvCpu_Set(dev, &e->cpu, src, &rc, w, h, e->ov);
+        if (!ok || !HudEl_Place(e, w, uC, vC, mpp)) { HudEl_Hide(e); continue; }
+        float a = 1.0f;
+        if (g_hudEditParts && i == g_hudEdSel) a = 0.55f + 0.45f * (0.5f + 0.5f * sinf((float)(now * 0.006)));   /* (the part being set pulses) */
+        if (fabsf(a - e->alpha) > 0.02f || (a == 1.0f && e->alpha != 1.0f)) { g_vrOverlay->SetOverlayAlpha(e->ov, a); e->alpha = a; }
+        if (!e->shown) { g_vrOverlay->ShowOverlay(e->ov); e->shown = true; }
+    }
+    if (g_hudSnapWant && nclr && play && !g_setOpen) { g_hudSnapWant = false; HudEl_Snapshot(dev, clr, clrId, nclr); }
+    for (int k = 0; k < nclr; k++) IDirect3DDevice9_ColorFill(dev, g_uiSurf, &clr[k], 0x00000000);   /* (gone from the HUD: only in its new place) */
+}
+static void HudEl_Release9(void)
+{
+    for (int i = 0; i < HE_N; i++) { OvZc_Release(&g_hudEl[i].zc); OvCpu_Release(&g_hudEl[i].cpu); g_hudEl[i].have = false; }
+    LHud_Release9();
 }
 static void LootMenu_Tick(void)
 {
@@ -18315,12 +18812,12 @@ static float Body_ArmScale(int side, float gameLen)
 #define SET_ROW_Y0 150
 #define SET_ROW_H 62
 #define SET_ROWS 14
-enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_HUD, SP_START, SP_ADV, SP_COUNT };
+enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_HUD, SP_START, SP_ADV, SP_HUDPARTS, SP_COUNT };
 static const char *const g_setPageName[SP_COUNT] = { "FNVR SETTINGS", "BODY & PROFILES", "PIP-BOY", "CONTROLS", "HOLSTERS & GESTURES", "HANDS & OBJECTS",
-                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC", "ADVANCED: HEADSET & CONTROLS" };
+                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC", "ADVANCED: HEADSET & CONTROLS", "HUD PARTS: MOVE & RESIZE" };
 enum { ST_BOOL, ST_FLOAT, ST_INT, ST_PAGE, ST_ACTION, ST_SIGN, ST_PROFILE, ST_INFO, ST_CHOICE, ST_RES };
 enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16, SF_MELEE = 32, SF_HOLM = 64, SF_IFRESTART = 128 };
-enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_PIP_GLUE, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP, SA_REQ, SA_QUIT_GAME };
+enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_PIP_GLUE, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP, SA_REQ, SA_QUIT_GAME, SA_HUD_RESET };
 /* ---- Setup check: is everything FNVVRMC needs actually loaded? (shown first on the startup screen, and in the log) ---- */
 static char g_reqLabel[96] = "Setup check", g_reqDesc[700] = "Checking what's installed...";
 static int  g_reqMissing = 0;
@@ -18412,6 +18909,7 @@ static const SetOpt g_setOpts[] = {
     { SP_START, ST_CHOICE, "Connection", "Startup", "bWirelessI", &g_gfxWirelessI, 0, 1, 1, "Wired (Link cable, DisplayPort)|Wireless (Air Link, Virtual Desktop, Steam Link)", 0, 0, "Wireless streaming compresses the picture, so slightly less resolution is used - it looks the same and runs smoother." },
     { SP_START, ST_CHOICE, "PC power", "Startup", "iPCTier", &g_gfxTier, 0, 3, 1, "Low end|Medium|High end|Very high end", 0, 0, "How strong your PC is. Higher = sharper picture in the headset, but harder on your graphics card. If the game stutters, pick one lower." },
     { SP_START, ST_CHOICE, "3D view", "Stereo", "i3DMode", &g_3dMode, 0, 2, 1, "2D (flat)|Alternating eyes|Full 3D", 0, 0, "FULL 3D: each eye gets its own picture every frame, like a game made for VR - real depth, the world all around you, your hands and guns right in front of you. It draws the world twice, so it needs a strong PC (lower PC power if the frame rate drops). ALTERNATING EYES: one eye per frame - real depth for less work, but fast movement can shimmer. 2D: both eyes see the same picture - fastest, but the world looks like a big flat screen. Ctrl+F10 switches too." },
+    { SP_START, ST_CHOICE, "HUD", "HUD", "iLayout", &g_hudLayout, 0, 2, 1, "Classic: in front of you|VR: on your wrists and hands|Custom", 0, 0, "CLASSIC: the game's HUD in front of you. VR: the compass on your Pip-Boy wrist, health and AP on your other wrist, each gun's ammo next to its hand. Change it any time: FNVR settings > HUD & menus." },
     { SP_START, ST_RES, "Game resolution", 0, 0, 0, 0, 0, 0, 0, 0, 0, "The size the game is drawn at - the headset picture can only be as sharp as this. Left/right: Automatic (from the headset and PC choices above), a size of your own, or the launcher's (FNVR leaves it alone). FNVR keeps the game at this size every time it starts; a change is used from the next start." },
     { SP_START, ST_ACTION, "Quit now - the new resolution starts next time", 0, 0, 0, 0, 0, 0, 0, SF_IFRESTART, SA_QUIT_GAME, "The game only picks up a new resolution when it starts. This closes the game (nothing is lost at this menu) - start it again and it runs at the new size." },
     { SP_START, ST_PAGE, "Advanced settings", 0, 0, 0, 0, 0, 0, 0, 0, SP_ADV, "Everything about the headset picture and motion controls: resolution, sharpness, 3D, field of view, aiming, fingers." },
@@ -18486,6 +18984,16 @@ static const SetOpt g_setOpts[] = {
     { SP_PIP, ST_ACTION, "Reset screen position", 0, 0, 0, 0, 0, 0, 0, 0, SA_PIP_RESET, "Wrist mode only: reset the screen spot to the 2000's glass." },
     { SP_PIP, ST_BOOL, "World keeps running", "Controls", "bPipBoyRealTime", &g_pipRealTime, 0, 0, 0, 0, 0, 0, "ON: the world doesn't pause while you look at your Pip-Boy (like Fallout 4 VR)." },
     { SP_PIP, ST_BOOL, "Live world behind the Pip-Boy", "Controls", "bPipBoyLiveWorld", &g_pipWorldDraw, 0, 0, 0, 0, 0, 0, "ON: the world keeps being drawn while the Pip-Boy is open (needs 'World keeps running'). Turn OFF if it stutters or the menu stops updating." },
+    { SP_HUD, ST_CHOICE, "HUD layout", "HUD", "iLayout", &g_hudLayout, 0, 2, 1, "Classic: in front of you|VR: on your wrists and hands|Custom", 0, 0, "CLASSIC: the game's HUD in front of you. VR: the compass on your Pip-Boy wrist, health and AP on your other wrist, and each gun's ammo next to the hand holding it - turn your wrist to check them. CUSTOM: your own choices (HUD parts: move & resize below)." },
+    { SP_HUD, ST_PAGE, "HUD parts: move & resize", 0, 0, 0, 0, 0, 0, 0, 0, SP_HUDPARTS, "Put each part of the HUD where you want it - on the HUD, floating in front of you, on a wrist or by a hand - and make it bigger or smaller." },
+    { SP_HUDPARTS, ST_CHOICE, "Part", 0, 0, &g_hudEdSel, 0, HE_N - 1, 1, "Compass|Health|Action points|Ammo (gun hand)|Other hand's weapon|Sneak indicator", 0, 0, "Which part of the HUD the rows below change. It pulses while you change it (when it's off the HUD)." },
+    { SP_HUDPARTS, ST_BOOL, "Show it", 0, 0, &g_hudEdOn, 0, 0, 0, 0, 0, 0, "OFF: this part isn't shown anywhere." },
+    { SP_HUDPARTS, ST_CHOICE, "Where", 0, 0, &g_hudEdPlace, 0, HP_N - 1, 1, "On the HUD|In front of you|Left wrist|Right wrist|Left hand|Right hand", 0, 0, "ON THE HUD: where the game draws it. IN FRONT OF YOU: its own little panel that moves with your head - move and size it below. WRIST: on the back of that wrist like a watch - turn your wrist to read it. HAND: beside that hand, turned to face you." },
+    { SP_HUDPARTS, ST_INT, "Size", 0, 0, &g_hudEdSize, 25, 400, 5, "%.0f %%", 0, 0, "Bigger or smaller (100% = its normal size for where it is)." },
+    { SP_HUDPARTS, ST_FLOAT, "Move left / right", 0, 0, &g_hudEdX, -50.0f, 50.0f, 0.5f, "%+.1f cm", 0, 0, "Moves it right (+) or left (-). On a wrist: along your forearm as you read it." },
+    { SP_HUDPARTS, ST_FLOAT, "Move down / up", 0, 0, &g_hudEdY, -50.0f, 50.0f, 0.5f, "%+.1f cm", 0, 0, "Moves it up (+) or down (-). On a wrist: across your forearm as you read it." },
+    { SP_HUDPARTS, ST_FLOAT, "Move in / out", 0, 0, &g_hudEdZ, -50.0f, 50.0f, 0.5f, "%+.1f cm", 0, 0, "IN FRONT OF YOU: further away (+) or closer (-). WRIST: further off your skin (+). HAND: further forward (+) or back (-)." },
+    { SP_HUDPARTS, ST_ACTION, "Reset this part's size and spot", 0, 0, 0, 0, 0, 0, 0, 0, SA_HUD_RESET, "Size back to 100% and no nudges - its normal spot for where it is." },
     { SP_HUD, ST_BOOL, "Quick-loot window controls", "Controls", "bLootMenuControls", &g_lootControls, 0, 0, 0, 0, 0, 0, "While the quick-loot window is up: right A takes the item, right stick scrolls, right B takes all, right grip opens the full loot menu." },
     { SP_HUD, ST_BOOL, "Quick-loot window in the middle", "Display", "bCenterLootMenu", &g_lootCenter, 0, 0, 0, 0, 0, 0, "The quick-loot window (for boxes and bodies) is moved from the right edge to the middle of your view." },
     { SP_HUD, ST_FLOAT, "Quick-loot window sideways", "Display", "fLootMenuOffset", &g_lootOffX, -600.0f, 600.0f, 20.0f, "%.0f", 0, 0, "Nudge the quick-loot window left (-) or right (+) from the middle." },
@@ -18917,6 +19425,9 @@ static void Set_Changed(const SetOpt *o)
         int w, h; Gfx_Target(&w, &h); char m[128];
         if (Gfx_Apply() && Gfx_RestartPending()) { snprintf(m, sizeof m, "Game resolution %dx%d - used from the next start", w, h); Set_Toast(m); }
     }
+    if (o->var == &g_hudLayout) HudLayout_Apply(g_hudLayout);
+    if (o->var == &g_hudEdSel) HudEd_Load();
+    else if (o->var == &g_hudEdOn || o->var == &g_hudEdPlace || o->var == &g_hudEdSize || o->var == &g_hudEdX || o->var == &g_hudEdY || o->var == &g_hudEdZ) HudEd_Store(o->var);
     if (o->var == &g_3dMode) {
         Stereo_FromMode();
         Set_Toast(g_3dMode == 2 ? "Full 3D: both eyes drawn every frame - real depth, about twice the drawing work" :
@@ -18977,11 +19488,11 @@ static void Start_Graphics(void)   /* (Start playing: the headset/PC choice goes
 }
 static void Set_Activate(int optIdx, int part)
 {
-    if (optIdx < 0) { int back = (g_setPage == SP_ADV && g_setFromStart) ? SP_START : SP_MAIN; g_setFromStart = false;
+    if (optIdx < 0) { int back = (g_setPage == SP_ADV && g_setFromStart) ? SP_START : g_setPage == SP_HUDPARTS ? SP_HUD : SP_MAIN; g_setFromStart = false;
         g_setPageSel[g_setPage] = g_setSel; g_setPage = back; g_setSel = g_setPageSel[back]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); return; }
     const SetOpt *o = &g_setOpts[optIdx];
     switch (o->type) {
-    case ST_PAGE: if (o->arg == SP_ADV) g_setFromStart = g_setPage == SP_START; g_setPageSel[g_setPage] = g_setSel; g_setPage = o->arg; g_setSel = g_setPageSel[o->arg]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); break;
+    case ST_PAGE: if (o->arg == SP_ADV) g_setFromStart = g_setPage == SP_START; if (o->arg == SP_HUDPARTS) HudEd_Load(); g_setPageSel[g_setPage] = g_setSel; g_setPage = o->arg; g_setSel = g_setPageSel[o->arg]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); break;
     case ST_BOOL: case ST_SIGN: Set_Step(o, 1, 1); break;
     case ST_FLOAT: case ST_INT: if (part) Set_Step(o, part, 1); break;
     case ST_PROFILE: case ST_CHOICE: case ST_RES: Set_Step(o, part ? part : 1, 1); break;
@@ -19028,6 +19539,7 @@ static void Set_Activate(int optIdx, int part)
             Gfx_Apply(); Profile_Save(); Game_Quit();
             Set_Toast("Closing the game - start it again and it uses the new resolution");
             break;
+        case SA_HUD_RESET: HudEd_Reset(); g_setDirty = true; Set_Toast("This part: normal size and spot"); break;
         case SA_REQ: Req_Check(); Set_Toast(g_reqMissing ? "Missing parts - run FNVVRMC-Setup.exe" : "Everything FNVVRMC needs is installed"); break;
         case SA_CAL_SKIP:
             g_calSkip = true; g_startAfterCal = false; Body_Apply();
@@ -19504,6 +20016,7 @@ static void Settings_Frame(void)
 {
     static double lastBody = 0;
     if (QpcMs() - lastBody > 1000.0) { lastBody = QpcMs(); Body_Apply(); }
+    g_hudEditing = g_setOpen && (g_setPage == SP_HUD || g_setPage == SP_HUDPARTS); g_hudEditParts = g_setOpen && g_setPage == SP_HUDPARTS;
     if (!g_setOpen) return;
     if (!Set_EnsureOverlay()) { g_setOpen = false; return; }
     static double toastWas = 0;

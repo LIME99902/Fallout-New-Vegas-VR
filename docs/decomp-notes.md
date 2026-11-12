@@ -51,3 +51,24 @@ is measured while one is worn on the gun hand ([Arms] sFistOnForearm), and the o
 matrix as is). The reflection turns the faces round, so each piece gets a NiStencilProperty (made with the game's
 @fnv 0x00a6f410) set to draw mode BOTH (flags 0x0C00) at NiGeometry+0xAC - NiD3DShader_SetupGeometryRenderStates
 (@fnv 0x00be20e0) then turns culling off for it.
+
+## HUD parts on their own panels (2.7.0)
+- Tile (xNVSE GameTiles.h): +0x04 child list (node: +0 next, +8 tile), +0x14/+0x18 values (each `{id, tile, float}`),
+  +0x20 name, +0x28 parent, **+0x2C NiNode**. Trait ids: 0xFA1 x, 0xFA2 y, 0xFA3 visible, 0xFA6 clipwindow, 0xFA8 locus,
+  0xFA9 alpha, **0xFB0 height, 0xFB1 width**.
+- How a tile is placed (Tile update, change flag 1, in the decomp's tile_ob1_variant.cpp): with *locus* set (or as a
+  child of the interface root) its node's local translation is `(x, depth, -y)` (root children also `-screenW/2`,
+  `+screenH/2`), so the node sits at its top-left corner. Without locus the node stays at its parent's spot and the
+  shapes themselves are moved by `(x, -y)`. Children tiles hang from their parent tile's node. So a piece's absolute
+  position = its own x/y + the x/y of every ancestor with locus (`@fnv 0x00a013d0` / `0x00a01440` add them up).
+- A clip window (0xFA6) cuts its children to its own box (x, y, width, height through the locus chain), as a scissor
+  rectangle - the compass strip is longer than what you see, so its box is used, not its shapes.
+- Interface camera: `InterfaceManager (0x011D8A80) + 4` scene graph, `+0xAC` its NiCamera: world rotate columns =
+  forward / up / right, frustum at +0xDC (l, r, t, b), +0xF4 ortho. FNVR widens that frustum for HUD size, so a node's
+  world position through this camera gives where it lands in the picture: `u = (dot(P - C, right) - l) / (r - l)`,
+  `v = (t - dot(P - C, up)) / (t - b)`.
+- NiObject vtable +0x08 = GetRTTI (`{name, parent}` records: "NiTriShape" -> "NiTriBasedGeom" -> "NiGeometry"), +0x0C
+  GetAsNiNode. NiGeometry +0xB8 geometry data: +0x08 vertex count, +0x20 vertices (model space).
+- FNVR measures a part from the corners of its visible shapes (culled nodes, visible = 0, alpha = 0 left out; clip
+  windows as their box), copies that rectangle of the interface picture onto the part's own SteamVR overlay, then clears
+  it from the picture before the curved HUD gets it.
