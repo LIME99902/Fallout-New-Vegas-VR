@@ -1,5 +1,7 @@
 # FNVVRMC: Fallout: New Vegas VR with Motion Controls
 
+—-Don’t install ENBoost or DXVK – the memory fix and renderer are built in, and their d3d9.dll turns the built-in path off—
+
 FNVVRMC (the plugin file is `FNVR.dll`, and its settings are in `FNVR.ini`) is an [xNVSE](https://github.com/xNVSE/NVSE) plugin that plays **Fallout: New Vegas in a VR headset with full motion controls**. It runs through SteamVR and was built and tested on a **Meta Quest 3** connected to a PC.
 
 You aim with your hand. You swing melee weapons and punches for real. You pick things up, throw them and climb. Guns go in holsters on your body, and you read the Pip-Boy on your actual wrist while the world keeps moving. On top of all that there is a Dying Light-style grappling hook.
