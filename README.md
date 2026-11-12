@@ -183,6 +183,22 @@ TC=/path/to/llvm-mingw/bin VOSK=/path/to/vosk-win64-0.3.45 ./build.sh
 #    -> out/FNVR.dll, out/FNVR_Voice.exe
 ```
 
+The VR display parts are in `stereo/` and built with the same llvm-mingw:
+
+- `stereo/vrproxy.c` -> `FNVR/Stereo/openvr_api.dll` (32-bit). A small stand-in for Valve's OpenVR library: the 32-bit game can't load the 64-bit SteamVR runtime, so this passes the OpenVR calls to the host program below. It is not Valve's DLL and doesn't modify it.
+- `stereo/vrhost.c` -> `FNVR/Stereo/x64/FNVR-VRHost.exe` (64-bit). Started by the game; talks to SteamVR through Valve's unmodified 64-bit `openvr_api.dll` and shows the game's eye pictures in the headset (shared GPU textures). No network access.
+- `stereo/fnvrstereo.c` -> `FNVRStereo.dll` (32-bit). Gives the game a Direct3D 9Ex device so its pictures can be shared with the host.
+- `FNVR/Stereo/x64/openvr_api.dll` is Valve's official, unmodified `bin/win64/openvr_api.dll` from [OpenVR v2.15.6](https://github.com/ValveSoftware/openvr/releases/tag/v2.15.6) (SHA-256 `bab8ac6ef64e68a9ca53315b0014d131088584b2efdfa6db511d67ec03cfcb4a`).
+
+```sh
+# 3. the VR display parts (OPENVR = a checkout of github.com/ValveSoftware/openvr at tag v2.15.6):
+TC=/path/to/llvm-mingw/bin OPENVR=/path/to/openvr ./stereo/build.sh
+#    -> stereo/out/Stereo/openvr_api.dll, stereo/out/Stereo/x64/FNVR-VRHost.exe,
+#       stereo/out/Stereo/x64/openvr_api.dll (Valve's), stereo/out/FNVRStereo.dll
+```
+
+Where each built file goes in the release: `FNVR.dll` and `FNVRStereo.dll` in `Data/NVSE/Plugins/`, the `Stereo` folder in `Data/NVSE/Plugins/FNVR/`, and `config/input/*.json` (the SteamVR Input action manifest and default controller bindings, plain text) in `Data/NVSE/Plugins/FNVR/input/`.
+
 The voice add-on zip is `FNVR_Voice.exe` plus the unmodified `libvosk.dll`, `libstdc++-6.dll`, `libgcc_s_seh-1.dll`, `libwinpthread-1.dll` from vosk-win64-0.3.45, and the unmodified [vosk-model-small-en-us-0.15](https://alphacephei.com/vosk/models) speech model, all in `Data/NVSE/Plugins/FNVR/voice/` (model in `voice/model/`).
 
 `src/openvr_capi.h` is Valve's OpenVR C API header (BSD 3-Clause, © Valve Corporation). `src/nvse_api.h` is a minimal subset of the xNVSE plugin interface.
