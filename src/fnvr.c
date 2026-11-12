@@ -32,9 +32,9 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        212
-#define FNVR_VERSION_STR    "2.8.0 (full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
-#define FNVR_VERSION_SHORT  "2.2.1"
+#define FNVR_VERSION        213
+#define FNVR_VERSION_STR    "2.8.1 (headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_SHORT  "2.8.1"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -19566,7 +19566,7 @@ static void Req_Check(void)
     }
     Log("Setup check: %s%s", g_reqMissing ? "MISSING " : "all installed", g_reqMissing ? miss : "");
 }
-#define GFX_HEADSETS "From SteamVR (auto)|Meta Quest 3|Meta Quest 3S / Quest 2|Meta Quest Pro|Meta Quest 1|Pico 4 / 4 Ultra|Valve Index|HTC Vive|HTC Vive Pro / Pro 2|HP Reverb G2|Windows Mixed Reality|Oculus Rift / Rift S|Pimax / Bigscreen Beyond"
+#define GFX_HEADSETS "Auto (SteamVR)|Quest 3|Quest 2 / 3S|Quest Pro|Quest 1|Pico 4|Valve Index|HTC Vive|Vive Pro / Pro 2|Reverb G2|Windows MR|Rift / Rift S|Pimax / Beyond"   /* (short: the value box fits about 14 letters - longer names were cut to "Meta Quest...") */
 static int g_gfxResPct = 0;   /* [Startup] iResolutionPercent: 0 = from your PC tier, else this much of the headset's own sharpness */
 typedef struct {
     int page, type; const char *label; const char *sec, *key; void *var;
@@ -19577,7 +19577,7 @@ static const SetOpt g_setOpts[] = {
     { SP_START, ST_PROFILE, "Who's playing", 0, 0, 0, 0, 0, 0, 0, 0, 0, "Pick your profile with left/right. A profile that isn't calibrated yet is a new player - up to four, each with their own body, play style and hand." },
     { SP_START, ST_BOOL, "Play style", 0, 0, &g_seated, 0, 0, 0, 0, SF_PROFILE | SF_BODY, 0, "STANDING: play on your feet - really crouch to reach low things. SEATED: play sitting down at your character's full height; hold the right stick DOWN to crouch and reach low things." },
     { SP_START, ST_BOOL, "Left-handed", 0, 0, &g_leftHanded, 0, 0, 0, 0, SF_PROFILE, 0, "Swap hands: the left hand aims and shoots, the right stick moves." },
-    { SP_START, ST_CHOICE, "VR headset", "Startup", "iHeadset", &g_gfxHeadset, 0, 12, 1, GFX_HEADSETS, 0, 0, "Which headset you play on - sets how sharp the game is drawn for it. From SteamVR uses what SteamVR recommends for your headset." },
+    { SP_START, ST_CHOICE, "VR headset", "Startup", "iHeadset", &g_gfxHeadset, 0, 12, 1, GFX_HEADSETS, 0, 0, "Which headset you play on - sets how sharp the game is drawn for it (nothing else). Auto uses what SteamVR recommends for your headset. Quest 2 and Quest 3S share one choice." },
     { SP_START, ST_CHOICE, "Connection", "Startup", "bWirelessI", &g_gfxWirelessI, 0, 1, 1, "Wired (Link cable, DisplayPort)|Wireless (Air Link, Virtual Desktop, Steam Link)", 0, 0, "Wireless streaming compresses the picture, so slightly less resolution is used - it looks the same and runs smoother." },
     { SP_START, ST_CHOICE, "PC power", "Startup", "iPCTier", &g_gfxTier, 0, 3, 1, "Low end|Medium|High end|Very high end", 0, 0, "How strong your PC is. Higher = sharper picture in the headset, but harder on your graphics card. If the game stutters, pick one lower." },
     { SP_START, ST_CHOICE, "3D view", "Stereo", "i3DMode", &g_3dMode, 0, 2, 1, "2D (flat)|Alternating eyes|Full 3D", 0, 0, "FULL 3D: each eye gets its own picture every frame, like a game made for VR - real depth, the world all around you, your hands and guns right in front of you. It draws the world twice, so it needs a strong PC (lower PC power if the frame rate drops). ALTERNATING EYES: one eye per frame - real depth for less work, but fast movement can shimmer. 2D: both eyes see the same picture - fastest, but the world looks like a big flat screen. Ctrl+F10 switches too." },
