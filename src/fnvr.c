@@ -33,7 +33,7 @@
 #include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.7.0 (HUD layout: each HUD part - compass, health, AP, ammo, the other hand's weapon, sneak - on the HUD, in front of you, on a wrist or by a hand, moved and sized as you like; a VR layout: compass on the Pip-Boy wrist, health and AP on the other wrist, each gun's ammo by its hand)"
+#define FNVR_VERSION_STR    "2.7.1 (settings check: motion controls, hand aiming and the game clock switch on in the menu at once; the frame rate counter shows in 3D; the menu revolver turns at once; depth of field reaches the game; the big screen moves when its distance changes; saying hello works on its own; the other hand's holsters follow the holster angles; Game resolution takes the stick; Show the HUD hides the other hand's readout too)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -305,6 +305,7 @@ static bool g_lgDropForSwap = false; static bool g_lhudShow = true; static float
 static volatile bool g_lgAssignReq;
 static void LHud_Draw(IDirect3DDevice9 *dev);
 static bool g_lhudInUi = false;   /* (this frame's other-hand readout went into the curved HUD's picture or onto its own panel - not into the frame) */
+static bool g_hudShow;   /* ([HUD] bShowHUD - defined with the HUD parts) */ static bool g_fpsInUi = false; static void Fps_DrawTo(IDirect3DDevice9 *dev, IDirect3DSurface9 *target);   /* (the frame rate counter went into the curved HUD's picture) */
 static void HudEl_Present(IDirect3DDevice9 *dev, bool drewUi); static void HudEl_Release9(void); static void HudEl_Load(void);   /* (HUD parts where you want them) */
 static void Gun_Palm(int h, float *palm); static char *LG_Root(char *ref); static bool LG_Pose(float *org, M3 W, float *aim);
 static bool  g_mrOn = true;   /* [Reload] manual reloading, and its ammo pocket */
@@ -4622,6 +4623,7 @@ static void UI_Present(IDirect3DDevice9 *dev)
     HudEl_Present(dev, drewUi);   /* (HUD parts moved off the HUD: onto their own panels, their spots on it cleared) */
     static bool shown = false;
     if (!drew) { if (shown) { g_vrOverlay->HideOverlay(g_uiOverlay); shown = false; } return; }
+    if (g_fpsShow && !g_pipOpen) { Fps_DrawTo(dev, g_uiSurf); g_fpsInUi = true; }   /* (the frame rate counter on the HUD panel: in the headset in 3D as well) */
     if (OvZc_Set(dev, &g_uiZc, g_uiSurf, NULL, UI_OUT_W, UI_OUT_H, D3DFMT_A8R8G8B8, g_uiOverlay, EColorSpace_ColorSpace_Auto, D3DTEXF_LINEAR, -1.0f)) goto uiPlaced;
     if (FAILED(IDirect3DDevice9_StretchRect(dev, g_uiSurf, NULL, g_uiSmall, NULL, D3DTEXF_LINEAR))) return;
     if (FAILED(IDirect3DDevice9_GetRenderTargetData(dev, g_uiSmall, g_uiSys))) return;
@@ -4644,11 +4646,10 @@ uiPlaced: ;
     /* main menu & loading screens: a big, gently curved screen further away; in play: the wrap-around HUD panel;
        a menu up in play: the same panel further away and smaller, fixed where you were looking */
     int layout = !g_inGameplay ? 2 : menuUp ? 3 : 1;
-    static int lastLayout = 0; static float lastSz[4];
+    static int lastLayout = 0; static float lastSz[7];
     float dist = layout == 2 ? g_mmDist : layout == 3 ? g_menuDist : g_uiDist;
-    if (layout != 2 && (lastSz[0] != g_uiDist || lastSz[1] != g_uiArcDeg || lastSz[2] != g_menuDist || lastSz[3] != g_menuArcDeg)) {
-        lastSz[0] = g_uiDist; lastSz[1] = g_uiArcDeg; lastSz[2] = g_menuDist; lastSz[3] = g_menuArcDeg; lastLayout = 0;   /* (changed in settings) */
-    }
+    {   float sz[7] = { g_uiDist, g_uiArcDeg, g_menuDist, g_menuArcDeg, g_mmDist, g_mmWidth, g_mmCurveR };
+        if (memcmp(sz, lastSz, sizeof sz)) { memcpy(lastSz, sz, sizeof sz); lastLayout = 0; } }   /* (changed in settings: sized and placed again) */
     if (layout != lastLayout) {
         if (layout == 2) {
             g_vrOverlay->SetOverlayWidthInMeters(g_uiOverlay, g_mmWidth);
@@ -5221,6 +5222,19 @@ static void Seq_Walk(char *n, const float Rp[9], const float Tp[3], float Sp, in
     }
 }
 static double g_seqWantAt = 0;
+/* (menu) the revolver turned around or rolled in the settings: its parts are let go and it's built again from the model with
+   the new turn, a moment later, from the main loop - no restart */
+static void Seq_Rebuild(void)
+{
+    if (!g_seqTried) return;   /* (not built yet: it's built with the new values) */
+    for (int q = 0; q < g_seqN; q++) {
+        if (g_seq[q].vb) ID3D11Buffer_Release(g_seq[q].vb);
+        if (g_seq[q].srv) ID3D11ShaderResourceView_Release(g_seq[q].srv);
+    }
+    memset(g_seq, 0, sizeof g_seq); g_seqN = 0; g_seqTexTries = 0;
+    g_seqTried = false; g_seqWantAt = QpcMs() + 250.0;
+    Log("Menu Sequoia: turned in the settings (%s, roll %.0f) - building it again", g_seqFlip ? "turned around" : "as found", g_seqRoll);
+}
 static void Room_LoadSequoia(void)
 {
     if (g_seqTried) return;
@@ -5313,6 +5327,7 @@ static void Far_Release9(void) { Release9(&g_mmRT); Release9(&g_mmSys); MmZc_Rel
 static void SaveBackbuffer(IDirect3DDevice9 *dev, const char *name);
 static bool g_farActive2 = false;
 /* place the screen straight ahead of where you're looking, level, at head height */
+static float g_scrPlacedDist = 0;   /* (the distance the big screen was put at) */
 static void Far_PlaceInFront(void)
 {
     float yaw = 0, pitch = 0, pos[3] = { 0, 1.6f, 0 };
@@ -5323,6 +5338,7 @@ static void Far_PlaceInFront(void)
     g_scrRight[0] = cosf(yaw); g_scrRight[1] = 0; g_scrRight[2] = -sinf(yaw);
     for (int k = 0; k < 3; k++) g_scrC[k] = pos[k] + g_scrFwd[k] * g_mmDist;
     g_scrC[1] = pos[1] - 0.05f;
+    g_scrPlacedDist = g_mmDist;
 }
 
 /* Where a ray hits the curved screen: u (0 left..1 right), v (0 top..1 bottom). */
@@ -5486,6 +5502,10 @@ mmHave:
     float mzX = g_seqN ? g_seqMuzzle[0] : GUN_MUZZLE_X, mzY = g_seqN ? g_seqMuzzle[1] : GUN_MUZZLE_Y, mzZ = g_seqN ? g_seqMuzzle[2] : 0.0f;
     static bool lastIngame = false;
     if (!g_farActive2 || lastIngame != g_inGameplay) Far_PlaceInFront();
+    else if (g_scrPlacedDist > 0 && g_mmDist != g_scrPlacedDist) {   /* (Big screen distance changed in the settings: moved there at once, same direction) */
+        for (int k = 0; k < 3; k += 2) g_scrC[k] += g_scrFwd[k] * (g_mmDist - g_scrPlacedDist);
+        g_scrPlacedDist = g_mmDist;
+    }
     lastIngame = g_inGameplay;
     {   /* diagnostic: a picture of the main menu, once per session, 6 s after it shows */
         static double mmShownAt = 0; static bool mmSnapDone = false;
@@ -9790,8 +9810,10 @@ static void Hol_Load(void)
 static void Hol_Save(void)
 {
     char b[64];
-    snprintf(b, sizeof b, "%.0f %.0f %.0f", g_holAng[1][0], g_holAng[1][1], g_holAng[1][2]); WritePrivateProfileStringA("HolsterModel", "sHip", b, g_iniPath);
-    snprintf(b, sizeof b, "%.0f %.0f %.0f", g_holAng[2][0], g_holAng[2][1], g_holAng[2][2]); WritePrivateProfileStringA("HolsterModel", "sShoulder", b, g_iniPath);
+    /* (the other hand's holsters - dual wielding - take the same angles, drawn mirrored on the other side) */
+    memcpy(g_holAng[3], g_holAng[1], sizeof g_holAng[1]); memcpy(g_holAng[4], g_holAng[2], sizeof g_holAng[2]);
+    snprintf(b, sizeof b, "%.0f %.0f %.0f", g_holAng[1][0], g_holAng[1][1], g_holAng[1][2]); WritePrivateProfileStringA("HolsterModel", "sHip", b, g_iniPath); WritePrivateProfileStringA("HolsterModel", "sHipOther", b, g_iniPath);
+    snprintf(b, sizeof b, "%.0f %.0f %.0f", g_holAng[2][0], g_holAng[2][1], g_holAng[2][2]); WritePrivateProfileStringA("HolsterModel", "sShoulder", b, g_iniPath); WritePrivateProfileStringA("HolsterModel", "sShoulderOther", b, g_iniPath);
 }
 static char *Hol_ChildNamed(char *parent, const char *name)
 {
@@ -12922,7 +12944,7 @@ static PlayReload_t o_PlayReload = NULL;
 static bool __attribute__((fastcall)) Hook_PlayReload(void *actor, void *unusedEdx, void *weap, int anim, int useMod)
 {
     (void)unusedEdx;
-    if (g_mrOn && actor && actor == GetPlayer() && anim != 0 && g_mr.g[0].cls != MRC_NONE && weap == g_mr.g[0].base) {
+    if (g_mrOn && g_motionControls && actor && actor == GetPlayer() && anim != 0 && g_mr.g[0].cls != MRC_NONE && weap == g_mr.g[0].base) {   /* (motion controls off: the game reloads as usual) */
         static double clickAt = 0; double now = QpcMs();
         if (now - clickAt > 350.0) { clickAt = now; MR_Buzz(MR_GunHand(0), 400);
             if (g_mr.g[0].st == MRS_READY && g_mr.rounds0 <= 0) {
@@ -12943,7 +12965,7 @@ static bool __attribute__((fastcall)) Hook_PlayerReload(void *player, void *unus
 {
     (void)unusedEdx;
     static int cl = 0; if (cl++ < 12) Log("Reload: the game's player reload called (mode %d, weapon %s)", mode, weap == g_mr.g[0].base ? "the gun hand's" : "another");
-    if (g_mrOn && mode != 0 && g_mr.g[0].cls != MRC_NONE && weap == g_mr.g[0].base) {
+    if (g_mrOn && g_motionControls && mode != 0 && g_mr.g[0].cls != MRC_NONE && weap == g_mr.g[0].base) {
         static double clickAt = 0; double now = QpcMs();
         if (now - clickAt > 350.0) { clickAt = now; MR_Buzz(MR_GunHand(0), 400);
             const MRGun *G = &g_mr.g[0];
@@ -14464,7 +14486,7 @@ static int LHud_Text(IDirect3DDevice9 *dev, IDirect3DSurface9 *target, void *fon
 static void LHud_Draw(IDirect3DDevice9 *dev)
 {
     bool inUi = g_lhudInUi; g_lhudInUi = false;
-    if (inUi || !g_lhudOn || !g_lhudShow || ScreenModeNow() || g_pipOpen) return;
+    if (inUi || !g_lhudOn || !g_lhudShow || !g_hudShow || ScreenModeNow() || g_pipOpen) return;
     UINT H = g_bbH ? g_bbH : 1080, W = g_bbW ? g_bbW : 1920;
     void *font = LHud_Font(dev, 0, (int)fmaxf(H / 38.0f * g_uiScale, 12.0f)); if (!font) return;
     IDirect3DSurface9 *bb = NULL;
@@ -14544,9 +14566,11 @@ static void Fps_Tick(void)
     last = now;
     if (now - rep > 500.0 && n > 0) { g_fpsMs = (float)(acc / n); g_fpsVal = g_fpsMs > 0.01f ? 1000.0f / g_fpsMs : 0; acc = 0; n = 0; rep = now; }
 }
-static void Fps_Draw(IDirect3DDevice9 *dev)
+/* (present) the counter into a picture: the curved HUD's own (so it's in the headset in 3D too - the frame is copied for each
+   eye before this point), or the frame */
+static void Fps_DrawTo(IDirect3DDevice9 *dev, IDirect3DSurface9 *target)
 {
-    if (!g_fpsShow || g_pipOpen) return;
+    if (!g_fpsShow || g_pipOpen || !target) return;
     static void *font = NULL; static bool failed = false; static UINT fontFor = 0;
     typedef HRESULT (WINAPI *CreateFont_t)(IDirect3DDevice9 *, INT, UINT, UINT, UINT, BOOL, DWORD, DWORD, DWORD, DWORD, LPCSTR, void **);
     typedef INT (__stdcall *DrawText_t)(void *, void *, LPCSTR, INT, RECT *, DWORD, DWORD);
@@ -14570,10 +14594,9 @@ static void Fps_Draw(IDirect3DDevice9 *dev)
     snprintf(line[0], sizeof line[0], "%.0f FPS   %.1f ms   (headset %.0f Hz)", g_fpsVal, g_fpsMs, hz);
     snprintf(line[1], sizeof line[1], "%s | %d%% res | %s | %s", g_zc == 1 ? "zero copy" : "CPU copy", pct[g_renderScaleSel < 0 || g_renderScaleSel > 4 ? 0 : g_renderScaleSel], cap,
              g_stereoFull ? "full 3D" : g_stereo ? "alternating 3D" : "2D");
-    IDirect3DSurface9 *bb = NULL, *old = NULL; D3DVIEWPORT9 vp;
-    if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
+    IDirect3DSurface9 *old = NULL; D3DVIEWPORT9 vp;
     IDirect3DDevice9_GetRenderTarget(dev, 0, &old); IDirect3DDevice9_GetViewport(dev, &vp);
-    IDirect3DDevice9_SetRenderTarget(dev, 0, bb);
+    IDirect3DDevice9_SetRenderTarget(dev, 0, target);
     DrawText_t dt = (DrawText_t)(*(void ***)font)[14];
     float sc = g_uiScale; int lh = (int)fmaxf(H / 40.0f * sc, 14.0f);
     int y0 = (int)(H * (0.5f + (0.10f - 0.5f) * sc));
@@ -14583,10 +14606,18 @@ static void Fps_Draw(IDirect3DDevice9 *dev)
         dt(font, NULL, line[i], -1, &rs, DT_CENTER | DT_TOP | DT_NOCLIP, 0xC0000000);
         dt(font, NULL, line[i], -1, &r, DT_CENTER | DT_TOP | DT_NOCLIP, i ? 0xFFE0E0E0 : col);
     }
-    IDirect3DDevice9_SetRenderTarget(dev, 0, old ? old : bb); IDirect3DDevice9_SetViewport(dev, &vp);
+    IDirect3DDevice9_SetRenderTarget(dev, 0, old ? old : target); IDirect3DDevice9_SetViewport(dev, &vp);
     if (old) IDirect3DSurface9_Release(old);
-    IDirect3DSurface9_Release(bb);
     D3D9_CheckHooks();
+}
+static void Fps_Draw(IDirect3DDevice9 *dev)
+{
+    bool inUi = g_fpsInUi; g_fpsInUi = false;
+    if (inUi || !g_fpsShow || g_pipOpen) return;
+    IDirect3DSurface9 *bb = NULL;
+    if (FAILED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bb)) || !bb) return;
+    Fps_DrawTo(dev, bb);
+    IDirect3DSurface9_Release(bb);
 }
 
 static void Grab_Start(int h, char *ref)
@@ -17596,7 +17627,7 @@ static int Vc_Answers(VcAns *out)
 static void Voice_Tick(void)
 {
     if (!g_vcCsOk) { InitializeCriticalSection(&g_vcCs); g_vcCsOk = true; }
-    if (g_voiceOn && !g_vcThread && g_inGameplay) { g_vcThread = CreateThread(NULL, 0, Vc_Thread, NULL, 0, NULL); }
+    if ((g_voiceOn || g_voiceGreet) && !g_vcThread && g_inGameplay) { g_vcThread = CreateThread(NULL, 0, Vc_Thread, NULL, 0, NULL); }   /* (either one on: the microphone listens) */
     if (g_vcState != 1) return;
     static double next = 0; static char *lastPerson = NULL; static double lastPersonAt = 0;
     static VcAns ans[VC_MAXOPT]; static int nAns = 0;
@@ -17650,8 +17681,8 @@ static void Voice_Tick(void)
     next = now + 250.0;
     /* what to listen for now */
     int mode = 0; VcAns a[VC_MAXOPT]; int n = 0;
-    if (g_voiceOn && g_inGameplay) {
-        if (talking) { mode = 2; n = Vc_Answers(a); }
+    if (g_inGameplay) {   /* (each on its own: answers while you talk, hello to start talking) */
+        if (talking) { if (g_voiceOn) { mode = 2; n = Vc_Answers(a); } }
         else if (g_voiceGreet && !IsMenuMode()) mode = 1;
     }
     bool same = mode == g_vcMode && n == g_vcN;
@@ -18416,7 +18447,7 @@ static void HudEl_Present(IDirect3DDevice9 *dev, bool drewUi)
         HudEl *e = &g_hudEl[i];
         IDirect3DSurface9 *src = NULL; RECT rc; float uC = 0.5f, vC = 0.5f, mpp = mppHud / sc;
         if (e->part < 0) {   /* the other hand's weapon: FNVR's own readout */
-            bool on = play && g_lhudOn && g_lhudShow;
+            bool on = play && g_lhudOn && g_lhudShow && g_hudShow;
             if (on && e->place == HP_HUD) { if (!g_setOpen) LHud_IntoUi(dev); }
             else if (on && LHud_Panel(dev, &rc)) {
                 /* (one line of its own picture is 48 pixels; on the HUD a line is 1/34 of the picture's height at full size) */
@@ -18832,9 +18863,18 @@ static int  g_reqMissing = 0;
 #define TIMER_UPDATE   0x00AA4EE0   /* BSTimer::Update(time) */
 #define HAVOK_MAXTIME  0x01267B38   /* bhkWorld::fMaxTime: longest physics step */
 static float g_havokMaxDefault = 0.0f; static double g_clkLast = 0; static int g_clkMode = 0;
+static uintptr_t g_clockWas = 0;     /* (where the main loop's timer call went before FNVR: the game's own, or NVTF's) */
+static float g_clkClamp0 = -1.0f;    /* (the timer's own clamp value before FNVR set it - put back when switched off) */
 typedef void (__attribute__((thiscall)) *TimerUpdate_t)(void *timer, uint32_t ms);
 static void __attribute__((thiscall)) Clock_Hook(char *timer)
 {
+    if (!g_vrClock && g_clockWas) {   /* (switched off in the menu: the call goes where it always went - at once, no restart) */
+        if (g_clkClamp0 >= 0.0f) { *(float *)(timer + 4) = g_clkClamp0; g_clkClamp0 = -1.0f; *(float *)HAVOK_MAXTIME = g_havokMaxDefault; Log("Game clock: back to the game's own / NVTF's (switched off in the menu)"); }
+        g_clkLast = 0;
+        ((void (__attribute__((thiscall)) *)(char *))g_clockWas)(timer);
+        return;
+    }
+    if (g_clkClamp0 < 0.0f) g_clkClamp0 = *(float *)(timer + 4);
     double now = QpcMs(), d = g_clkLast > 0 ? now - g_clkLast : 16.7; g_clkLast = now;
     bool loading = *(volatile bool *)0x011D8907;   /* (loading a new game) */
     char *sl = *(char **)0x011DDF38; if (sl && (*(uint32_t *)(sl + 0x244) & 2)) loading = true;   /* (loading a save) */
@@ -18861,7 +18901,7 @@ static void Clock_Install(void)
 {
     g_vrClock = GetPrivateProfileIntA("Clock", "bVRClock", 1, g_iniPath) != 0;
     BYTE *site = (BYTE *)CLOCK_CALLSITE;
-    if (!g_vrClock) { Log("Game clock: left to the game / NVTF ([Clock] bVRClock=0)"); return; }
+    /* (put in place even while it's off - it then passes the call straight on - so switching it on in the menu works at once) */
     if (site[0] != 0xE8) { Log("Game clock: unexpected code at %08X (%02X) - left to the game", CLOCK_CALLSITE, site[0]); return; }
     uintptr_t was = CLOCK_CALLSITE + 5 + *(int32_t *)(site + 1);
     HMODULE m = NULL; char mod[MAX_PATH] = "the game";
@@ -18870,7 +18910,9 @@ static void Clock_Install(void)
     DWORD old; VirtualProtect(site, 5, PAGE_EXECUTE_READWRITE, &old);
     *(int32_t *)(site + 1) = (int32_t)((uintptr_t)Clock_Hook - (CLOCK_CALLSITE + 5));
     VirtualProtect(site, 5, old, &old); FlushInstructionCache(GetCurrentProcess(), site, 5);
-    Log("Game clock: FNVR runs it now (was %s at %08X) - precise real time, whole headset refreshes when waiting for each one; no frame-rate limit (NVTF's other fixes stay)", mod, (unsigned)was);
+    g_clockWas = was;
+    if (g_vrClock) Log("Game clock: FNVR runs it now (was %s at %08X) - precise real time, whole headset refreshes when waiting for each one; no frame-rate limit (NVTF's other fixes stay)", mod, (unsigned)was);
+    else Log("Game clock: left to %s for now ([Clock] bVRClock=0) - FNVR takes over the moment it's switched on in the menu", mod);
 }
 static void Req_Check(void)
 {
@@ -18924,7 +18966,7 @@ static const SetOpt g_setOpts[] = {
     { SP_ADV, ST_RES, "Game resolution", 0, 0, 0, 0, 0, 0, 0, 0, 0, "The size the game is drawn at. Left/right: Automatic, a size of your own, or the launcher's (FNVR leaves it alone). Used from the next start." },
     { SP_ADV, ST_ACTION, "Quit now - the new resolution starts next time", 0, 0, 0, 0, 0, 0, 0, SF_IFRESTART, SA_QUIT_GAME, "Closes the game so it starts at the new resolution next time." },
     { SP_ADV, ST_ACTION, "Apply resolution (restart after)", 0, 0, 0, 0, 0, 0, 0, 0, SA_GFX_APPLY, "Writes the resolution to the game's settings, turns off v-sync (it holds the game to your monitor's refresh rate - stutter in the headset) and sets windowed mode (needed for sizes bigger than your monitor). Restart the game to use it." },
-    { SP_ADV, ST_BOOL, "Depth of field blur", "Startup", "bDepthOfField", &g_gfxDof, 0, 0, 0, 0, 0, 0, "The game's blur on distant things. Looks smeared in VR - OFF recommended. Applied with the resolution (restart)." },
+    { SP_ADV, ST_BOOL, "Depth of field blur", "Startup", "bDepthOfField", &g_gfxDof, 0, 0, 0, 0, 0, 0, "The game's blur on distant things. Looks smeared in VR - OFF recommended. The game only reads it when it starts: used from the next start." },
     { SP_ADV, ST_INT, "Sharpness", "Display", "iPixelDensityPercent", &g_pixelDensityPct, 0, 200, 5, "%.0f %%", SF_RESTART, 0, "Size of the picture sent to the headset. 0 = automatic (matches the game's resolution, recommended). Restart to apply." },
     { SP_ADV, ST_CHOICE, "3D view", "Stereo", "i3DMode", &g_3dMode, 0, 2, 1, "2D (flat)|Alternating eyes|Full 3D", 0, 0, "FULL 3D: each eye gets its own picture every frame, like a game made for VR - real depth, the world all around you, your hands and guns right in front of you. It draws the world twice, so it needs a strong PC (lower PC power if the frame rate drops). ALTERNATING EYES: one eye per frame - real depth for less work, but fast movement can shimmer. 2D: both eyes see the same picture - fastest, but the world looks like a big flat screen. Ctrl+F10 switches too." },
     { SP_ADV, ST_BOOL, "Match headset field of view", "Display", "bMatchHeadsetFOV", &g_matchHeadsetFov, 0, 0, 0, 0, SF_FOV, 0, "Widen the game's view so it fills your headset." },
@@ -18934,7 +18976,7 @@ static const SetOpt g_setOpts[] = {
     { SP_ADV, ST_BOOL, "Aim with your hand", "Controls", "bHandAim", &g_handAim, 0, 0, 0, 0, 0, 0, "Guns shoot where your hand points." },
     { SP_ADV, ST_FLOAT, "Aim angle", "Controls", "fAimPitchOffset", &g_aimPitchOffsetDeg, -90.0f, 90.0f, 0.5f, "%.1f deg", SF_PROFILE, 0, "Tilts where your hand aims, for controllers held at a different angle." },
     { SP_ADV, ST_BOOL, "Finger tracking", "Controls", "bFingerTracking", &g_fingerTracking, 0, 0, 0, 0, 0, 0, "Fingers follow your fingers on the controller." },
-    { SP_ADV, ST_BOOL, "Left trigger = bullet time", "Controls", "bLeftTriggerBulletTime", &g_ltBullet, 0, 0, 0, 0, 0, 0, "The left trigger presses the bullet-time key (needs a bullet-time mod). While dual wielding: squeeze the left grip, then pull the trigger." },
+    { SP_ADV, ST_BOOL, "Left trigger = bullet time", "Controls", "bLeftTriggerBulletTime", &g_ltBullet, 0, 0, 0, 0, 0, 0, "The left trigger presses the bullet-time key (needs a bullet-time mod). While dual wielding: squeeze the left grip, then pull the trigger. Not while \"Left trigger aims down sights\" is on (that takes the trigger)." },
     { SP_MAIN, ST_PAGE, "Body & profiles", 0, 0, 0, 0, 0, 0, 0, 0, SP_BODY, "Your height and arm reach, so the world and your arms fit you. Up to four people, each with their own." },
     { SP_MAIN, ST_PAGE, "Pip-Boy", 0, 0, 0, 0, 0, 0, 0, 0, SP_PIP, "Pip-Boy display: wrist mode or a head-locked HUD, plus screen settings." },
     { SP_MAIN, ST_PAGE, "Controls", 0, 0, 0, 0, 0, 0, 0, 0, SP_CONTROLS, "Motion controls, aiming, melee swings, buttons and fingers." },
@@ -19014,7 +19056,7 @@ static const SetOpt g_setOpts[] = {
     { SP_CONTROLS, ST_BOOL, "Melee swings", "Controls", "bMeleeSwings", &g_meleeSwings, 0, 0, 0, 0, 0, 0, "Swing a melee weapon or punch with a real swing of your hand." },
     { SP_CONTROLS, ST_BOOL, "Right trigger attacks with melee", "Controls", "bMeleeTrigger", &g_meleeTrigger, 0, 0, 0, 0, 0, 0, "ON: the right trigger attacks with melee weapons and fists too (as well as swinging). Automatic melee weapons like the chainsaw always use the trigger." },
     { SP_CONTROLS, ST_FLOAT, "Swing speed needed", "Controls", "fSwingSpeed", &g_swingSpeed, 0.5f, 6.0f, 0.1f, "%.1f m/s", 0, 0, "How fast your hand must move to count as a swing. Lower = easier." },
-    { SP_CONTROLS, ST_BOOL, "Left trigger = bullet time", "Controls", "bLeftTriggerBulletTime", &g_ltBullet, 0, 0, 0, 0, 0, 0, "The left trigger presses the bullet-time key (needs a bullet-time mod)." },
+    { SP_CONTROLS, ST_BOOL, "Left trigger = bullet time", "Controls", "bLeftTriggerBulletTime", &g_ltBullet, 0, 0, 0, 0, 0, 0, "The left trigger presses the bullet-time key (needs a bullet-time mod). Not while \"Left trigger aims down sights\" is on (that takes the trigger)." },
     { SP_CONTROLS, ST_BOOL, "Left trigger aims down sights", "Controls", "bAimDownSights", &g_adsEnabled, 0, 0, 0, 0, 0, 0, "Use the game's own aim-down-sights view with the left trigger (aimed with your head)." },
     { SP_CONTROLS, ST_BOOL, "Finger tracking", "Controls", "bFingerTracking", &g_fingerTracking, 0, 0, 0, 0, 0, 0, "Fingers follow your controller's touch sensors (trigger, grip, thumb)." },
     { SP_CONTROLS, ST_SIGN, "Fingers bend the other way", "Controls", "bFingerBendReverse", &g_fingerSign, 0, 0, 0, 0, 0, 0, "Turn on if the in-game fingers bend backwards." },
@@ -19049,9 +19091,9 @@ static const SetOpt g_setOpts[] = {
     { SP_HANDS, ST_FLOAT, "Weapon throw speed", "Grab", "fWeaponThrowSpeed", &g_keepThrowSpeed, 0.5f, 10.0f, 0.1f, "%.1f m/s", 0, 0, "With Keep weapons in hand: how fast your hand must be moving as you let go of the grip for the weapon to be thrown." },
     { SP_HANDS, ST_BOOL, "Grab people and bodies", "Grab", "bGrabPeople", &g_grabPeople, 0, 0, 0, 0, 0, 0, "ON: squeeze the grip on a body to hold the arm, leg or head you grabbed and drag it around; let go to drop it. Grab someone standing and yank or shove to knock them off their feet." },
     { SP_HANDS, ST_BOOL, "Dual wield", "Grab", "bDualWield", &g_dualOn, 0, 0, 0, 0, 0, 0, "ON: take a gun or melee weapon lying in the world by its grip with your other hand (or pick one in the Pip-Boy with the LEFT trigger) and fire it with that hand's trigger until it's empty. To reload, put your gun-hand weapon away, take the gun by its grip with your gun hand, reload as usual, then hand it back: hold it with your other hand and let go with your gun hand." },
-    { SP_HUD, ST_BOOL, "Other hand's weapon readout", "Display", "bLeftHud", &g_lhudShow, 0, 0, 0, 0, 0, 0, "Shows the weapon in your other hand at the left of your view: its name, rounds in it / rounds you carry, and its condition." },
-    { SP_HUD, ST_FLOAT, "Readout: across", "Display", "fLeftHudX", &g_lhudX, 0.0f, 0.9f, 0.01f, "%.2f", 0, 0, "Where the other hand's readout sits, from the left edge of the picture (0) to the right (0.9)." },
-    { SP_HUD, ST_FLOAT, "Readout: down", "Display", "fLeftHudY", &g_lhudY, 0.0f, 0.95f, 0.01f, "%.2f", 0, 0, "Where the other hand's readout sits, from the top (0) to the bottom (0.95)." },
+    { SP_HUD, ST_BOOL, "Other hand's weapon readout", "Display", "bLeftHud", &g_lhudShow, 0, 0, 0, 0, 0, 0, "Shows the weapon in your other hand: its name, rounds in it / rounds you carry, and its condition - on the HUD, or wherever HUD parts: move & resize puts it." },
+    { SP_HUD, ST_FLOAT, "Readout: across", "Display", "fLeftHudX", &g_lhudX, 0.0f, 0.9f, 0.01f, "%.2f", 0, 0, "Where the other hand's readout sits on the HUD, from the left (0) to the right (0.9). (Off the HUD: HUD parts: move & resize.)" },
+    { SP_HUD, ST_FLOAT, "Readout: down", "Display", "fLeftHudY", &g_lhudY, 0.0f, 0.95f, 0.01f, "%.2f", 0, 0, "Where the other hand's readout sits on the HUD, from the top (0) to the bottom (0.95). (Off the HUD: HUD parts: move & resize.)" },
     { SP_HANDS, ST_FLOAT, "Weapon grip reach", "Grab", "fWeaponGripReach", &g_gunGripR, 3.0f, 40.0f, 1.0f, "%.0f units", 0, 0, "How close your hand must be to a weapon's grip to take it (about 1.4 cm per unit)." },
     { SP_HANDS, ST_FLOAT, "Grab reach", "Grab", "fGrabReach", &g_grabReach, 2.0f, 40.0f, 1.0f, "%.0f units", 0, 0, "How close your hand must be to an object to grab it (about 1.4 cm per unit)." },
     { SP_HANDS, ST_FLOAT, "Heaviest object", "Grab", "fGrabMaxMass", &g_grabMaxMass, 10.0f, 1000.0f, 10.0f, "%.0f", 0, 0, "The heaviest thing you can pick up." },
@@ -19072,7 +19114,7 @@ static const SetOpt g_setOpts[] = {
     { SP_DISPLAY, ST_BOOL, "Frame rate counter", "Display", "bFpsCounter", &g_fpsShow, 0, 0, 0, 0, 0, 0, "ON: the frame rate at the top of your view - frames a second, milliseconds per frame, the headset's refresh rate, and the display setup in use (zero copy or CPU copy, render resolution, frame rate limit, 3D mode)." },
     { SP_DISPLAY, ST_CHOICE, "Render resolution", "Display", "iRenderScale", &g_renderScaleSel, 0, 4, 1, "100% (full)|85%|75%|66%|50%", 0, 0, "How much of the full resolution the game draws at (with Game resolution on Automatic). Lower = faster frames; the picture is scaled up to the headset and can be sharpened (below). Takes effect after a restart." },
     { SP_DISPLAY, ST_CHOICE, "Sharpening", "Display", "iSharpen", &g_sharpenSel, 0, 3, 1, "Off|Low|Medium|High", 0, 0, "Sharpens the picture on its way to the headset (AMD's contrast adaptive sharpening) - most useful with a lower render resolution. Needs FNVR Stereo with zero copy (see FNVR.log)." },
-    { SP_DISPLAY, ST_BOOL, "FNVR runs the game clock", "Clock", "bVRClock", &g_vrClock, 0, 0, 0, 0, 0, 0, "ON: the game moves by the real time between frames (or whole headset refreshes), at any frame rate - instead of New Vegas Tick Fix's frame-time fix, which puts the game in fast motion above its limit. Takes effect after a restart." },
+    { SP_DISPLAY, ST_BOOL, "FNVR runs the game clock", "Clock", "bVRClock", &g_vrClock, 0, 0, 0, 0, 0, 0, "ON: the game moves by the real time between frames (or whole headset refreshes), at any frame rate - instead of New Vegas Tick Fix's frame-time fix, which puts the game in fast motion above its limit. Switching it off and on works at once." },
     { SP_DISPLAY, ST_CHOICE, "Game frame rate", "Stereo", "iFrameRate", &g_fpsMode, 0, 5, 1, "Unlimited|120|90|60|30|Match the headset (old way)", 0, 0, "How many frames a second the game may draw. The game no longer waits for the headset: it draws as fast as this allows and each headset refresh gets the newest picture (SteamVR fills in when the game is slower). Unlimited = as fast as your PC can. Match the headset = wait for every refresh, as before." },
     { SP_DISPLAY, ST_CHOICE, "3D view", "Stereo", "i3DMode", &g_3dMode, 0, 2, 1, "2D (flat)|Alternating eyes|Full 3D", 0, 0, "FULL 3D: each eye gets its own picture every frame, like a game made for VR - real depth, the world all around you, your hands and guns right in front of you. It draws the world twice, so it needs a strong PC (lower PC power if the frame rate drops). ALTERNATING EYES: one eye per frame - real depth for less work, but fast movement can shimmer. 2D: both eyes see the same picture - fastest, but the world looks like a big flat screen. Ctrl+F10 switches too." },
     { SP_DISPLAY, ST_BOOL, "Match headset field of view", "Display", "bMatchHeadsetFOV", &g_matchHeadsetFov, 0, 0, 0, 0, SF_FOV, 0, "Widen the game's view so it fills your headset (F9 toggles it too)." },
@@ -19087,7 +19129,7 @@ static const SetOpt g_setOpts[] = {
     { SP_HUD, ST_BOOL, "Talking: world keeps running", "Display", "bLiveDialogueWorld", &g_liveDlgWorld, 0, 0, 0, 0, 0, 0, "ON: everything keeps moving while you talk. OFF: the game runs the conversation its own way and the rest of the world waits, as in the base game." },
     { SP_HUD, ST_BOOL, "Talking: they stand still", "Display", "bDialogueHoldStill", &g_dlgHold, 0, 0, 0, 0, 0, 0, "ON: the person you're talking to stays in place and looks at you while you talk (no shuffling or head snapping). Let go as soon as the conversation ends." },
     { SP_HUD, ST_BOOL, "Voice: say your answers", "Voice", "bVoiceControl", &g_voiceOn, 0, 0, 0, 0, 0, 0, "ON: the headset's microphone listens in conversations - say an answer (its first few words are enough) or \"option two\". Uses Windows' own speech recognition, offline." },
-    { SP_HUD, ST_BOOL, "Voice: say hello to talk", "Voice", "bGreetToTalk", &g_voiceGreet, 0, 0, 0, 0, 0, 0, "ON: look at someone and say \"hey\", \"hello\" or \"excuse me\" to start talking to them." },
+    { SP_HUD, ST_BOOL, "Voice: say hello to talk", "Voice", "bGreetToTalk", &g_voiceGreet, 0, 0, 0, 0, 0, 0, "ON: look at someone and say \"hey\", \"hello\" or \"excuse me\" to start talking to them. Works on its own (with or without saying your answers)." },
     { SP_HUD, ST_FLOAT, "Voice: how sure", "Voice", "fMinConfidence", &g_voiceConf, 0.0f, 0.9f, 0.05f, "%.2f", 0, 0, "How sure the speech recognizer must be before it acts. Raise it if it picks answers you didn't say, lower it if it ignores you." },
     { SP_HUD, ST_FLOAT, "Dialogue size", "Display", "fDialogueScale2", &g_dlgScale, 0.2f, 1.0f, 0.05f, "%.2f", 0, 0, "How much of your view talking to people takes up - the box and its text shrink together." },
     { SP_HUD, ST_FLOAT, "Menu height", "Display", "fMenuHeight", &g_menuYOff, -0.5f, 0.5f, 0.02f, "%+.2f", 0, 0, "Moves pop-up menus (trading, companions, containers, messages) up (+) or down (-) to where you look straight ahead." },
@@ -19336,10 +19378,20 @@ static bool Gfx_Apply(void)
    menu, whatever put another size in the game's settings since (the game's launcher, the game itself on the way out).
    "Launcher's" in the menu leaves the size to the launcher. */
 static int g_gfxOverW = 0, g_gfxOverH = 0;   /* (a size changed outside FNVR that was set back at this start - said on the startup screen) */
+/* the depth-of-field blur choice into the game's settings (true = it changed) */
+static bool Gfx_DofWrite(const char *pp)
+{
+    int want = g_gfxDof ? 1 : 0;
+    if ((int)GetPrivateProfileIntA("Imagespace", "bDoDepthOfField", -1, pp) == want) return false;
+    WritePrivateProfileStringA("Imagespace", "bDoDepthOfField", want ? "1" : "0", pp);
+    return true;
+}
 static void Gfx_EnforceEarly(void)
 {
     char pp[MAX_PATH]; Gfx_PrefsPathEarly(pp, sizeof pp);
     if (GetFileAttributesA(pp) == INVALID_FILE_ATTRIBUTES) { Log("Graphics: the game's settings file isn't there yet (%s) - the game makes it on its first start", pp); return; }
+    /* (the game writes its own settings back when it closes, so FNVR's depth-of-field choice is put in again before it reads them) */
+    if (Gfx_DofWrite(pp)) Log("Graphics: depth of field blur set %s in the game's settings (FNVR settings > Advanced > Depth of field blur)", g_gfxDof ? "ON" : "OFF");
     int iw = GetPrivateProfileIntA("Display", "iSize W", 0, pp), ih = GetPrivateProfileIntA("Display", "iSize H", 0, pp);
     int tw = g_gameW, th = g_gameH;
     int lw = GetPrivateProfileIntA("Startup", "iLastRunW", 0, g_iniPath), lh = GetPrivateProfileIntA("Startup", "iLastRunH", 0, g_iniPath);
@@ -19426,6 +19478,12 @@ static void Set_Changed(const SetOpt *o)
         if (Gfx_Apply() && Gfx_RestartPending()) { snprintf(m, sizeof m, "Game resolution %dx%d - used from the next start", w, h); Set_Toast(m); }
     }
     if (o->var == &g_hudLayout) HudLayout_Apply(g_hudLayout);
+    if (o->var == &g_seqFlip || o->var == &g_seqRoll) Seq_Rebuild();
+    if (o->var == &g_gfxDof) {   /* (written into the game's settings at once; the game only reads it when it starts) */
+        char pp[MAX_PATH]; Gfx_PrefsPath(pp, sizeof pp);
+        if (GetFileAttributesA(pp) != INVALID_FILE_ATTRIBUTES) Gfx_DofWrite(pp);
+        Set_Toast(g_gfxDof ? "Depth of field blur ON - from the next start" : "Depth of field blur OFF - from the next start");
+    }
     if (o->var == &g_hudEdSel) HudEd_Load();
     else if (o->var == &g_hudEdOn || o->var == &g_hudEdPlace || o->var == &g_hudEdSize || o->var == &g_hudEdX || o->var == &g_hudEdY || o->var == &g_hudEdZ) HudEd_Store(o->var);
     if (o->var == &g_3dMode) {
@@ -19893,7 +19951,7 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
     else if (nd && now - navAt > 380.0) { navAt = now - 290.0; g_setSel = (g_setSel + nd + n) % n; g_setDirty = true; Set_Buzz(200); }
     if (vd != valDir) { valDir = vd; valAt = now; valSince = now; if (vd && g_setSel < n && idx[g_setSel] >= 0) {
             const SetOpt *o = &g_setOpts[idx[g_setSel]];
-            if (o->type == ST_FLOAT || o->type == ST_INT || o->type == ST_PROFILE || o->type == ST_BOOL || o->type == ST_SIGN || o->type == ST_CHOICE) Set_Step(o, vd, 1); } }
+            if (o->type == ST_FLOAT || o->type == ST_INT || o->type == ST_PROFILE || o->type == ST_BOOL || o->type == ST_SIGN || o->type == ST_CHOICE || o->type == ST_RES) Set_Step(o, vd, 1); } }   /* (Game resolution too: left/right on the stick - it only took the trigger) */
     else if (vd && now - valAt > 400.0 && g_setSel < n && idx[g_setSel] >= 0) {
         const SetOpt *o = &g_setOpts[idx[g_setSel]];
         if (o->type == ST_FLOAT || o->type == ST_INT) { valAt = now - 330.0; Set_Step(o, vd, now - valSince > 1800.0 ? 5.0f : 1.0f); }
@@ -20486,9 +20544,9 @@ static void OnNVSEMessage(NVSEMessage *msg)
         Sky_Install();
         InstallD3D9Hooks();
         InstallRenderHook();
-        if (g_motionControls) InstallXInputThunkHook();
-        if (g_motionControls && g_handAim) InstallFireHook();
-        if (g_motionControls) InstallReloadHook();
+        InstallXInputThunkHook();   /* (these three always: each passes everything through while its setting is off, so */
+        InstallFireHook();          /*  Motion controls, Aim with your hand and Manual reloading switch on at once, no restart) */
+        InstallReloadHook();
         InstallRealTimePipBoy();
         InstallPipMenuCapture();
         InstallInstantPipBoy();
@@ -20564,7 +20622,7 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface *nvse)
     {   /* (the text helper FNVR uses for the other hand's readout, loaded now: loading it later, mid-game, made overlay programs
            that watch for graphics libraries hook the game's Direct3D device again - which threw FNVR's hooks out) */
         HMODULE dx = LoadLibraryA("d3dx9_43.dll"); Log("Text helper d3dx9_43.dll %s", dx ? "loaded early" : "not found (the other hand's readout will be off)"); }
-    if (g_motionControls) { InstallXInputHook(); LoadGameBindings(); }
+    InstallXInputHook(); LoadGameBindings();   /* (always: with motion controls off it hands the real controller through, and switching them on in the menu works at once) */
     StartWatchdog();
     g_handle = nvse->GetPluginHandle();
     g_scriptIntf = (NVSEScriptIntf *)nvse->QueryInterface(6);
