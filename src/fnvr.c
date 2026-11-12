@@ -33,7 +33,7 @@
 #include "../stereo/vrinput.h"
 
 #define FNVR_VERSION        210
-#define FNVR_VERSION_STR    "2.7.7 (full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_STR    "2.7.8 (raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
 #define FNVR_VERSION_SHORT  "2.2.1"
 
 #define PI_F 3.14159265f
@@ -17020,7 +17020,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             bool pipSteady = g_pipOpen && g_pipModeRaw == 3 && PipBoyMode() == 3;
             if (!pipSteady) pipSteadySince = 0; else if (!pipSteadySince) pipSteadySince = QpcMs();
             bool pipOk = pipSteady && !pipBad && QpcMs() - pipSteadySince > 700.0;
-            bool quiet = !g_pipOpen && !g_wristUp && g_pipModeRaw == 0 && PipBoyMode() == 0 && QpcMs() > g_pipExpectUntil + 300.0 && !g_liveMenuNow && !IsMenuMode();
+            bool quiet = !g_pipOpen && g_pipModeRaw == 0 && PipBoyMode() == 0 && QpcMs() > g_pipExpectUntil + 300.0 && !g_liveMenuNow && !IsMenuMode();
             if (!(pipOk || quiet)) full = alt = false;   /* (menus, conversations, the Pip-Boy opening or closing: one picture for both eyes) */
             (void)pipOk; if (pipSteady || g_pipOpen) full = false;   /* (the Pip-Boy open: one picture - its menu screen only reaches the picture drawn at the end of the frame) */
             g_fullPipNow = full && pipSteady;
