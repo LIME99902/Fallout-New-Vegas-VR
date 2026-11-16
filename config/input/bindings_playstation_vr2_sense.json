@@ -1,0 +1,161 @@
+{
+  "controller_type": "playstation_vr2_sense",
+  "name": "FNVR - PS VR2 Sense",
+  "description": "FNVR's default controls",
+  "action_manifest_version": 0,
+  "alias_info": {},
+  "bindings": {
+    "/actions/fnvr": {
+      "sources": [
+        {
+          "path": "/user/hand/left/input/left_stick",
+          "mode": "joystick",
+          "inputs": {
+            "position": {
+              "output": "/actions/fnvr/in/stick"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/stickclick"
+            },
+            "touch": {
+              "output": "/actions/fnvr/in/thumbtouch"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/l2",
+          "mode": "trigger",
+          "inputs": {
+            "pull": {
+              "output": "/actions/fnvr/in/trigger"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/triggerclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/l1",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/gripclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/l1",
+          "mode": "trigger",
+          "inputs": {
+            "pull": {
+              "output": "/actions/fnvr/in/grip"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/square",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/primary"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/left/input/triangle",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/secondary"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/right_stick",
+          "mode": "joystick",
+          "inputs": {
+            "position": {
+              "output": "/actions/fnvr/in/stick"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/stickclick"
+            },
+            "touch": {
+              "output": "/actions/fnvr/in/thumbtouch"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/r2",
+          "mode": "trigger",
+          "inputs": {
+            "pull": {
+              "output": "/actions/fnvr/in/trigger"
+            },
+            "click": {
+              "output": "/actions/fnvr/in/triggerclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/r1",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/gripclick"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/r1",
+          "mode": "trigger",
+          "inputs": {
+            "pull": {
+              "output": "/actions/fnvr/in/grip"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/cross",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/primary"
+            }
+          }
+        },
+        {
+          "path": "/user/hand/right/input/circle",
+          "mode": "button",
+          "inputs": {
+            "click": {
+              "output": "/actions/fnvr/in/secondary"
+            }
+          }
+        }
+      ],
+      "chords": [],
+      "poses": [],
+      "haptics": [
+        {
+          "output": "/actions/fnvr/out/haptic",
+          "path": "/user/hand/left/output/haptic"
+        },
+        {
+          "output": "/actions/fnvr/out/haptic",
+          "path": "/user/hand/right/output/haptic"
+        }
+      ],
+      "skeleton": [
+        {
+          "output": "/actions/fnvr/in/skel_left",
+          "path": "/user/hand/left/input/skeleton/left"
+        },
+        {
+          "output": "/actions/fnvr/in/skel_right",
+          "path": "/user/hand/right/input/skeleton/right"
+        }
+      ]
+    }
+  }
+}

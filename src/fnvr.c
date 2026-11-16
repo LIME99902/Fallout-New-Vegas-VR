@@ -32,9 +32,9 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        213
-#define FNVR_VERSION_STR    "2.8.1 (headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
-#define FNVR_VERSION_SHORT  "2.8.1"
+#define FNVR_VERSION        214
+#define FNVR_VERSION_STR    "2.8.2 (alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_SHORT  "2.8.2"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -1303,7 +1303,8 @@ static void VrIn_Start(void)
     static int waited = 0; if (!type[0] && ++waited < 400) return;   /* (its kind comes a moment after it connects) */
     g_vrInTried = true; snprintf(g_vrInType, sizeof g_vrInType, "%s", type[0] ? type : "unknown");
     bool bound = !strcmp(type, "knuckles") || !strcmp(type, "vive_controller") || !strcmp(type, "holographic_controller") ||
-                 !strcmp(type, "hpmotioncontroller") || !strcmp(type, "vive_cosmos_controller") || !strcmp(type, "oculus_touch");
+                 !strcmp(type, "hpmotioncontroller") || !strcmp(type, "vive_cosmos_controller") || !strcmp(type, "oculus_touch") ||
+                 !strcmp(type, "playstation_vr2_sense");
     /* (automatic: the controllers whose old-style reading is wrong - an Index reports its thumbstick and trackpad as one stick
        and the fingers resting on its handle as a held grip; Vive and Windows Mixed Reality have trackpads - go through
        SteamVR Input; the others keep the direct reading they've always had) */
@@ -17288,9 +17289,11 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             o_DoRenderFrame(osGlobals, renderer, a, b);
             Lgd_FrameEnd();
             (void)ropeOn;
-            /* the camera stays on this eye until the frame is finished (its effects, the HUD) - put back at the end of the frame,
-               where the whole picture is taken for this eye */
-            g_aerCam = cam; memcpy(g_aerSavedT, savedT, 12); memcpy(g_aerSavedL, savedL, 12);
+            /* the camera back on the head at once (2.7.9 left it moved over until the end of the frame: the game's own camera
+               and physics read it in between, and players fell out of the world into a brown void); the picture is still
+               taken whole at the end of the frame, with the HUD, for this eye */
+            for (int k = 0; k < 3; k++) { T[k] = savedT[k]; L[k] = savedL[k]; }
+            NodeUpdate(cam);
             g_aerPendingEye = eye;
             g_aerEye ^= 1;
             g_stereoCapturedThisFrame = false;

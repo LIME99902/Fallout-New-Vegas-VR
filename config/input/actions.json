@@ -23,6 +23,10 @@
     {
       "controller_type": "vive_cosmos_controller",
       "binding_url": "bindings_vive_cosmos_controller.json"
+    },
+    {
+      "controller_type": "playstation_vr2_sense",
+      "binding_url": "bindings_playstation_vr2_sense.json"
     }
   ],
   "actions": [
