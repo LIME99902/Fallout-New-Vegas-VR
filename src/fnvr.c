@@ -32,9 +32,9 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        215
-#define FNVR_VERSION_STR    "2.8.3 (full 3D: the renderer's frame state put back before the right eye draws (it came out the same as the left); checked three times; if it still can't, one smooth picture instead of alternating eyes; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
-#define FNVR_VERSION_SHORT  "2.8.3"
+#define FNVR_VERSION        216
+#define FNVR_VERSION_STR    "2.8.4 (full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_SHORT  "2.8.4"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -17187,9 +17187,11 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             bool ropeOn = g_rope.on; bool ok0 = false, ok1 = false;
             static int f3Tries = 0; static double f3NextProbe = 0;
             bool probe = g_f3Mode == 0 && QpcMs() >= f3NextProbe; bool prOk[2] = { false, false }; float prMag[2] = { 0, 0 }; uint32_t prSum[2] = { 0, 0 };
-            /* (the renderer's frame state: the first eye's drawing moves it on, and the engine quietly skips drawing objects
-               when it's wrong - the second eye then only re-ran the colour effects over the first eye's picture. Put back
-               exactly as it was before the second eye draws.) */
+            /* (the first eye's drawing leaves the game's last drawing target open (for the HUD after it), so the second
+               eye's world couldn't start its own and only its colour effects ran (130 draws against 1478, nothing on the
+               screen picture). Before the second eye, the open targets are ended with the game's own routine - the one it
+               runs at every frame's end (BSRenderedTexture::EndAll); the frame itself stays open.
+               2.8.3 overwrote the renderer's frame state instead and left the game unable to start frames: it froze.) */
             char *rnd = *(char **)NIDX9RENDERER_ADDR; bool rndOk = rnd && !IsBadReadPtr(rnd + 0x200, 12);
             int rs0 = rndOk ? *(int *)(rnd + 0x200) : 0; bool rg0 = rndOk ? *(bool *)(rnd + 0x208) != 0 : false;
             int rsAfter[2] = { 0, 0 }; bool rgAfter[2] = { 0, 0 }; unsigned drew[2] = { 0, 0 }; bool fixed1 = false;
@@ -17218,10 +17220,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
                     PipScr_Prepare((char *)player, cam);
                 }
                 double tr = QpcMs();
-                if (eye == 1 && rndOk && (*(int *)(rnd + 0x200) != rs0 || (*(bool *)(rnd + 0x208) != 0) != rg0)) {
-                    *(int *)(rnd + 0x200) = rs0; *(bool *)(rnd + 0x208) = rg0; fixed1 = true;
-                    IDirect3DDevice9_BeginScene(dev);   /* (if the first eye ended the scene: one more, closed by the game's own end of frame; refused harmlessly otherwise) */
-                }
+                if (eye == 1 && rndOk && *(bool *)(rnd + 0x208)) { ((void (__cdecl *)(void))0x00B6B6C0)(); fixed1 = true; }
                 if (probe) { IDirect3DSurface9 *bbm = NULL;   /* (the check: the screen picture magenta first, for each eye) */
                     if (SUCCEEDED(IDirect3DDevice9_GetBackBuffer(dev, 0, 0, D3DBACKBUFFER_TYPE_MONO, &bbm)) && bbm) { IDirect3DDevice9_ColorFill(dev, bbm, NULL, 0xFFFF00FF); IDirect3DSurface9_Release(bbm); } }
                 unsigned d0 = g_drawsAll;
@@ -17263,7 +17262,7 @@ static void __attribute__((fastcall)) Hook_DoRenderFrame(void *osGlobals, void *
             g_fullDrawnAt = QpcMs();
             if (probe) {   /* (the check: up to three times, a few seconds apart - the first frame in the world can be odd) */
                 Log("Full 3D check %d: draws left %u / right %u, renderer state %d -> %d / %d (group %d -> %d / %d)%s", f3Tries + 1, drew[0], drew[1],
-                    rs0, rsAfter[0], rsAfter[1], (int)rg0, (int)rgAfter[0], (int)rgAfter[1], fixed1 ? ", put back before the right eye" : "");
+                    rs0, rsAfter[0], rsAfter[1], (int)rg0, (int)rgAfter[0], (int)rgAfter[1], fixed1 ? ", drawing target ended before the right eye" : "");
                 if (!prOk[0] || !prOk[1]) { Log("Full 3D check: couldn't read the picture back - assuming it works"); g_f3Mode = 1; }
                 else {
                     Log("Full 3D check: left eye %.0f%% still magenta, right eye %.0f%%, the eyes %s", prMag[0] * 100.0f, prMag[1] * 100.0f, prSum[0] == prSum[1] ? "THE SAME" : "different");
