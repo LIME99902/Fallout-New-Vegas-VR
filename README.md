@@ -162,7 +162,7 @@ A ripperdoc and implants, inspired by cyberpunk ripperdocs (original names and d
 - **Over capacity:** you can install more chrome than your capacity - but then you risk Chrome Overload.
 - **Chrome perks** (need **Endurance 10**, at any level; shown on the ripperdoc screen, not in the Pip-Boy's perk list):
   - **Full Borg** - every slot filled: **30% less damage taken**.
-  - **Chrome Overload** - when over capacity or a full borg, every hit you land has a **2% chance** to set it off - and when over capacity, every **kill** has a chance equal to how far over you are (**20% over capacity = 20% per kill**, up to 100%): **+50% damage**, **+50 damage resistance**, each kill **heals 20%** of your health and adds **3 seconds**. Lasts **20 seconds** (plus kills), then 30 seconds before it can happen again.
+  - **Chrome Overload** - when over capacity or a full borg, every hit you land has a **2% chance** to set it off - and when over capacity, every **kill** has a chance equal to how far over you are (**20% over capacity = 20% per kill**, up to 100%): **+50% damage**, **+50 damage resistance**, **+50% movement speed**, each kill **heals 20%** of your health and adds **3 seconds**. Lasts **20 seconds** (plus kills), then 30 seconds before it can happen again.
 - **Saves:** installed implants are kept beside each save (xNVSE co-save) and cleared for a new game.
 - **Testing:** FNVR settings > Advanced > *Ripperdoc anywhere* lets you install from the settings panel anywhere (caps are still paid). *Cyberware* there turns the whole thing off.
 - The arm blades' models and their deploy-from-the-forearm animation are coming in a later update; for now the blades add unarmed damage.
