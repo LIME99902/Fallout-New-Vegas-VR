@@ -19,12 +19,12 @@
      +50 damage resistance, and every kill heals 20% of your health and adds 3 seconds. The game's multipliers aren't part of a save, so
      they're put back whenever a game is left or loaded. Hits and kills come from xNVSE's own OnHit and OnDeath events. */
 
-#define CY_MAXINST 24
+#define CY_MAXINST 40
 #define CY_MAXMOD 4
 enum { CY_CORE, CY_CORTEX, CY_OPTICS, CY_CIRC, CY_NERVE, CY_DERMAL, CY_SKEL, CY_IMMUNE, CY_ARMS, CY_HANDS, CY_LEGS, CY_NSLOT };
 static const char *const g_cySlotName[CY_NSLOT] = { "NEURAL CORE", "CORTEX", "OPTICS", "CIRCULATORY", "NERVOUS", "DERMAL",
                                                     "SKELETON", "IMMUNE", "ARMS", "HANDS", "LEGS" };
-static const int g_cySlotMax[CY_NSLOT] = { 1, 2, 1, 2, 2, 2, 1, 1, 1, 2, 1 };
+static const int g_cySlotMax[CY_NSLOT] = { 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };   /* (one Neural Core: the grip squeeze sets off one ability) */
 enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP };
 typedef struct { const char *av; int amt; } CyMod;
 typedef struct {
@@ -49,6 +49,8 @@ static const CyImpl g_cyCat[] = {
       "Replacement eyes with rangefinding and motion highlighting." },
     { "optics_ballist", CY_OPTICS, "Ballistic Overlay", 3500, 5, CYS_NONE, { { "Guns", 10 }, { "EnergyWeapons", 10 } },
       "Projects bullet drop and lead onto everything you look at." },
+    { "optics_threat",  CY_OPTICS, "Threat Scanner", 2200, 3, CYS_NONE, { { "Sneak", 10 }, { "CritChance", 2 } },
+      "Tags anyone who's spotted you and where they're looking. Easier to stay hidden, easier to find the weak spot." },
     { "circ_heart",     CY_CIRC, "Synthetic Heart", 2500, 4, CYS_NONE, { { "Health", 50 } },
       "A pump that never tires. A lot more health." },
     { "circ_adrenal",   CY_CIRC, "Adrenal Pump", 2000, 3, CYS_NONE, { { "ActionPoints", 20 } },
@@ -59,6 +61,8 @@ static const CyImpl g_cyCat[] = {
       "Synthetic nerve fibre that fires faster than flesh." },
     { "nerve_steady",   CY_NERVE, "Steady Signal", 1500, 2, CYS_NONE, { { "Lockpick", 10 }, { "Repair", 10 } },
       "Filters the tremor out of your hands. Fine work comes easy." },
+    { "nerve_pain",     CY_NERVE, "Pain Editor", 3500, 5, CYS_NONE, { { "DamageThreshold", 2 }, { "Health", 15 } },
+      "Filters pain signals before they reach the brain. Small hits just don't register (+2 damage threshold)." },
     { "derm_plate",     CY_DERMAL, "Subdermal Plating", 3000, 5, CYS_NONE, { { "DamageResist", 10 } },
       "Overlapping ceramic plates under the skin. More damage resistance." },
     { "derm_thresh",    CY_DERMAL, "Ballistic Weave", 4500, 6, CYS_NONE, { { "DamageThreshold", 3 } },
@@ -67,8 +71,16 @@ static const CyImpl g_cyCat[] = {
       "Heat-sinking filaments under the skin. Fire hurts a lot less." },
     { "skel_titan",     CY_SKEL, "Titanium Bones", 4000, 6, CYS_NONE, { { "CarryWeight", 50 }, { "Health", 25 } },
       "Every bone laced with titanium. Carry far more, take more punishment." },
+    { "skel_spine",     CY_SKEL, "Spinal Brace", 2500, 4, CYS_NONE, { { "CarryWeight", 25 }, { "DamageResist", 5 } },
+      "A carbon brace fused along the spine. Carry more, stand up to more." },
+    { "skel_lattice",   CY_SKEL, "Bone Lattice", 3000, 4, CYS_NONE, { { "Health", 40 } },
+      "A polymer lattice grown through the marrow. Bones that bend instead of breaking." },
     { "imm_filter",     CY_IMMUNE, "Toxin Filter", 1500, 2, CYS_NONE, { { "PoisonResist", 30 }, { "RadResist", 20 } },
       "A synthetic liver and lymph filter. Poison and radiation hurt less." },
+    { "imm_rad",        CY_IMMUNE, "Rad Sponge", 2000, 3, CYS_NONE, { { "RadResist", 40 } },
+      "A chelating gland that soaks up radiation before it settles in your cells." },
+    { "imm_venom",      CY_IMMUNE, "Antivenom Gland", 1800, 2, CYS_NONE, { { "PoisonResist", 40 } },
+      "Brews antivenom on the spot. Cazador and radscorpion stings hurt far less." },
     { "arm_kinetic",    CY_ARMS, "Arm Blades: Kinetic", 5000, 7, CYS_NONE, { { "UnarmedDamage", 15 } },
       "Serrated blades that rise out of your forearms. (Their arm model and deploy come in the next update - for now: +15 unarmed damage.)" },
     { "arm_thermal",    CY_ARMS, "Arm Blades: Thermal", 6500, 8, CYS_NONE, { { "UnarmedDamage", 12 }, { "FireResist", 10 } },
@@ -79,10 +91,14 @@ static const CyImpl g_cyCat[] = {
       "Blades that weep venom. (Arm model and poison effect come in the next update - for now: +12 unarmed damage.)" },
     { "arm_hydraulic",  CY_ARMS, "Hydraulic Forearms", 3000, 5, CYS_NONE, { { "MeleeDamage", 10 } },
       "Hydraulic rams along both forearms. Every swing of a melee weapon lands harder (+10 melee damage)." },
+    { "arm_recoil",     CY_ARMS, "Recoil Dampers", 2500, 4, CYS_NONE, { { "Guns", 8 } },
+      "Shock absorbers in the elbow and shoulder joints soak up every kick." },
     { "hand_knuckle",   CY_HANDS, "Ripper Knuckles", 1500, 2, CYS_NONE, { { "UnarmedDamage", 8 } },
       "Tungsten knuckle caps. Punches land harder." },
     { "hand_link",      CY_HANDS, "Smart-Link Palms", 2500, 3, CYS_NONE, { { "Guns", 5 }, { "EnergyWeapons", 5 } },
       "Contacts in your palms talk to your gun. Steadier, more accurate shooting." },
+    { "hand_grip",      CY_HANDS, "Grip Servos", 2000, 3, CYS_NONE, { { "MeleeWeapons", 10 }, { "Unarmed", 10 } },
+      "Servos in every finger joint. Your grip never slips, your strikes land true." },
     { "leg_sprint",     CY_LEGS, "Sprint Pistons", 2500, 4, CYS_NONE, { { "SpeedMult", 10 } },
       "Hydraulic assists in the calves. You move 10% faster." },
     { "leg_jump",       CY_LEGS, "Kinetic Calves", 4500, 6, CYS_DJUMP, { { 0 } },
@@ -234,6 +250,7 @@ static const char *Cy_Install(const CyImpl *c)
     if (!Cy_CanInstallHere()) return "Only a ripperdoc can do that - see Doc Usanagi at the New Vegas Medical Clinic";
     if (Cy_InstIdx(c->id) >= 0) return "Already installed";
     if (g_cyN >= CY_MAXINST) return "No room for more implants";
+    if (strstr(c->name, "Arm Blades")) for (int i = 0; i < g_cyN; i++) { const CyImpl *o = Cy_Find(g_cyInst[i].id); if (o && strstr(o->name, "Arm Blades")) { snprintf(why, sizeof why, "You already have %s - one set of blades per forearm", o->name); return why; } }
     if (Cy_SlotUsed(c->slot) >= g_cySlotMax[c->slot]) { snprintf(why, sizeof why, "Your %s slot is full - remove one first", g_cySlotName[c->slot]); return why; }
     int cap = Cy_Capacity(), used = Cy_LoadUsed();
     bool over = used + c->load > cap;   /* (allowed - but too much chrome risks a Chrome Overload) */
@@ -551,7 +568,7 @@ static void Cyber_Open(bool atDoc)
 #define CY_RX1 1000
 #define CY_Y0 196
 #define CY_SLH 64
-#define CY_ITH 72
+#define CY_ITH 64
 #define CY_DY0 590
 #define CY_BTNY0 1090
 #define CY_BTNY1 1160
