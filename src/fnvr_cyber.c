@@ -15,7 +15,8 @@
    Both need Endurance 10 (at any level).
    - FULL BORG: every slot filled - 30% less damage taken (the game's own "damage to the player" multipliers x0.7).
    - CHROME OVERLOAD: with more chrome than your body can handle (over capacity), or as a full borg, every hit you land
-     has a 2% chance to set it off: for 20 seconds +50% damage dealt (the "damage by the player" multipliers x1.5),
+     has a 2% chance to set it off, and over capacity every kill has a chance equal to how far over you are (20% over =
+     20% per kill): for 20 seconds +50% damage dealt (the "damage by the player" multipliers x1.5),
      +50 damage resistance, and every kill heals 20% of your health and adds 3 seconds. The game's multipliers aren't part of a save, so
      they're put back whenever a game is left or loaded. Hits and kills come from xNVSE's own OnHit and OnDeath events. */
 
@@ -188,6 +189,13 @@ static int Cy_Endurance(void)   /* (without chems if the game can say so) */
     if (!tried) { tried = true; s = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetPermanentActorValue Endurance\nSetFunctionValue iV\nEnd\n");
         if (!s) s = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetAV Endurance\nSetFunctionValue iV\nEnd\n"); }
     double v = 0; return Cy_CallNum(s, 0, 0, &v) ? (int)v : 0;
+}
+static int Cy_LoadUsed(void);
+static int Cy_OverPct(void)   /* how far over capacity, in % (0 when not over; at most 100) */
+{
+    int cap = g_cyCapShown > 0 ? g_cyCapShown : 1, used = Cy_LoadUsed();
+    if (used <= cap) return 0;
+    int p = (used - cap) * 100 / cap; return p > 100 ? 100 : p < 1 ? 1 : p;
 }
 static void Cy_Refresh(void) { if (g_inGameplay && GetPlayer()) { g_cyCapsShown = Cy_Caps(); g_cyCapShown = Cy_Capacity(); g_cyEnd = Cy_Endurance(); } }
 static double Cy_HealthFrac(void)
@@ -438,6 +446,12 @@ static void Cy_Tick(void)
         bool risk = g_cyEnd >= CY_PERK_END && (g_cyBorg || Cy_LoadUsed() > g_cyCapShown);
         if (hits && risk && !g_cyCO && now > g_cyCOReady)
             for (LONG i = 0; i < hits && !g_cyCO; i++) if (rand() % 100 < 2) Cy_CoStart();
+        {   /* a kill: the chance is how far over capacity you are (20% over = 20% a kill) */
+            int pct = Cy_OverPct();
+            if (kills && risk && pct > 0 && !g_cyCO && now > g_cyCOReady) {
+                for (LONG i = 0; i < kills && !g_cyCO; i++) if (rand() % 100 < pct) { Log("Cyberware: a kill set off Chrome Overload (%d%% over capacity)", pct); Cy_CoStart(); kills = 0; }
+            }
+        }
         if (kills && g_cyCO) {   /* each kill: 20% health back and 3 more seconds */
             Cy_HealPct(20 * (int)(kills > 5 ? 5 : kills));
             g_cyCOEnd += 3000.0 * (double)kills;
@@ -653,6 +667,7 @@ static void Cy_Draw(void)
     else {   /* chrome perks */
         int filled = 0, total = 0; for (int sl = 0; sl < CY_NSLOT; sl++) { int u = Cy_SlotUsed(sl); filled += u < g_cySlotMax[sl] ? u : g_cySlotMax[sl]; total += g_cySlotMax[sl]; }
         bool over = used > cap, endOk = g_cyEnd >= CY_PERK_END;
+        char coTxt[96]; snprintf(coTxt, sizeof coTxt, "%d%% over: %d%% per kill, 2%% per hit", Cy_OverPct(), Cy_OverPct());
         Set_Text(g_setFontSmall, CY_TEAL, 30, 912, CY_LX1, 946, endOk ? "CHROME PERKS" : "CHROME PERKS: NEED END 10", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
         Set_Fill(30, 950, 42, 962, g_cyBorg ? CY_RED : CY_TEALD);
         snprintf(t, sizeof t, "FULL BORG  %d/%d", filled, total);
@@ -660,7 +675,7 @@ static void Cy_Draw(void)
         Set_Text(g_setFontSmall, CY_DIM, 52, 974, CY_LX1, 1006, g_cyBorg ? "30% less damage taken" : endOk ? "fill every slot: -30% damage" : "fill every slot (END 10)", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
         Set_Fill(30, 1030, 42, 1042, g_cyCO ? CY_RED : endOk && (g_cyBorg || over) ? RGB(200, 120, 40) : CY_TEALD);
         Set_Text(g_setFontSmall, g_cyCO ? CY_RED : CY_TXT, 52, 1018, CY_LX1, 1054, "CHROME OVERLOAD", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-        Set_Text(g_setFontSmall, CY_DIM, 52, 1054, CY_LX1, 1170, g_cyCO ? "ACTIVE: +50% damage, +50 DR, kills heal 20% and add 3 s" : !endOk ? "needs Endurance 10" : (g_cyBorg || over) ? "2% chance per hit you land" : "over capacity or full borg: 2% per hit", DT_LEFT | DT_WORDBREAK);
+        Set_Text(g_setFontSmall, CY_DIM, 52, 1054, CY_LX1, 1170, g_cyCO ? "ACTIVE: +50% damage, +50 DR, kills heal 20% and add 3 s" : !endOk ? "needs Endurance 10" : over ? coTxt : g_cyBorg ? "2% chance per hit you land" : "over capacity or full borg: 2% per hit; over capacity: kills too", DT_LEFT | DT_WORDBREAK);
     }
     Set_Fill(24, SET_H - 86, SET_W - 24, SET_H - 83, CY_TEALD);
     Set_Text(g_setFontSmall, CY_DIM, 30, SET_H - 76, SET_W - 30, SET_H - 20, g_cyFromDoc ? "Point + trigger   |   stick: move   |   B: back to talking" : "Point + trigger   |   stick: move   |   B: back", DT_CENTER | DT_SINGLELINE | DT_VCENTER);
