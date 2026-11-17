@@ -169,6 +169,7 @@ A ripperdoc and implants, inspired by cyberpunk ripperdocs (original names and d
   - **Ghost Core:** optical camo for 8 seconds now and then.
   - **Backup Heart:** once, below 15% health, back to full.
   - **Cyberpsychosis:** an enemy over its capacity can snap (2% per hit it lands, its over-capacity % per kill): it goes **frenzied** and attacks anyone near it, tougher and faster, for 20 seconds plus 3 per kill.
+  - **Story bosses** - Caesar, Legate Lanius, Vulpes Inculta, Motor-Runner, Benny, Cook-Cook, Driver Nephi, Jessup, McMurphy, Papa Khan, General Lee Oliver, Chief Hanlon, Elijah, Ulysses, Salt-Upon-Wounds, Big Sal, Nero and Dog - are **maxed out** at any level: every slot filled, always a Backup Heart, +30 damage resistance (a full borg's toughness) and far over capacity, so they can go cyberpsycho.
   - Turn it off in FNVR settings > Advanced > *Chromed enemies*.
 - **Saves:** installed implants are kept beside each save (xNVSE co-save) and cleared for a new game.
 - **Testing:** FNVR settings > Advanced > *Ripperdoc anywhere* lets you install from the settings panel anywhere (caps are still paid). *Cyberware* there turns the whole thing off.

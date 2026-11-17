@@ -7,6 +7,9 @@
    far more. Their stat implants go in with the game's own ModAV on them (so the game keeps them with the save), and
    what each enemy carries is written into FNVR's co-save so its abilities come back after loading.
 
+   The story's big names (Caesar, Legate Lanius, Motor-Runner, Benny...) are maxed out: every slot filled, always a
+   Backup Heart, a full borg's toughness (+30 damage resistance) and over capacity - they can snap into cyberpsychosis.
+
    Their abilities, in a fight with you:
    - Overclock Core: a burst of speed for 2.5 seconds (to close in or get out of your line of fire), then 10 seconds
      before it can do it again.
@@ -20,7 +23,7 @@
    Boosts that are on when the game is saved are undone again when that save is loaded. */
 
 #define CE_MAX 192
-#define CE_MAXIMP 12
+#define CE_MAXIMP 32
 #define CE_REC 0x43594245u   /* 'CYBE' */
 typedef struct {
     uint32_t refID; uint8_t nImp, boss, over, heartUsed;
@@ -126,21 +129,27 @@ static void Ce_TempOff(CEnemy *e, char *ref)
     e->tempN = 0; e->abilOn = 0;
 }
 
+/* the story's big names: maxed-out chrome whatever your level (their in-game names, exactly) */
+static const char *const g_ceNamed[] = { "Caesar", "Legate Lanius", "Vulpes Inculta", "Motor-Runner", "Benny", "Cook-Cook", "Driver Nephi",
+    "Jessup", "McMurphy", "Papa Khan", "General Lee Oliver", "Chief Hanlon", "Elijah", "Ulysses", "Salt-Upon-Wounds", "Big Sal", "Nero", "Dog", NULL };
+static bool Ce_IsNamedBoss(const char *nm) { for (int i = 0; g_ceNamed[i]; i++) if (!_stricmp(nm, g_ceNamed[i])) return true; return false; }
 /* the first fight with you: does this one have chrome, and what */
 static void Ce_Decide(char *ref)
 {
     uint32_t id = *(uint32_t *)(ref + 0x0C);
     Ce_MarkDecided(id);
     int plv = g_cyPlayerLvl > 0 ? g_cyPlayerLvl : 1, lvl = (int)Ce_Num(1, ref); if (lvl < 1) lvl = 1;
-    bool boss = lvl >= plv + 5 || (plv >= 8 && lvl * 10 >= plv * 13);
+    bool named = Ce_IsNamedBoss(Cy_RefName(ref));
+    bool boss = named || lvl >= plv + 5 || (plv >= 8 && lvl * 10 >= plv * 13);
     int chance = boss ? 100 : (int)fminf(90.0f, 15.0f + plv * 2.5f);
     if (rand() % 100 >= chance || g_ceN >= CE_MAX) return;
-    int want = boss ? 3 + plv / 4 : 1 + plv / 7 + rand() % 2;
+    int want = named ? CE_MAXIMP : boss ? 3 + plv / 4 : 1 + plv / 7 + rand() % 2;
     if (want > CE_MAXIMP) want = CE_MAXIMP;
     CEnemy *e = &g_ce[g_ceN]; memset(e, 0, sizeof *e);
     e->refID = id; e->boss = boss; e->cap = 16 + 20 + lvl;
     int order[CY_NCAT]; for (int i = 0; i < CY_NCAT; i++) order[i] = i;
     for (int i = CY_NCAT - 1; i > 0; i--) { int j = rand() % (i + 1), t = order[i]; order[i] = order[j]; order[j] = t; }
+    if (named) for (int i = 0; i < CY_NCAT; i++) if (g_cyCat[order[i]].special == CYS_HEART) { int t = order[0]; order[0] = order[i]; order[i] = t; break; }   /* (always a Backup Heart) */
     int used[CY_NSLOT] = { 0 }; bool blade = false;
     for (int k = 0; k < CY_NCAT && e->nImp < want; k++) {
         const CyImpl *c = &g_cyCat[order[k]];
@@ -152,11 +161,16 @@ static void Ce_Decide(char *ref)
         if (c->slot == CY_CORE) e->core = c->special;
         for (int m = 0; m < CY_MAXMOD && c->mod[m].av; m++) Ce_ModAV(ref, c->mod[m].av, c->mod[m].amt);
     }
-    if (boss && e->load <= e->cap && rand() % 100 < 50) e->load = e->cap + e->cap / 4;   /* (half the bosses are pushing it) */
+    if (named) {   /* maxed out: a full borg's toughness, and too much chrome for any body */
+        Ce_ModAV(ref, "DamageResist", 30);
+        if (e->load <= e->cap) e->load = e->cap * 2;
+    }
+    else if (boss && e->load <= e->cap && rand() % 100 < 50) e->load = e->cap + e->cap / 4;   /* (half the bosses are pushing it) */
     e->over = e->load > e->cap;
     g_ceN++;
-    char list[400] = ""; for (int i = 0; i < e->nImp; i++) { strncat(list, g_cyCat[e->imp[i]].name, sizeof list - strlen(list) - 3); if (i + 1 < e->nImp) strncat(list, ", ", sizeof list - strlen(list) - 1); }
-    Log("Chromed enemy: %s (level %d%s) - %d implants%s: %s", Cy_RefName(ref), lvl, boss ? ", BOSS" : "", e->nImp, e->over ? ", OVER CAPACITY" : "", list);
+    char list[1200] = ""; for (int i = 0; i < e->nImp; i++) { strncat(list, g_cyCat[e->imp[i]].name, sizeof list - strlen(list) - 3); if (i + 1 < e->nImp) strncat(list, ", ", sizeof list - strlen(list) - 1); }
+    if (named) { char m[96]; snprintf(m, sizeof m, "%s is chromed to the limit", Cy_RefName(ref)); UIMessage(m); }
+    Log("Chromed enemy: %s (level %d%s) - %d implants%s: %s", Cy_RefName(ref), lvl, named ? ", MAXED-OUT BOSS" : boss ? ", BOSS" : "", e->nImp, e->over ? ", OVER CAPACITY" : "", list);
 }
 static int Ce_OverPct(const CEnemy *e) { if (e->load <= e->cap || e->cap <= 0) return 0; int p = (e->load - e->cap) * 100 / e->cap; return p > 100 ? 100 : p < 1 ? 1 : p; }
 static void Ce_PsychoStart(CEnemy *e, char *ref)
@@ -262,7 +276,7 @@ static void Ce_Reset(void)
 }
 static void Ce_Save(void)
 {
-    if (!g_ser || !g_ser->OpenRecord(CE_REC, 1)) return;
+    if (!g_ser || !g_ser->OpenRecord(CE_REC, 2)) return;
     int32_t nd = g_ceDoneN, n = g_ceN;
     g_ser->WriteRecordData(&nd, 4);
     for (int i = 0; i < nd; i++) g_ser->WriteRecordData(&g_ceDone[i], 4);
@@ -277,7 +291,7 @@ static void Ce_Save(void)
 }
 static void Ce_Load(uint32_t ver)
 {
-    if (ver != 1) return;
+    if (ver != 2) return;   /* (v1 held 12 implants per enemy: those enemies are simply decided again) */
     int32_t nd = 0, n = 0;
     if (g_ser->ReadRecordData(&nd, 4) != 4 || nd < 0 || nd > 1024) return;
     for (int i = 0; i < nd; i++) { uint32_t id = 0, nid = 0; if (g_ser->ReadRecordData(&id, 4) != 4) return; if (g_ser->ResolveRefID && g_ser->ResolveRefID(id, &nid)) Ce_MarkDecided(nid); }
