@@ -121,7 +121,8 @@ static bool g_cyBorg = false, g_cyCO = false; static double g_cyCOEnd = 0, g_cyC
 static bool g_cyAtDoc = false;                                     /* talking to the ripperdoc right now */
 static volatile bool g_cyActivate = false;                         /* the two-squeeze gesture happened */
 static NVSESerializationInterface *g_ser = NULL;
-static int g_cyCapsShown = 0, g_cyCapShown = 36, g_cyEnd = 0;
+static int g_cyCapsShown = 0, g_cyCapShown = 36, g_cyEnd = 0, g_cyPlvShown = 1;
+static void Ce_Event(void *attacker, void *victim, bool kill);
 #define CY_PERK_END 10   /* Endurance needed for the chrome perks (any level) */                   /* (read on the game's thread, shown by the panel) */
 static void Cyber_Open(bool atDoc);
 
@@ -197,7 +198,12 @@ static int Cy_OverPct(void)   /* how far over capacity, in % (0 when not over; a
     if (used <= cap) return 0;
     int p = (used - cap) * 100 / cap; return p > 100 ? 100 : p < 1 ? 1 : p;
 }
-static void Cy_Refresh(void) { if (g_inGameplay && GetPlayer()) { g_cyCapsShown = Cy_Caps(); g_cyCapShown = Cy_Capacity(); g_cyEnd = Cy_Endurance(); } }
+static int Cy_PlayerLevel(void)
+{
+    static void *s = NULL; if (!s) s = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetLevel\nSetFunctionValue iV\nEnd\n");
+    double v = 0; return Cy_CallNum(s, 0, 0, &v) && v >= 1 ? (int)v : 1;
+}
+static void Cy_Refresh(void) { if (g_inGameplay && GetPlayer()) { g_cyCapsShown = Cy_Caps(); g_cyCapShown = Cy_Capacity(); g_cyEnd = Cy_Endurance(); g_cyPlvShown = Cy_PlayerLevel(); } }
 static double Cy_HealthFrac(void)
 {
     static void *s = NULL; if (!s) s = Cy_Compile("float fV\nBegin Function { }\nset fV to player.GetHealthPercentage\nSetFunctionValue fV\nEnd\n");
@@ -329,11 +335,13 @@ static void Cy_OnHit(void *thisObj, void *params)
 {
     (void)thisObj; void **p = (void **)params; void *pl = GetPlayer();
     if (p && pl && p[1] == pl && p[0] && p[0] != pl) InterlockedIncrement(&g_cyHits);
+    else if (p && pl && p[1] && p[0] && p[1] != pl) Ce_Event(p[1], p[0], false);   /* (someone else's hit: a chromed enemy's?) */
 }
 static void Cy_OnDeath(void *thisObj, void *params)
 {
     (void)thisObj; void **p = (void **)params; void *pl = GetPlayer();
     if (p && pl && p[1] == pl && p[0] && p[0] != pl) InterlockedIncrement(&g_cyKills);
+    else if (p && pl && p[1] && p[0] && p[1] != pl) Ce_Event(p[1], p[0], true);
 }
 static NVSEInterface *g_cyNvse = NULL;
 static void Cyber_Events(void)
@@ -396,6 +404,7 @@ static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *
     else if (phase == 1 && none) phase = 2;
     else if (phase == 2 && both) { phase = 0; if (Cy_Core()) g_cyActivate = true; }
 }
+#include "fnvr_cyber_enemy.c"
 static void Cy_Tick(void)
 {
     if (g_cyRevertN && g_inGameplay && GetPlayer()) {   /* (a save made while a boost was on: the boost is undone) */
@@ -429,6 +438,8 @@ static void Cy_Tick(void)
     }
     if (!g_inGameplay || !GetPlayer()) return;
     double now = QpcMs();
+    g_cyPlayerLvl = g_cyPlvShown;
+    Ce_Tick(now);
     if (g_cyActivate) { g_cyActivate = false; Cy_AbilityStart(); }
     if (g_cyAbil && now > g_cyAbilEnd) { Cy_AbilityStop("time up"); Cy_Buzz(1500); }
     if (g_cyAbil == CYS_SLOWMO && ((const volatile bool *)0x011F308F)[1056]) Cy_AbilityStop("VATS");   /* (VATS runs time itself) */
@@ -507,6 +518,7 @@ static void Cy_Reset(const char *why)
     g_cyCO = false; g_cyCoTempN = 0; g_cyCOReady = 0; g_cyBorg = false;
     if (g_cyGsHave) { Cy_GsSet(0, 1.0f); Cy_GsSet(1, 1.0f); }
     g_cyN = 0; g_cyRevertN = 0; g_cyAbilReady = g_cyHeartReady = 0;
+    Ce_Reset();
 }
 static void Cy_SaveCb(void *r)
 {
@@ -519,6 +531,7 @@ static void Cy_SaveCb(void *r)
     if (g_cyTempN) g_ser->WriteRecordData(g_cyTemp, (uint32_t)(sizeof(CySavedMod) * (size_t)g_cyTempN));
     if (g_cyCoTempN) g_ser->WriteRecordData(g_cyCoTemp, (uint32_t)(sizeof(CySavedMod) * (size_t)g_cyCoTempN));
     Log("Cyberware: saved %d implants with the game%s", n, t ? " (a boost was on)" : "");
+    Ce_Save();
 }
 static void Cy_LoadCb(void *r)
 {
@@ -526,6 +539,7 @@ static void Cy_LoadCb(void *r)
     Cy_Reset("loading a game");
     uint32_t type, ver, len;
     while (g_ser && g_ser->GetNextRecordInfo(&type, &ver, &len)) {
+        if (type == CE_REC) { Ce_Load(ver); continue; }
         if (type != CY_REC || ver != 1) continue;
         int32_t n = 0, t = 0;
         if (g_ser->ReadRecordData(&n, 4) != 4 || n < 0 || n > CY_MAXINST) break;
@@ -546,6 +560,7 @@ static void Cyber_Init(NVSEInterface *nvse, PluginHandle h)
     srand((unsigned)GetTickCount() ^ (unsigned)GetCurrentProcessId());   /* (Chrome Overload's chance) */
     g_cyOn = GetPrivateProfileIntA("Cyberware", "bEnabled", 1, g_iniPath) != 0;
     g_cyAnywhere = GetPrivateProfileIntA("Cyberware", "bRipperdocAnywhere", 0, g_iniPath) != 0;
+    g_cyEnemies = GetPrivateProfileIntA("Cyberware", "bChromedEnemies", 1, g_iniPath) != 0;
     g_ser = (NVSESerializationInterface *)nvse->QueryInterface(kInterface_Serialization);
     if (g_ser && g_ser->SetSaveCallback && g_ser->SetLoadCallback) {
         g_ser->SetSaveCallback(h, Cy_SaveCb); g_ser->SetLoadCallback(h, Cy_LoadCb);

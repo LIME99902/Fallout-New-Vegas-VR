@@ -163,6 +163,13 @@ A ripperdoc and implants, inspired by cyberpunk ripperdocs (original names and d
 - **Chrome perks** (need **Endurance 10**, at any level; shown on the ripperdoc screen, not in the Pip-Boy's perk list):
   - **Full Borg** - every slot filled: **30% less damage taken**.
   - **Chrome Overload** - when over capacity or a full borg, every hit you land has a **2% chance** to set it off - and when over capacity, every **kill** has a chance equal to how far over you are (**20% over capacity = 20% per kill**, up to 100%): **+50% damage**, **+50 damage resistance**, **+50% movement speed**, each kill **heals 20%** of your health and adds **3 seconds**. Lasts **20 seconds** (plus kills), then 30 seconds before it can happen again.
+- **Chromed enemies:** human enemies carry the same implants (not creatures or robots). How many depends on **your level** - a few early on, most enemies well chromed by the end - and **bosses** (enemies well above your level) are always chromed and carry far more. Their implants raise their stats, and they use the abilities:
+  - **Overclock Core:** a 2.5-second burst of speed to close in or dodge out of your sights, then 10 seconds before the next.
+  - **Berserker Core:** below half health, tougher and harder-hitting up close for 12 seconds.
+  - **Ghost Core:** optical camo for 8 seconds now and then.
+  - **Backup Heart:** once, below 15% health, back to full.
+  - **Cyberpsychosis:** an enemy over its capacity can snap (2% per hit it lands, its over-capacity % per kill): it goes **frenzied** and attacks anyone near it, tougher and faster, for 20 seconds plus 3 per kill.
+  - Turn it off in FNVR settings > Advanced > *Chromed enemies*.
 - **Saves:** installed implants are kept beside each save (xNVSE co-save) and cleared for a new game.
 - **Testing:** FNVR settings > Advanced > *Ripperdoc anywhere* lets you install from the settings panel anywhere (caps are still paid). *Cyberware* there turns the whole thing off.
 - The arm blades' models and their deploy-from-the-forearm animation are coming in a later update; for now the blades add unarmed damage.
