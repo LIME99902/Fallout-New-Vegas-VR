@@ -149,6 +149,19 @@ Three separate switches:
 
 ---
 
+## Cyberware
+
+A ripperdoc and implants, inspired by cyberpunk ripperdocs (original names and designs).
+
+- **Where:** talk to **Doc Usanagi** at the New Vegas Medical Clinic and the cyberware screen opens over the dialogue (B goes back to talking). Your implants can be looked at any time in FNVR settings > Cyberware.
+- **Slots:** Neural Core, Cortex, Optics, Circulatory, Nervous, Dermal, Skeleton, Immune, Arms, Hands, Legs - each takes one or two implants.
+- **Cost:** caps, plus body capacity (16 + Endurance x 4 + your level). Removing one gives a quarter of its price back.
+- **Effects:** most implants raise stats (health, action points, damage resistance and threshold, skills, carry weight, speed...). What an implant changed is recorded when it goes in, so taking it out undoes exactly that.
+- **Abilities:** the Neural Core holds one active ability - squeeze both grips twice quickly: **Overclock** (time slows for 8 s), **Berserker** (+25 damage resistance and close-up damage for 12 s) or **Ghost** (optical camouflage for 12 s). The **Backup Heart** brings you back to full health below 15% (every 5 minutes) and **Shock Absorbers** stop fall damage.
+- **Saves:** installed implants are kept beside each save (xNVSE co-save) and cleared for a new game.
+- **Testing:** FNVR settings > Advanced > *Ripperdoc anywhere* lets you install from the settings panel anywhere (caps are still paid). *Cyberware* there turns the whole thing off.
+- The arm blades' models and their deploy-from-the-forearm animation are coming in a later update; for now the blades add unarmed damage.
+
 ## The VR settings panel
 
 Hold **both thumbsticks in for about a second** (or press **F11**) and a settings panel appears in front of you.

@@ -40,7 +40,23 @@ typedef struct NVSEMessagingInterface {
     bool (*Dispatch)(PluginHandle sender, uint32_t messageType, void *data, uint32_t dataLen, const char *receiver);
 } NVSEMessagingInterface;
 
-enum { kInterface_Messaging = 2 };
+enum { kInterface_Serialization = 0, kInterface_Messaging = 2 };
+
+/* xNVSE's co-save: data a plugin keeps beside each game save (xNVSE PluginAPI.h, NVSESerializationInterface v2) */
+typedef void (*NVSESerCallback)(void *reserved);
+typedef struct NVSESerializationInterface {
+    uint32_t version;
+    void     (*SetSaveCallback)(PluginHandle plugin, NVSESerCallback callback);
+    void     (*SetLoadCallback)(PluginHandle plugin, NVSESerCallback callback);
+    void     (*SetNewGameCallback)(PluginHandle plugin, NVSESerCallback callback);
+    bool     (*WriteRecord)(uint32_t type, uint32_t version, const void *buf, uint32_t length);
+    bool     (*OpenRecord)(uint32_t type, uint32_t version);
+    bool     (*WriteRecordData)(const void *buf, uint32_t length);
+    bool     (*GetNextRecordInfo)(uint32_t *type, uint32_t *version, uint32_t *length);
+    uint32_t (*ReadRecordData)(void *buf, uint32_t length);
+    bool     (*ResolveRefID)(uint32_t refID, uint32_t *outRefID);
+    void     (*SetPreLoadCallback)(PluginHandle plugin, NVSESerCallback callback);
+} NVSESerializationInterface;
 
 enum {
     kMessage_PostLoad = 0,

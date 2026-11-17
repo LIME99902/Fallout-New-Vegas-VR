@@ -32,9 +32,9 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        217
-#define FNVR_VERSION_STR    "2.8.5 (PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
-#define FNVR_VERSION_SHORT  "2.8.5"
+#define FNVR_VERSION        218
+#define FNVR_VERSION_STR    "2.9.0 (cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_SHORT  "2.9.0"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -398,6 +398,7 @@ static bool  g_ltBullet = true; static int g_bulletKey = 46;   /* INI [Controls]
 static bool  g_momentumOnIni = true;   /* INI [Controls] bJumpMomentum */
 static bool  g_armSwing = true; static float g_armSwingSens = 1.0f; static bool g_armSwingSprint = true;   /* INI [Controls] bArmSwing, fArmSwingSensitivity, bArmSwingSprint */
 static bool  g_grapOn = true, g_grapSafe = true;   /* INI [Grapple] bEnabled, bSafeLanding */
+static bool  g_cyOn = true, g_cyAnywhere = false;   /* INI [Cyberware] bEnabled, bRipperdocAnywhere */
 static bool  g_grapHand[2] = { true, false };      /* INI [Grapple] bLeftHand, bRightHand */
 static bool  g_grapRope = true, g_grapRumble = true, g_grapActors = true;   /* INI [Grapple] bShowRope, bRumble, bHookActors */
 static float g_foreDirW[2][3]; static double g_foreDirAt[2];   /* the drawn forearm's direction (elbow -> wrist), last frame */
@@ -694,6 +695,9 @@ static float Body_ArmScale(int side, float gameLen);
 static void  Profile_Save(void);
 static void  Profiles_Init(void);
 static bool  Settings_Update(const VRControllerState_t *mv, const VRControllerState_t *am, bool okMv, bool okAm);
+static void  Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *r, bool okL, bool okR);
+static void  Cy_Draw(void);
+static void  Cy_EnterFromSettings(void);
 static void IntroSkip_Frame(void);
 static void StartSetup_Tick(void);
 static void  Settings_Frame(void);
@@ -2132,6 +2136,7 @@ static void Controllers_Poll(bool menu)
             bothSince = 0; bothUsed = false;
         }
     }
+    if (!g_setOpen && !g_setSwallow) Cy_Gesture(&c[0], &c[1], ok[0], ok[1]);   /* (cyberware: both grips squeezed twice) */
     if (g_setSwallow && !g_setOpen) {   /* (so the button that closed the panel doesn't also reload, jump...) */
         bool any = false;
         for (int h = 0; h < 2; h++) if (ok[h] && (c[h].ulButtonPressed || c[h].rAxis[1].x > 0.25f || fabsf(c[h].rAxis[0].x) > 0.5f || fabsf(c[h].rAxis[0].y) > 0.5f)) any = true;
@@ -19497,9 +19502,9 @@ static float Body_ArmScale(int side, float gameLen)
 #define SET_ROW_Y0 150
 #define SET_ROW_H 62
 #define SET_ROWS 14
-enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_HUD, SP_START, SP_ADV, SP_HUDPARTS, SP_COUNT };
+enum { SP_MAIN, SP_BODY, SP_PIP, SP_CONTROLS, SP_SPOTS, SP_HANDS, SP_DISPLAY, SP_WEAPONS, SP_MOVE, SP_KIDS, SP_HUD, SP_START, SP_ADV, SP_HUDPARTS, SP_CYBER, SP_COUNT };
 static const char *const g_setPageName[SP_COUNT] = { "FNVR SETTINGS", "BODY & PROFILES", "PIP-BOY", "CONTROLS", "HOLSTERS & GESTURES", "HANDS & OBJECTS",
-                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC", "ADVANCED: HEADSET & CONTROLS", "HUD PARTS: MOVE & RESIZE" };
+                                                     "DISPLAY & MENUS", "WEAPONS & SCOPES", "MOVEMENT & COMFORT", "KID FRIENDLY STUFF", "HUD & MENUS", "WELCOME TO FNVVRMC", "ADVANCED: HEADSET & CONTROLS", "HUD PARTS: MOVE & RESIZE", "CYBERWARE" };
 enum { ST_BOOL, ST_FLOAT, ST_INT, ST_PAGE, ST_ACTION, ST_SIGN, ST_PROFILE, ST_INFO, ST_CHOICE, ST_RES };
 enum { SF_RESTART = 1, SF_PROFILE = 2, SF_FOV = 4, SF_BODY = 8, SF_KIDS = 16, SF_MELEE = 32, SF_HOLM = 64, SF_IFRESTART = 128 };
 enum { SA_CLOSE = 1, SA_BACK, SA_CAL_BODY, SA_CAL_HEIGHT, SA_CAL_ARMS, SA_PIP_ADJUST, SA_PIP_RESET, SA_PIP_GLUE, SA_START_PLAY, SA_GFX_APPLY, SA_CAL_SKIP, SA_REQ, SA_QUIT_GAME, SA_HUD_RESET };
@@ -19641,6 +19646,7 @@ static const SetOpt g_setOpts[] = {
     { SP_MAIN, ST_PAGE, "Weapons & scopes", 0, 0, 0, 0, 0, 0, 0, 0, SP_WEAPONS, "See-through scopes and their zoom and brightness." },
     { SP_MAIN, ST_PAGE, "Movement & comfort", 0, 0, 0, 0, 0, 0, 0, 0, SP_MOVE, "Real crouching and leaning, sprinting and jumping." },
     { SP_MAIN, ST_PAGE, "Kid friendly stuff", 0, 0, 0, 0, 0, 0, 0, 0, SP_KIDS, "Turn off bodies bursting, limbs coming off, and blood." },
+    { SP_MAIN, ST_PAGE, "Cyberware", 0, 0, 0, 0, 0, 0, 0, 0, SP_CYBER, "Your implants and what they do. Install and remove them at a ripperdoc: talk to Doc Usanagi at the New Vegas Medical Clinic." },
     { SP_MAIN, ST_PAGE, "Startup setup screen", 0, 0, 0, 0, 0, 0, 0, 0, SP_START, "The screen shown before the main menu: who's playing, standing or seated, calibration." },
     { SP_MAIN, ST_ACTION, "Close settings", 0, 0, 0, 0, 0, 0, 0, 0, SA_CLOSE, "Hold both thumbsticks in for a second (or press F11) to open this panel again." },
 
@@ -19890,6 +19896,8 @@ static const SetOpt g_setOpts[] = {
     { SP_MOVE, ST_BOOL, "Hide your body (grapple, climbing)", "Grapple", "bHideBody", &g_hideBodyGrap, 0, 0, 0, 0, 0, 0, "Your body below you disappears while the line pulls you or you climb (and a moment after), so it can't get in front of you." },
     { SP_MOVE, ST_BOOL, "Show the grapple rope", "Grapple", "bShowRope", &g_grapRope, 0, 0, 0, 0, 0, 0, "Draw the rope from your hand to the hook point." },
     { SP_MOVE, ST_BOOL, "Grapple rumble", "Grapple", "bRumble", &g_grapRumble, 0, 0, 0, 0, 0, 0, "Controller buzz while the line is pulling you." },
+    { SP_ADV, ST_BOOL, "Cyberware", "Cyberware", "bEnabled", &g_cyOn, 0, 0, 0, 0, 0, 0, "Implants, the ripperdoc (Doc Usanagi) and their abilities. OFF: Doc Usanagi is just a doctor again (implants already in stay in)." },
+    { SP_ADV, ST_BOOL, "Ripperdoc anywhere (testing)", "Cyberware", "bRipperdocAnywhere", &g_cyAnywhere, 0, 0, 0, 0, 0, 0, "Install and remove implants from FNVR settings > Cyberware anywhere, without visiting Doc Usanagi. Caps are still paid." },
     { SP_KIDS, ST_BOOL, "Bloody Mess bursts bodies", "KidFriendly", "bBloodyMessExplodes", &g_kidMess, 0, 0, 0, 0, SF_KIDS, 0, "OFF: with the Bloody Mess perk, bodies no longer burst into pieces (you still get its extra damage)." },
     { SP_KIDS, ST_BOOL, "Dismemberment", "KidFriendly", "bDismemberment", &g_kidDismember, 0, 0, 0, 0, SF_KIDS, 0, "OFF: arms, legs and heads never come off and bodies never burst - from any weapon or perk." },
     { SP_KIDS, ST_BOOL, "Blood effects & decals", "KidFriendly", "bBlood", &g_kidBlood, 0, 0, 0, 0, SF_KIDS, 0, "OFF: no blood spray or blood marks when anyone is hit, and no blood on your view. Hits still make their sound." },
@@ -20207,7 +20215,7 @@ static void Set_Activate(int optIdx, int part)
         g_setPageSel[g_setPage] = g_setSel; g_setPage = back; g_setSel = g_setPageSel[back]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); return; }
     const SetOpt *o = &g_setOpts[optIdx];
     switch (o->type) {
-    case ST_PAGE: if (o->arg == SP_ADV) g_setFromStart = g_setPage == SP_START; if (o->arg == SP_HUDPARTS) HudEd_Load(); g_setPageSel[g_setPage] = g_setSel; g_setPage = o->arg; g_setSel = g_setPageSel[o->arg]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); break;
+    case ST_PAGE: if (o->arg == SP_CYBER) Cy_EnterFromSettings(); if (o->arg == SP_ADV) g_setFromStart = g_setPage == SP_START; if (o->arg == SP_HUDPARTS) HudEd_Load(); g_setPageSel[g_setPage] = g_setSel; g_setPage = o->arg; g_setSel = g_setPageSel[o->arg]; g_setScroll = 0; g_setDirty = true; Set_Buzz(900); break;
     case ST_BOOL: case ST_SIGN: Set_Step(o, 1, 1); break;
     case ST_FLOAT: case ST_INT: if (part) Set_Step(o, part, 1); break;
     case ST_PROFILE: case ST_CHOICE: case ST_RES: Set_Step(o, part ? part : 1, 1); break;
@@ -20303,6 +20311,11 @@ static void Set_Text(HFONT f, COLORREF c, int x0, int y0, int x1, int y1, const 
 }
 static void Set_Draw(void)
 {
+    if (g_setPage == SP_CYBER && !g_setCal) {
+        Cy_Draw(); GdiFlush();
+        for (int i = 0; i < SET_W * SET_H; i++) g_setBits[i] |= 0xFF000000u;
+        return;
+    }
     int idx[64]; int n = Set_PageRows(g_setPage, idx, 64);
     if (g_setSel >= n) g_setSel = n - 1; if (g_setSel < 0) g_setSel = 0;
     if (g_setSel < g_setScroll) g_setScroll = g_setSel;
@@ -20457,6 +20470,7 @@ static void Settings_Close(void)
     Log("Settings: closed");
 }
 static void Settings_Toggle(void) { if (g_setOpen) Settings_Close(); else Settings_Open(); }
+#include "fnvr_cyber.c"
 
 /* Called from the controller poll. Returns true while the panel has the controls (the game gets none). */
 static bool Settings_Update(const VRControllerState_t *mv, const VRControllerState_t *am, bool okMv, bool okAm)
@@ -20547,6 +20561,7 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
         }
         return true;
     }
+    if (g_setPage == SP_CYBER) { Cy_Update(mv, am, okMv, okAm, trigEdge, aEdge, bEdge); return true; }
     int idx[64]; int n = Set_PageRows(g_setPage, idx, 64);
     {   /* (a row that comes and goes - "Quit now" - doesn't move the selection onto another option) */
         static int lastPage = -1, lastN = 0, lastIdx[64];
@@ -21178,6 +21193,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         Throw_Tick();
         Crouch_Tick();
         Bleed_Tick();
+        Cy_Tick();
         Gun_Tick();
         LG_Tick();
         MR_Tick();
@@ -21232,6 +21248,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         UIMessage(HeadsetDisplayActive() ? "FNVR loaded - headset display active" : "FNVR loaded");
         break;
     case kMessage_ExitToMainMenu:
+        Cy_Reset("exit to main menu");
         g_newGameWait = false;
         World_Reset("exit to main menu");
         HeadOffset_Reset();
@@ -21242,6 +21259,7 @@ static void OnNVSEMessage(NVSEMessage *msg)
         NoPrompt_Restore(0); NoPrompt_Restore(1);
         break;
     case kMessage_PreLoadGame:
+        Cy_Reset("loading a save");   /* (a save without cyberware data: none installed) */
         NoPrompt_Restore(0); NoPrompt_Restore(1);
         g_newGameWait = false;
         World_Reset("loading a save");
@@ -21292,6 +21310,7 @@ __declspec(dllexport) bool NVSEPlugin_Load(const NVSEInterface *nvse)
     g_handle = nvse->GetPluginHandle();
     g_scriptIntf = (NVSEScriptIntf *)nvse->QueryInterface(6);
     Log("Script interface: %s", g_scriptIntf ? "available" : "missing");
+    Cyber_Init(nvse, g_handle);
 
     NVSEMessagingInterface *msgIntf = (NVSEMessagingInterface *)nvse->QueryInterface(kInterface_Messaging);
     if (!msgIntf) { Log("ERROR: could not get NVSE messaging interface"); return false; }
