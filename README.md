@@ -158,6 +158,11 @@ A ripperdoc and implants, inspired by cyberpunk ripperdocs (original names and d
 - **Cost:** caps, plus body capacity (16 + Endurance x 4 + your level). Removing one gives a quarter of its price back.
 - **Effects:** most implants raise stats (health, action points, damage resistance and threshold, skills, carry weight, speed...). What an implant changed is recorded when it goes in, so taking it out undoes exactly that.
 - **Abilities:** the Neural Core holds one active ability - squeeze both grips twice quickly: **Overclock** (time slows for 8 s), **Berserker** (+25 damage resistance and close-up damage for 12 s) or **Ghost** (optical camouflage for 12 s). The **Backup Heart** brings you back to full health below 15% (every 5 minutes) and **Shock Absorbers** stop fall damage.
+- **More implants:** Kinetic Calves (legs) let you **double jump** - press jump again in mid-air. Hydraulic Forearms (arms) give **+10 melee damage**.
+- **Over capacity:** you can install more chrome than your capacity - but then you risk Chrome Overload.
+- **Chrome perks** (need **Endurance 10**, at any level; shown on the ripperdoc screen, not in the Pip-Boy's perk list):
+  - **Full Borg** - every slot filled: **30% less damage taken**.
+  - **Chrome Overload** - when over capacity or a full borg, every hit you land has a **2% chance** to set it off: **+50% damage**, **+50 damage resistance**, each kill **heals 20%** of your health and adds **3 seconds**. Lasts **20 seconds** (plus kills), then 30 seconds before it can happen again.
 - **Saves:** installed implants are kept beside each save (xNVSE co-save) and cleared for a new game.
 - **Testing:** FNVR settings > Advanced > *Ripperdoc anywhere* lets you install from the settings panel anywhere (caps are still paid). *Cyberware* there turns the whole thing off.
 - The arm blades' models and their deploy-from-the-forearm animation are coming in a later update; for now the blades add unarmed damage.

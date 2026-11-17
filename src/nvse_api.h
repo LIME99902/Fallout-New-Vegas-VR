@@ -40,7 +40,17 @@ typedef struct NVSEMessagingInterface {
     bool (*Dispatch)(PluginHandle sender, uint32_t messageType, void *data, uint32_t dataLen, const char *receiver);
 } NVSEMessagingInterface;
 
-enum { kInterface_Serialization = 0, kInterface_Messaging = 2 };
+enum { kInterface_Serialization = 0, kInterface_Messaging = 2, kInterface_EventManager = 8 };
+
+/* xNVSE's events (PluginAPI.h NVSEEventManagerInterface): a plugin's own function called on game events - for the game's
+   own events ("onhit", "ondeath") parameters[0] is the reference the event happened to, parameters[1] the other one
+   (the attacker, the killer) */
+typedef void (*NVSENativeEventHandler)(void *thisObj, void *parameters);
+typedef struct NVSEEventManagerInterface {
+    void *RegisterEvent, *DispatchEvent, *DispatchEventAlt;
+    bool (*SetNativeEventHandler)(const char *eventName, NVSENativeEventHandler func);
+    bool (*RemoveNativeEventHandler)(const char *eventName, NVSENativeEventHandler func);
+} NVSEEventManagerInterface;
 
 /* xNVSE's co-save: data a plugin keeps beside each game save (xNVSE PluginAPI.h, NVSESerializationInterface v2) */
 typedef void (*NVSESerCallback)(void *reserved);

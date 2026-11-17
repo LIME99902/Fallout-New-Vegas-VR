@@ -9,7 +9,15 @@
 
    Special implants: the Neural Core holds one active ability - squeeze both grips twice quickly to use it (slow time,
    berserk, or optical camo); the Backup Heart brings you back from near death; Shock Absorbers stop fall damage.
-   Temporary boosts that are active when the game is saved are undone again when that save is loaded. */
+   Temporary boosts that are active when the game is saved are undone again when that save is loaded.
+
+   Chrome perks (worked out from what's installed; shown on the ripperdoc screen):
+   Both need Endurance 10 (at any level).
+   - FULL BORG: every slot filled - 30% less damage taken (the game's own "damage to the player" multipliers x0.7).
+   - CHROME OVERLOAD: with more chrome than your body can handle (over capacity), or as a full borg, every hit you land
+     has a 2% chance to set it off: for 20 seconds +50% damage dealt (the "damage by the player" multipliers x1.5),
+     +50 damage resistance, and every kill heals 20% of your health and adds 3 seconds. The game's multipliers aren't part of a save, so
+     they're put back whenever a game is left or loaded. Hits and kills come from xNVSE's own OnHit and OnDeath events. */
 
 #define CY_MAXINST 24
 #define CY_MAXMOD 4
@@ -17,7 +25,7 @@ enum { CY_CORE, CY_CORTEX, CY_OPTICS, CY_CIRC, CY_NERVE, CY_DERMAL, CY_SKEL, CY_
 static const char *const g_cySlotName[CY_NSLOT] = { "NEURAL CORE", "CORTEX", "OPTICS", "CIRCULATORY", "NERVOUS", "DERMAL",
                                                     "SKELETON", "IMMUNE", "ARMS", "HANDS", "LEGS" };
 static const int g_cySlotMax[CY_NSLOT] = { 1, 2, 1, 2, 2, 2, 1, 1, 1, 2, 1 };
-enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL };
+enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP };
 typedef struct { const char *av; int amt; } CyMod;
 typedef struct {
     const char *id; int slot; const char *name; int price, load, special;
@@ -69,12 +77,16 @@ static const CyImpl g_cyCat[] = {
       "Blades that arc with current. (Arm model and shock effect come in the next update - for now: +12 unarmed damage.)" },
     { "arm_toxin",      CY_ARMS, "Arm Blades: Toxin", 6500, 8, CYS_NONE, { { "UnarmedDamage", 12 }, { "PoisonResist", 10 } },
       "Blades that weep venom. (Arm model and poison effect come in the next update - for now: +12 unarmed damage.)" },
+    { "arm_hydraulic",  CY_ARMS, "Hydraulic Forearms", 3000, 5, CYS_NONE, { { "MeleeDamage", 10 } },
+      "Hydraulic rams along both forearms. Every swing of a melee weapon lands harder (+10 melee damage)." },
     { "hand_knuckle",   CY_HANDS, "Ripper Knuckles", 1500, 2, CYS_NONE, { { "UnarmedDamage", 8 } },
       "Tungsten knuckle caps. Punches land harder." },
     { "hand_link",      CY_HANDS, "Smart-Link Palms", 2500, 3, CYS_NONE, { { "Guns", 5 }, { "EnergyWeapons", 5 } },
       "Contacts in your palms talk to your gun. Steadier, more accurate shooting." },
     { "leg_sprint",     CY_LEGS, "Sprint Pistons", 2500, 4, CYS_NONE, { { "SpeedMult", 10 } },
       "Hydraulic assists in the calves. You move 10% faster." },
+    { "leg_jump",       CY_LEGS, "Kinetic Calves", 4500, 6, CYS_DJUMP, { { 0 } },
+      "Stored-energy actuators in your calves. Press jump again in mid-air to jump a second time." },
     { "leg_absorb",     CY_LEGS, "Shock Absorbers", 3000, 4, CYS_NOFALL, { { 0 } },
       "Dampers in your knees and ankles. Falls never hurt you." },
 };
@@ -84,11 +96,16 @@ typedef struct { char av[20]; int32_t amt; } CySavedMod;
 typedef struct { char id[24]; int32_t n; CySavedMod m[CY_MAXMOD]; } CyInst;
 static CyInst g_cyInst[CY_MAXINST]; static int g_cyN = 0;
 static CySavedMod g_cyTemp[8]; static int g_cyTempN = 0;          /* an active ability's boosts, undone when it ends */
-static CySavedMod g_cyRevert[8]; static int g_cyRevertN = 0;      /* boosts that were active when the loaded save was made */
+static CySavedMod g_cyCoTemp[4]; static int g_cyCoTempN = 0;     /* Chrome Overload's boosts */
+static CySavedMod g_cyRevert[12]; static int g_cyRevertN = 0;     /* boosts that were active when the loaded save was made */
+static volatile LONG g_cyHits = 0, g_cyKills = 0;                  /* (from xNVSE's events: hits and kills by you, not handled yet) */
+static volatile bool g_cyJumpEdge = false;
+static bool g_cyBorg = false, g_cyCO = false; static double g_cyCOEnd = 0, g_cyCOReady = 0;
 static bool g_cyAtDoc = false;                                     /* talking to the ripperdoc right now */
 static volatile bool g_cyActivate = false;                         /* the two-squeeze gesture happened */
 static NVSESerializationInterface *g_ser = NULL;
-static int g_cyCapsShown = 0, g_cyCapShown = 36;                   /* (read on the game's thread, shown by the panel) */
+static int g_cyCapsShown = 0, g_cyCapShown = 36, g_cyEnd = 0;
+#define CY_PERK_END 10   /* Endurance needed for the chrome perks (any level) */                   /* (read on the game's thread, shown by the panel) */
 static void Cyber_Open(bool atDoc);
 
 static const CyImpl *Cy_Find(const char *id) { for (int i = 0; i < CY_NCAT; i++) if (!strcmp(g_cyCat[i].id, id)) return &g_cyCat[i]; return NULL; }
@@ -149,7 +166,14 @@ static int Cy_Capacity(void)   /* 16 + Endurance x 4 + your level */
     if (s && Cy_CallNum(s, 0, 0, &v) && v > 0) return 16 + (int)v;
     return 36;
 }
-static void Cy_Refresh(void) { if (g_inGameplay && GetPlayer()) { g_cyCapsShown = Cy_Caps(); g_cyCapShown = Cy_Capacity(); } }
+static int Cy_Endurance(void)   /* (without chems if the game can say so) */
+{
+    static void *s = NULL; static bool tried = false;
+    if (!tried) { tried = true; s = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetPermanentActorValue Endurance\nSetFunctionValue iV\nEnd\n");
+        if (!s) s = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetAV Endurance\nSetFunctionValue iV\nEnd\n"); }
+    double v = 0; return Cy_CallNum(s, 0, 0, &v) ? (int)v : 0;
+}
+static void Cy_Refresh(void) { if (g_inGameplay && GetPlayer()) { g_cyCapsShown = Cy_Caps(); g_cyCapShown = Cy_Capacity(); g_cyEnd = Cy_Endurance(); } }
 static double Cy_HealthFrac(void)
 {
     static void *s = NULL; if (!s) s = Cy_Compile("float fV\nBegin Function { }\nset fV to player.GetHealthPercentage\nSetFunctionValue fV\nEnd\n");
@@ -160,6 +184,45 @@ static void Cy_HealFull(void)
 {
     static void *s = NULL; if (!s) s = Cy_Compile("Begin Function { }\nplayer.RestoreAV Health 10000\nEnd\n");
     Cy_CallNum(s, 0, 0, NULL);
+}
+
+/* the game's damage multipliers for each difficulty: 0 = damage BY the player, 1 = damage TO the player. Read once, then
+   set to the original x mult (never saved with a game - put back on every load and exit) */
+static const char *const g_cyDiff[5] = { "VE", "E", "N", "H", "VH" };
+static float g_cyGsOrig[2][5]; static bool g_cyGsHave = false; static float g_cyGsMult[2] = { 1.0f, 1.0f };
+static bool Cy_GsRead(void)
+{
+    static bool failed = false;
+    if (g_cyGsHave) return true;
+    if (failed) return false;
+    for (int w = 0; w < 2; w++) for (int k = 0; k < 5; k++) {
+        char src[200]; snprintf(src, sizeof src, "float fV\nBegin Function { }\nset fV to GetNumericGameSetting \"fDiffMultHP%sPC%s\"\nSetFunctionValue fV\nEnd\n", w ? "To" : "By", g_cyDiff[k]);
+        void *scr = Cy_Compile(src); double v = 0;
+        if (!scr || !Cy_CallNum(scr, 0, 0, &v) || !(v > 0.0)) { Log("Cyberware: couldn't read the game's damage setting fDiffMultHP%sPC%s - Full Borg and Chrome Overload damage won't work", w ? "To" : "By", g_cyDiff[k]); failed = true; return false; }
+        g_cyGsOrig[w][k] = (float)v;
+    }
+    g_cyGsHave = true;
+    Log("Cyberware: damage settings by you %.2f/%.2f/%.2f/%.2f/%.2f, to you %.2f/%.2f/%.2f/%.2f/%.2f", g_cyGsOrig[0][0], g_cyGsOrig[0][1], g_cyGsOrig[0][2], g_cyGsOrig[0][3], g_cyGsOrig[0][4],
+        g_cyGsOrig[1][0], g_cyGsOrig[1][1], g_cyGsOrig[1][2], g_cyGsOrig[1][3], g_cyGsOrig[1][4]);
+    return true;
+}
+static void Cy_GsSet(int w, float mult)
+{
+    static void *scr[2][5];
+    if (fabsf(mult - g_cyGsMult[w]) < 1e-4f) return;
+    if (!Cy_GsRead()) return;
+    for (int k = 0; k < 5; k++) {
+        if (!scr[w][k]) { char src[220]; snprintf(src, sizeof src, "int iV\nfloat fV\nBegin Function { iV }\nset fV to iV / 10000\nSetNumericGameSetting \"fDiffMultHP%sPC%s\" fV\nEnd\n", w ? "To" : "By", g_cyDiff[k]); scr[w][k] = Cy_Compile(src); }
+        Cy_CallNum(scr[w][k], 1, (int)lroundf(g_cyGsOrig[w][k] * mult * 10000.0f), NULL);
+    }
+    g_cyGsMult[w] = mult;
+    Log("Cyberware: damage %s you x%.2f", w ? "to" : "by", mult);
+}
+static void Cy_HealPct(int pct)
+{
+    static void *s = NULL;
+    if (!s) s = Cy_Compile("int iP\nfloat fC\nfloat fP\nfloat fM\nBegin Function { iP }\nset fC to player.GetAV Health\nset fP to player.GetHealthPercentage\nif fP > 1.5\nset fP to fP / 100\nendif\nif fP > 0.01\nset fM to fC / fP * iP / 100\nplayer.RestoreAV Health fM\nendif\nEnd\n");
+    Cy_CallNum(s, 1, pct, NULL);
 }
 
 /* ---- installing and removing ---- */
@@ -173,7 +236,7 @@ static const char *Cy_Install(const CyImpl *c)
     if (g_cyN >= CY_MAXINST) return "No room for more implants";
     if (Cy_SlotUsed(c->slot) >= g_cySlotMax[c->slot]) { snprintf(why, sizeof why, "Your %s slot is full - remove one first", g_cySlotName[c->slot]); return why; }
     int cap = Cy_Capacity(), used = Cy_LoadUsed();
-    if (used + c->load > cap) { snprintf(why, sizeof why, "Your body can't take it: needs %d capacity, %d free (Endurance and level raise it)", c->load, cap - used); return why; }
+    bool over = used + c->load > cap;   /* (allowed - but too much chrome risks a Chrome Overload) */
     int caps = Cy_Caps();
     if (caps < c->price) { snprintf(why, sizeof why, "Not enough caps: %d needed, you have %d", c->price, caps); return why; }
     Cy_CapsChange(-c->price);
@@ -186,7 +249,8 @@ static const char *Cy_Install(const CyImpl *c)
     g_cyN++;
     Cy_Buzz(3500);
     Log("Cyberware: installed %s for %d caps (%d stat changes)", c->name, c->price, in->n);
-    snprintf(why, sizeof why, "%s installed", c->name);
+    if (over) snprintf(why, sizeof why, "%s installed - OVER CAPACITY (%d / %d): your hits can now set off a Chrome Overload", c->name, used + c->load, cap);
+    else snprintf(why, sizeof why, "%s installed", c->name);
     return why;
 }
 static const char *Cy_Remove(const CyImpl *c)
@@ -215,6 +279,44 @@ static void Cy_TempEnd(void)
 {
     for (int i = 0; i < g_cyTempN; i++) Cy_ModAV(g_cyTemp[i].av, -g_cyTemp[i].amt);
     g_cyTempN = 0;
+}
+static void Cy_CoStart(void)
+{
+    if (g_cyCO) return;
+    g_cyCO = true; g_cyCOEnd = QpcMs() + 20000.0;
+    if (g_cyCoTempN < 4 && Cy_ModAV("DamageResist", 50)) { snprintf(g_cyCoTemp[g_cyCoTempN].av, sizeof g_cyCoTemp[0].av, "DamageResist"); g_cyCoTemp[g_cyCoTempN].amt = 50; g_cyCoTempN++; }
+    Cy_GsSet(0, 1.5f);
+    UIMessage("CHROME OVERLOAD"); Cy_Buzz(3999);
+    Log("Cyberware: Chrome Overload! (+50%% damage, +50 damage resistance, kills heal 20%% and add 3 s, 20 s)");
+}
+static void Cy_CoEnd(bool undo)
+{
+    if (!g_cyCO) return;
+    if (undo) for (int i = 0; i < g_cyCoTempN; i++) Cy_ModAV(g_cyCoTemp[i].av, -g_cyCoTemp[i].amt);
+    g_cyCoTempN = 0; g_cyCO = false; g_cyCOReady = QpcMs() + 30000.0;
+    Cy_GsSet(0, 1.0f);
+    if (undo) { UIMessage("Chrome Overload wore off"); Log("Cyberware: Chrome Overload over"); }
+}
+/* xNVSE's events: a hit you land, a kill you make (counted here, handled on the next tick) */
+static void Cy_OnHit(void *thisObj, void *params)
+{
+    (void)thisObj; void **p = (void **)params; void *pl = GetPlayer();
+    if (p && pl && p[1] == pl && p[0] && p[0] != pl) InterlockedIncrement(&g_cyHits);
+}
+static void Cy_OnDeath(void *thisObj, void *params)
+{
+    (void)thisObj; void **p = (void **)params; void *pl = GetPlayer();
+    if (p && pl && p[1] == pl && p[0] && p[0] != pl) InterlockedIncrement(&g_cyKills);
+}
+static NVSEInterface *g_cyNvse = NULL;
+static void Cyber_Events(void)
+{
+    static bool done = false; if (done || !g_cyNvse) return; done = true;
+    NVSEInterface *nvse = g_cyNvse;
+    NVSEEventManagerInterface *em = (NVSEEventManagerInterface *)nvse->QueryInterface(kInterface_EventManager);
+    bool h = em && em->SetNativeEventHandler && em->SetNativeEventHandler("onhit", Cy_OnHit);
+    bool d = em && em->SetNativeEventHandler && em->SetNativeEventHandler("ondeath", Cy_OnDeath);
+    Log("Cyberware: hit events %s, kill events %s (Chrome Overload needs them)", h ? "on" : "NOT AVAILABLE", d ? "on" : "NOT AVAILABLE");
 }
 static void Cy_SlowTime(bool on)
 {
@@ -255,6 +357,11 @@ static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *
 {
     static int phase = 0; static double at = 0;
     if (!g_cyOn || !okL || !okR || !g_inGameplay || IsMenuMode() || g_pipOpen) { phase = 0; return; }
+    {   /* jump (A) pressed: a second jump in the air with Kinetic Calves */
+        static bool aPrev = false; bool a = Pressed(r, EVRButtonId_k_EButton_A);
+        if (a && !aPrev) g_cyJumpEdge = true;
+        aPrev = a;
+    }
     float gl = l->rAxis[2].x, gr = r->rAxis[2].x; double now = QpcMs();
     bool both = gl > 0.85f && gr > 0.85f, none = gl < 0.35f && gr < 0.35f;
     if (phase && now - at > 600.0) phase = 0;
@@ -298,6 +405,48 @@ static void Cy_Tick(void)
     if (g_cyActivate) { g_cyActivate = false; Cy_AbilityStart(); }
     if (g_cyAbil && now > g_cyAbilEnd) { Cy_AbilityStop("time up"); Cy_Buzz(1500); }
     if (g_cyAbil == CYS_SLOWMO && ((const volatile bool *)0x011F308F)[1056]) Cy_AbilityStop("VATS");   /* (VATS runs time itself) */
+    {   /* chrome perks */
+        static double nextLook = 0;
+        if (now > nextLook) {
+            nextLook = now + 1500.0;
+            Cy_Refresh();
+            bool borg = g_cyEnd >= CY_PERK_END; for (int sl = 0; sl < CY_NSLOT; sl++) if (Cy_SlotUsed(sl) < g_cySlotMax[sl]) borg = false;
+            if (borg != g_cyBorg) {
+                g_cyBorg = borg; UIMessage(borg ? "FULL BORG: 30% less damage taken" : "No longer a full borg");
+                Log("Cyberware: Full Borg %s", borg ? "ON" : "off");
+            }
+            Cy_GsSet(1, g_cyBorg ? 0.7f : 1.0f);
+        }
+        LONG hits = InterlockedExchange(&g_cyHits, 0), kills = InterlockedExchange(&g_cyKills, 0);
+        bool risk = g_cyEnd >= CY_PERK_END && (g_cyBorg || Cy_LoadUsed() > g_cyCapShown);
+        if (hits && risk && !g_cyCO && now > g_cyCOReady)
+            for (LONG i = 0; i < hits && !g_cyCO; i++) if (rand() % 100 < 2) Cy_CoStart();
+        if (kills && g_cyCO) {   /* each kill: 20% health back and 3 more seconds */
+            Cy_HealPct(20 * (int)(kills > 5 ? 5 : kills));
+            g_cyCOEnd += 3000.0 * (double)kills;
+            char m[64]; snprintf(m, sizeof m, "Chrome Overload +%ld s", 3L * (long)kills); UIMessage(m);
+        }
+        if (g_cyCO && now > g_cyCOEnd) Cy_CoEnd(true);
+    }
+    if (Cy_Has(CYS_DJUMP)) {   /* a second jump in mid-air */
+        static bool used = false;
+        char *player = (char *)GetPlayer(), *proc = *(char **)(player + 0x68);
+        char *ctrl = (proc && *(uint8_t *)(proc + 0x28) <= 1) ? *(char **)(proc + 0x138) : NULL;
+        char *proxy = ctrl && !IsBadReadPtr(ctrl + 0x08, 4) ? *(char **)(ctrl + 0x08) : NULL;
+        if (ctrl && proxy && !IsBadWritePtr(ctrl + 0x4F0, 0x60)) {
+            float fall = *(float *)(ctrl + 0x548);
+            if (fall < 0.02f) used = false;
+            if (g_cyJumpEdge && fall > 0.12f && !used && !g_climbing && !Grapple_Busy()) {
+                used = true;
+                float vz = 5.5f * g_unitsPerMeter / HAVOK_UNIT, *pv = (float *)(proxy + 0x10), *cv = (float *)(ctrl + 0x4F0);
+                pv[2] = vz; cv[2] = vz;
+                *(float *)(ctrl + 0x548) = 0.0f; *(float *)(ctrl + 0x544) = ((float *)(player + 0x30))[2];
+                Cy_Buzz(2500);
+                static int ln = 0; if (ln++ < 5) Log("Cyberware: double jump");
+            }
+        }
+    }
+    g_cyJumpEdge = false;
     static double nextHeart = 0;
     if (now > nextHeart && Cy_Has(CYS_HEART)) {
         nextHeart = now + 200.0;
@@ -322,17 +471,20 @@ static void Cy_Reset(const char *why)
     if (g_cyAbil) Log("Cyberware: ability over (%s)", why);
     if (g_cyAbil == CYS_SLOWMO) Cy_SlowTime(false);
     g_cyAbil = 0; g_cyTempN = 0; g_cyAtDoc = false;
+    g_cyCO = false; g_cyCoTempN = 0; g_cyCOReady = 0; g_cyBorg = false;
+    if (g_cyGsHave) { Cy_GsSet(0, 1.0f); Cy_GsSet(1, 1.0f); }
     g_cyN = 0; g_cyRevertN = 0; g_cyAbilReady = g_cyHeartReady = 0;
 }
 static void Cy_SaveCb(void *r)
 {
     (void)r;
     if (!g_ser || !g_ser->OpenRecord(CY_REC, 1)) return;
-    int32_t n = g_cyN, t = g_cyTempN;
+    int32_t n = g_cyN, t = g_cyTempN + g_cyCoTempN;
     g_ser->WriteRecordData(&n, 4);
     if (n) g_ser->WriteRecordData(g_cyInst, (uint32_t)(sizeof(CyInst) * (size_t)n));
     g_ser->WriteRecordData(&t, 4);
-    if (t) g_ser->WriteRecordData(g_cyTemp, (uint32_t)(sizeof(CySavedMod) * (size_t)t));
+    if (g_cyTempN) g_ser->WriteRecordData(g_cyTemp, (uint32_t)(sizeof(CySavedMod) * (size_t)g_cyTempN));
+    if (g_cyCoTempN) g_ser->WriteRecordData(g_cyCoTemp, (uint32_t)(sizeof(CySavedMod) * (size_t)g_cyCoTempN));
     Log("Cyberware: saved %d implants with the game%s", n, t ? " (a boost was on)" : "");
 }
 static void Cy_LoadCb(void *r)
@@ -347,7 +499,7 @@ static void Cy_LoadCb(void *r)
         if (n && g_ser->ReadRecordData(g_cyInst, (uint32_t)(sizeof(CyInst) * (size_t)n)) != sizeof(CyInst) * (size_t)n) { n = 0; break; }
         g_cyN = n;
         for (int i = 0; i < g_cyN; i++) { g_cyInst[i].id[23] = 0; if (g_cyInst[i].n < 0 || g_cyInst[i].n > CY_MAXMOD) g_cyInst[i].n = 0; for (int k = 0; k < CY_MAXMOD; k++) g_cyInst[i].m[k].av[19] = 0; }
-        if (g_ser->ReadRecordData(&t, 4) == 4 && t > 0 && t <= 8 && g_ser->ReadRecordData(g_cyRevert, (uint32_t)(sizeof(CySavedMod) * (size_t)t)) == sizeof(CySavedMod) * (size_t)t) {
+        if (g_ser->ReadRecordData(&t, 4) == 4 && t > 0 && t <= 12 && g_ser->ReadRecordData(g_cyRevert, (uint32_t)(sizeof(CySavedMod) * (size_t)t)) == sizeof(CySavedMod) * (size_t)t) {
             for (int i = 0; i < t; i++) g_cyRevert[i].av[19] = 0;
             g_cyRevertN = t;
         }
@@ -357,6 +509,8 @@ static void Cy_LoadCb(void *r)
 static void Cy_NewGameCb(void *r) { (void)r; Cy_Reset("new game"); Log("Cyberware: new game - no implants"); }
 static void Cyber_Init(NVSEInterface *nvse, PluginHandle h)
 {
+    g_cyNvse = nvse;
+    srand((unsigned)GetTickCount() ^ (unsigned)GetCurrentProcessId());   /* (Chrome Overload's chance) */
     g_cyOn = GetPrivateProfileIntA("Cyberware", "bEnabled", 1, g_iniPath) != 0;
     g_cyAnywhere = GetPrivateProfileIntA("Cyberware", "bRipperdocAnywhere", 0, g_iniPath) != 0;
     g_ser = (NVSESerializationInterface *)nvse->QueryInterface(kInterface_Serialization);
@@ -422,10 +576,11 @@ static void Cy_Draw(void)
     Set_Text(g_setFont, CY_TXT, 40, 22, SET_W - 40, 80, t, DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
     /* capacity */
     int cap = g_cyCapShown, used = Cy_LoadUsed();
-    snprintf(t, sizeof t, "BODY CAPACITY  %d / %d", used, cap);
-    Set_Text(g_setFontSmall, CY_TXT, 40, 120, 520, 156, t, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    snprintf(t, sizeof t, used > cap ? "OVER CAPACITY  %d / %d" : "BODY CAPACITY  %d / %d", used, cap);
+    Set_Text(g_setFontSmall, used > cap ? CY_RED : CY_TXT, 40, 120, 520, 156, t, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
     int bx0 = 470, bx1 = SET_W - 40, by0 = 128, by1 = 148, fill = cap > 0 ? bx0 + (bx1 - bx0) * (used > cap ? cap : used) / cap : bx0;
     Set_Fill(bx0, by0, bx1, by1, RGB(20, 40, 44)); Set_Fill(bx0, by0, fill, by1, used * 10 > cap * 9 ? CY_RED : CY_TEAL);
+
     Set_Fill(24, 172, SET_W - 24, 175, CY_TEALD);
     /* slots */
     for (int s = 0; s < CY_NSLOT; s++) {
@@ -465,7 +620,8 @@ static void Cy_Draw(void)
             Set_Text(g_setFontSmall, CY_TXT, CY_RX0 + 48, ey, CY_RX1 - 20, ey + 40, t, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
         }
         if (c->special) {
-            const char *sp = c->special == CYS_HEART ? "AUTOMATIC: saves you below 15% health" : c->special == CYS_NOFALL ? "ALWAYS ON: no fall damage" : "ACTIVE ABILITY: squeeze both grips twice";
+            const char *sp = c->special == CYS_HEART ? "AUTOMATIC: saves you below 15% health" : c->special == CYS_NOFALL ? "ALWAYS ON: no fall damage" :
+                             c->special == CYS_DJUMP ? "ALWAYS ON: jump again in mid-air" : "ACTIVE ABILITY: squeeze both grips twice";
             Set_Fill(CY_RX0 + 22, ey + 14, CY_RX0 + 34, ey + 26, CY_RED);
             Set_Text(g_setFontSmall, CY_RED, CY_RX0 + 48, ey, CY_RX1 - 20, ey + 40, sp, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
         }
@@ -477,11 +633,17 @@ static void Cy_Draw(void)
     }
     /* message line + help */
     if (QpcMs() < g_cyMsgUntil) Set_Text(g_setFont, CY_RED, 30, 900, CY_LX1 + 4, 1180, g_cyMsg, DT_LEFT | DT_WORDBREAK);
-    else {
-        const CyImpl *core = Cy_Core(); double now = QpcMs();
-        if (core) snprintf(t, sizeof t, "Active: %s\n%s", core->name, now < g_cyAbilReady ? "recharging" : "ready - squeeze both grips twice");
-        else snprintf(t, sizeof t, "No Neural Core installed.\nA core gives you an active ability.");
-        Set_Text(g_setFontSmall, CY_DIM, 30, 920, CY_LX1, 1180, t, DT_LEFT | DT_WORDBREAK);
+    else {   /* chrome perks */
+        int filled = 0, total = 0; for (int sl = 0; sl < CY_NSLOT; sl++) { int u = Cy_SlotUsed(sl); filled += u < g_cySlotMax[sl] ? u : g_cySlotMax[sl]; total += g_cySlotMax[sl]; }
+        bool over = used > cap, endOk = g_cyEnd >= CY_PERK_END;
+        Set_Text(g_setFontSmall, CY_TEAL, 30, 912, CY_LX1, 946, endOk ? "CHROME PERKS" : "CHROME PERKS: NEED END 10", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        Set_Fill(30, 950, 42, 962, g_cyBorg ? CY_RED : CY_TEALD);
+        snprintf(t, sizeof t, "FULL BORG  %d/%d", filled, total);
+        Set_Text(g_setFontSmall, g_cyBorg ? CY_RED : CY_TXT, 52, 938, CY_LX1, 974, t, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        Set_Text(g_setFontSmall, CY_DIM, 52, 974, CY_LX1, 1006, g_cyBorg ? "30% less damage taken" : endOk ? "fill every slot: -30% damage" : "fill every slot (END 10)", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        Set_Fill(30, 1030, 42, 1042, g_cyCO ? CY_RED : endOk && (g_cyBorg || over) ? RGB(200, 120, 40) : CY_TEALD);
+        Set_Text(g_setFontSmall, g_cyCO ? CY_RED : CY_TXT, 52, 1018, CY_LX1, 1054, "CHROME OVERLOAD", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        Set_Text(g_setFontSmall, CY_DIM, 52, 1054, CY_LX1, 1170, g_cyCO ? "ACTIVE: +50% damage, +50 DR, kills heal 20% and add 3 s" : !endOk ? "needs Endurance 10" : (g_cyBorg || over) ? "2% chance per hit you land" : "over capacity or full borg: 2% per hit", DT_LEFT | DT_WORDBREAK);
     }
     Set_Fill(24, SET_H - 86, SET_W - 24, SET_H - 83, CY_TEALD);
     Set_Text(g_setFontSmall, CY_DIM, 30, SET_H - 76, SET_W - 30, SET_H - 20, g_cyFromDoc ? "Point + trigger   |   stick: move   |   B: back to talking" : "Point + trigger   |   stick: move   |   B: back", DT_CENTER | DT_SINGLELINE | DT_VCENTER);
