@@ -140,7 +140,7 @@ static void Ce_TempOff(CEnemy *e, char *ref)
 
 /* the story's big names: maxed-out chrome whatever your level (their in-game names, exactly) */
 static const char *const g_ceNamed[] = { "Caesar", "Legate Lanius", "Vulpes Inculta", "Motor-Runner", "Benny", "Cook-Cook", "Driver Nephi",
-    "Jessup", "McMurphy", "Papa Khan", "General Lee Oliver", "Chief Hanlon", "Elijah", "Ulysses", "Salt-Upon-Wounds", "Joshua Graham", "Big Sal", "Nero", "Dog", NULL };
+    "Jessup", "McMurphy", "Papa Khan", "General Lee Oliver", "Chief Hanlon", "Elijah", "Ulysses", "Salt-Upon-Wounds", "Joshua Graham", "Big Sal", "Nero", "Dog", "Hunter", NULL };
 static bool Ce_IsNamedBoss(const char *nm) { for (int i = 0; g_ceNamed[i]; i++) if (!_stricmp(nm, g_ceNamed[i])) return true; return false; }
 /* what kind of fighter each implant suits */
 enum { CK_MELEE = 1, CK_GUN = 2, CK_STEALTH = 4, CK_TOUGH = 8, CK_MIND = 16 };
