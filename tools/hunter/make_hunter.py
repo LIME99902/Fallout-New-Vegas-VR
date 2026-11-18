@@ -17,7 +17,7 @@ KR = {r.edid(): r for r in walk(kr) if r.edid()}
 cell = [r for r in walk(cells) if r.typ == 'CELL' and r.fid == 0xED19F][0]
 
 # masters: 00 FalloutNV.esm, 01 LonesomeRoad.esm, 02 Kriss.esp ; our own forms 03xxxxxx
-nid = [0x04000800]   # (4 masters: our own forms are 04xxxxxx; the low part - what saves keep - stays the same)
+nid = [0x06000800]   # (6 masters: our own forms are 06xxxxxx; the low part - what saves keep - stays the same)
 def new(): nid[0] += 1; return nid[0] - 1
 def fid(v): return struct.pack('<I', v)
 
@@ -244,6 +244,52 @@ ench = Rec('ENCH', ENCH_ID, subs=[['EDID', z('FNVVRMCHunterGearEnch')], ['FULL',
 light_and_enchanted(arm, ENCH_ID); light_and_enchanted(hlm, ENCH_ID)
 cell_grp = Grup(b'CELL', 0, [Grup(7, 2, [Grup(6, 3, [cellov, Grup(0xED19F, 6, [Grup(0xED19F, 8, pers), Grup(0xED19F, 9, temp)])])])])
 
+# ---------------------------------------------------------------- (2.13.4) after every DLC: Joshua Graham, the scriptures, the key
+KEY_ID = new()
+_, keys = read_plugin(UP + 'FalloutNV.esm', want={'KEYM'})
+key = [r for r in walk(keys) if r.edid() == 'VFSVanGraffKey'][0].copy(); key.fid = KEY_ID   # (an ordinary key: model, icons, sounds)
+key.set('EDID', z('FNVVRMCHunterFootlockerKey')); key.set('FULL', z("Hunter's Footlocker Key"))
+fl.subs.insert([k for k, x in enumerate(fl.subs) if x[0] == 'CNTO'][-1] + 1, ['CNTO', fid(0x0000000F) + struct.pack('<i', 10000)])   # 10,000 caps
+chestref.set('XLOC', bytes([100, 0, 0, 0]) + fid(KEY_ID) + bytes(12))
+T_GRAHAM, T_SCRIPT = new(), new()
+def qdone(q, orflag=False):   # GetQuestCompleted <quest> == 1
+    return ['CTDA', struct.pack('<B3sfHHIIII', 0x01 if orflag else 0, b'\0\0\0', 1.0, 546, 0, q, 0, 0, 0)]
+ALL_DLCS = [qdone(0x04000FC1),                                   # Dead Money: Heist of the Centuries
+            qdone(0x03008A36, True), qdone(0x03008A37),          # Honest Hearts: Crush the White Legs OR Flight from Zion
+            qdone(0x05002FCC),                                   # Old World Blues: Old World Blues
+            qdone(0x01003615, True), qdone(0x0100BF03)]          # Lonesome Road: The End OR The Apocalypse
+gi = info("I wouldn't expect him to remember me. After his centurions went down under the .50s' cover fire, he could only see red. "
+          "Caesar would have him killed for his failure to take the dam, so everything else from that day was probably lost to him. "
+          "I've heard he reads the scriptures. Maybe God can forgive him. But I can't. "
+          "Colossians 3:13. \"Bear with each other and forgive one another if any of you has a grievance against someone. "
+          "Forgive as the Lord forgave you.\"", prompt="I've seen Joshua Graham. He didn't mention you.", choices=(T_SCRIPT,) + ALL)
+for c in ALL_DLCS: gi.subs.insert([k for k, x in enumerate(gi.subs) if x[0] == 'CTDA'][-1] + 1, c)
+si = info("The Bible holds many words of guidance for us, in times of peace and in times of war. "
+          "Love your neighbor, and forgive those who have transgressed against you. "
+          "All that is to say, I may never forgive the Legion or Caesar for what happened to me. "
+          "I will never know the feeling of holding something in my hands again, or of dirt under my bare feet. "
+          "They took that away from me on the orders of a coward. "
+          "My fight is over, Courier, but yours isn't. Not till the dam is secured and the Legion is no more. "
+          "I want you to have this. You've done the Mojave a service. The NCR itself won't show you appreciation, but I can. "
+          "May the Holy Spirit guide you to him, and good luck. You're gonna need it.",
+          prompt="So you've read the scriptures too, then?", choices=ALL)
+si.set('DATA', bytes([0, 0, 0x04, 0]))   # (say once: the key is given one time)
+# player.AddItem FNVVRMCHunterFootlockerKey 1  - compiled the way the game's own result scripts are (AddItem = 0x1002)
+scda = bytes.fromhex('1c000100') + bytes.fromhex('0210') + struct.pack('<HH', 10, 2) + b'r' + struct.pack('<H', 2) + b'n' + struct.pack('<i', 1)
+k0 = [k for k, x in enumerate(si.subs) if x[0] == 'SCHR'][0]
+si.subs[k0:k0 + 1] = [['SCHR', struct.pack('<IIIIHH', 0, 2, len(scda), 0, 0, 1)], ['SCDA', scda],
+                      ['SCTX', b'player.AddItem FNVVRMCHunterFootlockerKey 1'], ['SCRO', fid(0x14)], ['SCRO', fid(KEY_ID)]]
+dial_items += [Rec('DIAL', T_GRAHAM, subs=[['EDID', z('FNVVRMCHunterTopicGraham')], ['QSTI', fid(QST_ID)], ['FULL', z("I've seen Joshua Graham. He didn't mention you.")], ['PNAM', f32(50.0)], ['DATA', b'\0\0']]),
+               Grup(T_GRAHAM, 7, [gi]),
+               Rec('DIAL', T_SCRIPT, subs=[['EDID', z('FNVVRMCHunterTopicScripture')], ['QSTI', fid(QST_ID)], ['FULL', z("So you've read the scriptures too, then?")], ['PNAM', f32(50.0)], ['DATA', b'\0\0']]),
+               Grup(T_SCRIPT, 7, [si])]
+# the Joshua Graham line is offered wherever his other topics are (it only shows once every DLC is done)
+for r in walk(dial_items):
+    if r.typ == 'INFO' and r not in (gi, si) and any(x[0] == 'TCLT' for x in r.subs):
+        r.subs.insert([k for k, x in enumerate(r.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
+gi.subs.insert([k for k, x in enumerate(gi.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
+si.subs.insert([k for k, x in enumerate(si.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
+
 # ---------------------------------------------------------------- write
 top = [
     Grup(b'GLOB', 0, [glob]),
@@ -251,6 +297,7 @@ top = [
     Grup(b'ARMO', 0, [arm, hlm]),
     Grup(b'WEAP', 0, [vec]),
     Grup(b'STAT', 0, [adstat]),
+    Grup(b'KEYM', 0, [key]),
     Grup(b'CONT', 0, [fl]),
     Grup(b'NPC_', 0, [npc]),
     Grup(b'CREA', 0, [boba]),
@@ -262,7 +309,7 @@ nrec = sum(1 for _ in walk(top)) + sum(1 for g in top for _ in [0])
 def count(items): return sum(1 + (count(x.items) if isinstance(x, Grup) else 0) for x in items)
 hdr = Rec('TES4', 0, subs=[['HEDR', struct.pack('<fiI', 1.34, count(top), nid[0])], ['CNAM', z('FNVVRMC')],
                            ['SNAM', z("Hunter - an NCR veteran ripperdoc at the New Vegas Medical Clinic (FNVVRMC cyberware).")]])
-for m in ('FalloutNV.esm', 'LonesomeRoad.esm', 'Kriss.esp', 'HonestHearts.esm'):
+for m in ('FalloutNV.esm', 'LonesomeRoad.esm', 'Kriss.esp', 'HonestHearts.esm', 'DeadMoney.esm', 'OldWorldBlues.esm'):
     hdr.subs += [['MAST', z(m)], ['DATA', bytes(8)]]
 open(OUT, 'wb').write(hdr.pack() + b''.join(g.pack() for g in top))
 print('wrote', OUT, 'records', count(top), 'next id', hex(nid[0]))
