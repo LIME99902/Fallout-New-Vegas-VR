@@ -317,17 +317,22 @@ LEGION_EAR, REP_NCR = 0x00125F4C, 0x000F43DE
 GOOD_NCR = [cond(575, REP_NCR, 0, op=0x60, val=2.0),    # GetReputationThreshold RepNVNCR fame >= 2
             cond(575, REP_NCR, 1, op=0x80, val=2.0)]    # ... and infamy < 2  (the NCR likes you)
 HAS_EARS = [cond(47, LEGION_EAR, 0, op=0x60, val=1.0, runon=1)]   # the player (the one talked to) has a Legion ear
-# with a good name in the NCR: 400 caps an ear (FNVR.dll sees this line and makes the trade)
-ei = info("Another pile of Legion dogs put down. Here you go, 400 caps an ear. Keep 'em coming.",
+# the bounty depends on what the NCR thinks of you (FNVR.dll sees "<n> caps an ear" and makes the trade):
+# idolized 400, liked 250, anything less (neutral, hated) 100
+IDOLIZED = [cond(575, REP_NCR, 0, op=0x60, val=4.0), cond(575, REP_NCR, 1, op=0x80, val=2.0)]
+ei = info("Another pile of Legion dogs put down. For a hero of the Republic, 400 caps an ear. Keep 'em coming.",
           prompt="I've got some Legion ears for you.", choices=ALL)
-add_conds(ei, HAS_EARS + GOOD_NCR)
-ei2 = info("I don't pay just anyone for those. Earn the NCR's trust first, then we'll talk about ears.",
-           prompt="I've got some Legion ears for you.", choices=ALL)
-add_conds(ei2, HAS_EARS)
+add_conds(ei, HAS_EARS + IDOLIZED)
+ei2 = info("Good work. The NCR speaks well of you. 250 caps an ear.", prompt="I've got some Legion ears for you.", choices=ALL)
+add_conds(ei2, HAS_EARS + GOOD_NCR)
 ei2.set('PNAM', fid(ei.fid))
+ei3 = info("The NCR doesn't think much of you, but a dead legionary is a dead legionary. 100 caps an ear.",
+           prompt="I've got some Legion ears for you.", choices=ALL)
+add_conds(ei3, HAS_EARS)
+ei3.set('PNAM', fid(ei2.fid))
 dial_items += [topic(T_NCR, 'FNVVRMCHunterTopicNCR', 'How do you feel about the NCR?'), Grup(T_NCR, 7, [ni]),
                topic(T_LEGION, 'FNVVRMCHunterTopicLegion', 'How do you feel about the Legion?'), Grup(T_LEGION, 7, [li]),
-               topic(T_EARS, 'FNVVRMCHunterTopicEars', "I've got some Legion ears for you."), Grup(T_EARS, 7, [ei, ei2])]
+               topic(T_EARS, 'FNVVRMCHunterTopicEars', "I've got some Legion ears for you."), Grup(T_EARS, 7, [ei, ei2, ei3])]
 
 # every answer offers the full list of his topics (each only shows when its conditions are met); Goodbye stays last
 TOPICS = [T_CHROME, T_OPEN, T_BURNED, T_NCR, T_LEGION, T_EARS, T_GRAHAM, T_CAESAR, T_BYE]

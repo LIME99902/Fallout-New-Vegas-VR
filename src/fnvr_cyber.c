@@ -464,20 +464,27 @@ static void Cy_Tick(void)
                 Cyber_Open(true);
             }
             hSaid = said;
-            /* his Legion ear bounty: "400 caps an ear" on screen - every Legion ear you carry is swapped for 400 caps */
-            static bool eSaid = false; budget = 4000;
-            bool ears = dm && Cy_TileHasText(dm, "400 caps an ear", 0, &budget);
-            if (ears && !eSaid) {
+            /* his Legion ear bounty: "<price> caps an ear" on screen (400 idolized by the NCR, 250 liked, 100 otherwise) -
+               every Legion ear you carry is swapped for that many caps */
+            static int eSaid = 0;
+            int price = 0;
+            static const int prices[] = { 400, 250, 100 };
+            for (int pi = 0; pi < 3 && !price && dm; pi++) {
+                char needle[32]; snprintf(needle, sizeof needle, "%d caps an ear", prices[pi]); budget = 4000;
+                if (Cy_TileHasText(dm, needle, 0, &budget)) price = prices[pi];
+            }
+            bool ears = price != 0;
+            if (price && price != eSaid) {
                 static void *eScr = NULL; static bool eBad = false;
                 if (!eScr && !eBad) {
-                    eScr = Cy_Compile("int iN\nint iC\nBegin Function { }\nset iN to player.GetItemCount LegionEar\nif iN > 0\n"
-                                      "set iC to iN * 400\nplayer.RemoveItem LegionEar iN\nplayer.AddItem Caps001 iC\nendif\nSetFunctionValue iN\nEnd\n");
+                    eScr = Cy_Compile("int iP\nint iN\nint iC\nBegin Function { iP }\nset iN to player.GetItemCount LegionEar\nif iN > 0\n"
+                                      "set iC to iN * iP\nplayer.RemoveItem LegionEar iN\nplayer.AddItem Caps001 iC\nendif\nSetFunctionValue iN\nEnd\n");
                     eBad = !eScr;
                 }
                 double n = 0;
-                if (eScr && Cy_CallNum(eScr, 0, 0, &n)) Log("Cyberware: Hunter bought %d Legion ears for %d caps", (int)n, (int)n * 400);
+                if (eScr && Cy_CallNum(eScr, 1, price, &n)) Log("Cyberware: Hunter bought %d Legion ears at %d caps each (%d caps)", (int)n, price, (int)n * price);
             }
-            eSaid = ears;
+            eSaid = price; (void)ears;
         }
         if (!g_cyTalkHunter) hSaid = false;
         /* Hunter (FNVVRMC - Hunter.esp, New Vegas Medical Clinic), the ripperdoc: his "What kind of chrome do you have?" topic sets the
