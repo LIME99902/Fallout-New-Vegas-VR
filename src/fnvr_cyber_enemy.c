@@ -256,8 +256,17 @@ static void Ce_PsychoEnd(CEnemy *e, char *ref)
 static char *Ce_NextFoe(char *last)
 {
     typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
-    static void *s = NULL;
-    if (!s) s = Cy_Compile("ref rLast\nref rW\nref rOut\nint iSeen\nBegin Function { rLast }\nset iSeen to 0\nif rLast == 0\nset iSeen to 1\nendif\nset rW to GetFirstRef 200 1\nwhile rW != 0\nif iSeen\nif rW.GetDead == 0\nset rOut to rW\nbreak\nendif\nelseif rW == rLast\nset iSeen to 1\nendif\nset rW to GetNextRef\nloop\nSetFunctionValue rOut\nEnd\n");
+    static void *s = NULL; static int tries = 0;
+    /* (2.13.1: the 2.10 version used 'break' inside 'while' and the game wouldn't compile it - so no character ever
+       got chrome; a loop with a done flag instead, and a Label/GoTo version if that is refused too) */
+    static const char *const src[] = {
+        "ref rLast\nref rW\nref rOut\nint iSeen\nBegin Function { rLast }\nset iSeen to 0\nif rLast == 0\nset iSeen to 1\nendif\n"
+        "set rW to GetFirstRef 200 1\nwhile rW\nif rOut == 0\nif iSeen\nif rW.GetDead == 0\nset rOut to rW\nendif\nelseif rW == rLast\nset iSeen to 1\nendif\nendif\n"
+        "set rW to GetNextRef\nloop\nSetFunctionValue rOut\nEnd\n",
+        "ref rLast\nref rW\nref rOut\nshort iSeen\nBegin Function { rLast }\nset iSeen to 0\nif rLast == 0\nset iSeen to 1\nendif\n"
+        "set rW to GetFirstRef 200 1\nLabel 1\nif rW\nif rOut == 0\nif iSeen\nif rW.GetDead == 0\nset rOut to rW\nendif\nelseif rW == rLast\nset iSeen to 1\nendif\nendif\n"
+        "set rW to GetNextRef\nGoTo 1\nendif\nSetFunctionValue rOut\nEnd\n" };
+    while (!s && tries < 2) s = Cy_Compile(src[tries++]);
     if (!s || !g_scriptIntf || !g_scriptIntf->CallFunction) return NULL;
     struct { union { double num; void *form; } u; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
     if (!((CallFn_t)g_scriptIntf->CallFunction)(s, GetPlayer(), NULL, &res, 1, last) || res.type != 2) return NULL;

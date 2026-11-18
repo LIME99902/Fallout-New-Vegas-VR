@@ -1,7 +1,7 @@
 /* ==== Cyberware: a ripperdoc, implant slots and implants =============================================================
    Included by fnvr.c (after the settings panel, whose overlay, drawing surface and pointer it shares).
 
-   Doc Usanagi at the New Vegas Medical Clinic is the ripperdoc: talk to her and the cyberware screen opens over the
+   Hunter at the New Vegas Medical Clinic (FNVVRMC - Hunter.esp) is the ripperdoc: his chrome topic opens the cyberware screen over the
    dialogue (B closes it and the talk goes on). Every implant goes in a body slot; each costs caps and takes some of your
    body's capacity (more with Endurance and level). Most change your stats with the game's own ModAV; what each one
    changed is written down at the moment it's installed, so taking it out undoes exactly that, even if a later version
@@ -263,7 +263,7 @@ static bool Cy_CanInstallHere(void) { return g_cyAtDoc || g_cyAnywhere; }
 static const char *Cy_Install(const CyImpl *c)
 {
     static char why[160];
-    if (!Cy_CanInstallHere()) return "Only a ripperdoc can do that - see Doc Usanagi (New Vegas Medical Clinic) or Hunter (Camp McCarran)";
+    if (!Cy_CanInstallHere()) return "Only a ripperdoc can do that - see Hunter at the New Vegas Medical Clinic";
     if (Cy_InstIdx(c->id) >= 0) return "Already installed";
     if (g_cyN >= CY_MAXINST) return "No room for more implants";
     if (strstr(c->name, "Arm Blades")) for (int i = 0; i < g_cyN; i++) { const CyImpl *o = Cy_Find(g_cyInst[i].id); if (o && strstr(o->name, "Arm Blades")) { snprintf(why, sizeof why, "You already have %s - one set of blades per forearm", o->name); return why; } }
@@ -415,7 +415,7 @@ static void Cy_Tick(void)
         g_cyRevertN = 0;
     }
     if (!g_cyOn) return;
-    {   /* the ripperdoc: talking to Doc Usanagi opens the cyberware screen over the dialogue */
+    {   /* who you're talking to (logged) */
         bool dlg = ((const volatile bool *)0x011F308F)[1009];
         static bool dlgWas = false; static int tries = 0;
         if (dlg && !dlgWas) tries = 20;   /* (who you're talking to may only be set a frame or two after the menu opens) */
@@ -429,13 +429,8 @@ static void Cy_Tick(void)
                 if (s && !IsBadStringPtrA(s, 64) && s[0] >= 'A' && s[0] <= 'Z' && strlen(s) < 48) nm = s;
             }
             if (nm || !tries) { tries = 0; static int logged = 0; if (logged++ < 40) Log("Cyberware: talking to %s", nm ? nm : "(no name found)"); }
-            if (nm && strstr(nm, "Usanagi")) {
-                g_cyAtDoc = true;
-                Log("Cyberware: Doc Usanagi - opening the ripperdoc");
-                Cyber_Open(true);
-            }
         }
-        /* Hunter (FNVVRMC - Hunter.esp, Camp McCarran): his "What kind of chrome do you have?" topic sets the
+        /* Hunter (FNVVRMC - Hunter.esp, New Vegas Medical Clinic), the ripperdoc: his "What kind of chrome do you have?" topic sets the
            global FNVVRMCHunterChrome to 1; it's read (and cleared) here while you're talking */
         static void *hScr = NULL; static bool hBad = false; static int hWait = 0;
         if (dlg && !hBad && ++hWait >= 10) {
@@ -443,7 +438,7 @@ static void Cy_Tick(void)
             if (!hScr) {
                 hScr = g_scriptIntf && g_scriptIntf->CompileScript ? g_scriptIntf->CompileScript(
                     "int iV\nBegin Function { }\nset iV to FNVVRMCHunterChrome\nset FNVVRMCHunterChrome to 0\nSetFunctionValue iV\nEnd\n") : NULL;
-                if (!hScr) { hBad = true; Log("Cyberware: Hunter's plugin isn't loaded (no FNVVRMCHunterChrome) - only Doc Usanagi is a ripperdoc"); }
+                if (!hScr) { hBad = true; Log("Cyberware: Hunter's plugin isn't loaded (no FNVVRMCHunterChrome) - no ripperdoc; install FNVVRMC - Hunter.esp"); }
             }
             double v = 0;
             if (hScr && Cy_CallNum(hScr, 0, 0, &v) && v > 0.5) {

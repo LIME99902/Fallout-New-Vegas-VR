@@ -1,4 +1,4 @@
-"""Builds 'FNVVRMC - Hunter.esp': Hunter, the Camp McCarran ripperdoc."""
+"""Builds 'FNVVRMC - Hunter.esp': Hunter, the ripperdoc at the New Vegas Medical Clinic."""
 import sys, struct, pickle, re
 sys.path.insert(0, '/home/claude/hunter')
 from tes import *
@@ -14,7 +14,7 @@ _, kr = read_plugin(UP + 'Kriss.esp')
 FNV = {r.edid(): r for r in walk(small) if r.edid()}
 LR = {r.edid(): r for r in walk(lr) if r.edid()}
 KR = {r.edid(): r for r in walk(kr) if r.edid()}
-cell = [r for r in walk(cells) if r.typ == 'CELL' and r.fid == 0xF1893][0]
+cell = [r for r in walk(cells) if r.typ == 'CELL' and r.fid == 0xED19F][0]
 
 # masters: 00 FalloutNV.esm, 01 LonesomeRoad.esm, 02 Kriss.esp ; our own forms 03xxxxxx
 nid = [0x03000800]
@@ -145,12 +145,12 @@ for t in ALL:
     i = info(text, prompt=topic, choices=() if bye else ALL, goodbye=bye, script_set=scr)
     dial_items += [d, Grup(t, 7, [i])]
 
-# ---------------------------------------------------------------- placed in Camp McCarran's concourse infirmary (Dr. Kemp's)
+# ---------------------------------------------------------------- placed in the New Vegas Medical Clinic's operating room, by the Auto-Doc
 REF_ID = new()
 achr = Rec('ACHR', REF_ID, flags=0x400, subs=[['EDID', z('FNVVRMCHunterREF')], ['NAME', fid(NPC_ID)],
-                                              ['DATA', f32(4215.0, -985.0, 18245.0, 0.0, 0.0, 2.2)]])
+                                              ['DATA', f32(2110.0, 120.0, 10114.0, 0.0, 0.0, 1.57)]])
 cellov = cell.copy()
-cell_grp = Grup(b'CELL', 0, [Grup(1, 2, [Grup(3, 3, [cellov, Grup(0xF1893, 6, [Grup(0xF1893, 8, [achr])])])])])
+cell_grp = Grup(b'CELL', 0, [Grup(7, 2, [Grup(6, 3, [cellov, Grup(0xED19F, 6, [Grup(0xED19F, 8, [achr])])])])])
 
 # ---------------------------------------------------------------- write
 top = [
@@ -165,7 +165,7 @@ top = [
 nrec = sum(1 for _ in walk(top)) + sum(1 for g in top for _ in [0])
 def count(items): return sum(1 + (count(x.items) if isinstance(x, Grup) else 0) for x in items)
 hdr = Rec('TES4', 0, subs=[['HEDR', struct.pack('<fiI', 1.34, count(top), nid[0])], ['CNAM', z('FNVVRMC')],
-                           ['SNAM', z("Hunter - an NCR ripperdoc at Camp McCarran (FNVVRMC cyberware).")]])
+                           ['SNAM', z("Hunter - an NCR veteran ripperdoc at the New Vegas Medical Clinic (FNVVRMC cyberware).")]])
 for m in ('FalloutNV.esm', 'LonesomeRoad.esm', 'Kriss.esp'):
     hdr.subs += [['MAST', z(m)], ['DATA', bytes(8)]]
 open(OUT, 'wb').write(hdr.pack() + b''.join(g.pack() for g in top))
