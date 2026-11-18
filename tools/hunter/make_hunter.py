@@ -60,6 +60,7 @@ for i, n in ((1, 'acc'), (2, 'holo'), (3, 'acc_holo'), (4, 'supp'), (5, 'acc_sup
 # .45 ACP like a real Vector: Honest Hearts' .45 Auto (HonestHearts.esm is our 4th master, index 03)
 AMMO = 0x0300947B                     # NVDLC02Ammo45Auto
 vec.set('NAM0', fid(0x03009E70))       # NVDLC02AmmoList45Auto (all .45 Auto kinds)
+_dn = bytearray(vec.get('DNAM')); struct.pack_into('<f', _dn, 64, 20.0); struct.pack_into('<f', _dn, 88, 20.0); vec.set('DNAM', bytes(_dn))   # 1200 rounds a minute, like the real one
 
 # ---------------------------------------------------------------- Hunter
 NPC_ID = new()
@@ -233,9 +234,9 @@ i_ = [k for k, x in enumerate(fl.subs) if x[0] == 'MODL'][0] + 1
 for item, n_ in ((ARM_ID, 1), (HLM_ID, 1), (VEC_ID, 1), (AMMO, 200)):
     fl.subs.insert(i_, ['CNTO', fid(item) + struct.pack('<i', n_)]); i_ += 1
 CHEST_REF = new()
-chestref = Rec('REFR', CHEST_REF, subs=[['NAME', fid(CHEST_ID)], ['XLOC', bytes([100, 0, 0, 0]) + fid(0) + bytes(12)],
+chestref = Rec('REFR', CHEST_REF, flags=0x400, subs=[['EDID', z('FNVVRMCHunterFootlockerREF')], ['NAME', fid(CHEST_ID)], ['XLOC', bytes([100, 0, 0, 0]) + fid(0) + bytes(12)],
                                         ['DATA', f32(2140.0, -300.0, 10112.0, 0.0, 0.0, 4.71)]])
-temp.append(chestref)
+pers.append(chestref)   # (persistent: FNVR.dll makes it yours once you've told Hunter Caesar is dead)
 ENCH_ID = new()
 ench = Rec('ENCH', ENCH_ID, subs=[['EDID', z('FNVVRMCHunterGearEnch')], ['FULL', z("Hunter's Chrome-Lined Gear")],
                                   ['ENIT', struct.pack('<IIIB3s', 3, 0, 0, 0, b'\0\0\0')],          # apparel enchantment
@@ -274,11 +275,7 @@ si = info("The Bible holds many words of guidance for us, in times of peace and 
           "May the Holy Spirit guide you to him, and good luck. You're gonna need it.",
           prompt="So you've read the scriptures too, then?", choices=ALL)
 si.set('DATA', bytes([0, 0, 0x04, 0]))   # (say once: the key is given one time)
-# player.AddItem FNVVRMCHunterFootlockerKey 1  - compiled the way the game's own result scripts are (AddItem = 0x1002)
-scda = bytes.fromhex('1c000100') + bytes.fromhex('0210') + struct.pack('<HH', 10, 2) + b'r' + struct.pack('<H', 2) + b'n' + struct.pack('<i', 1)
-k0 = [k for k, x in enumerate(si.subs) if x[0] == 'SCHR'][0]
-si.subs[k0:k0 + 1] = [['SCHR', struct.pack('<IIIIHH', 0, 2, len(scda), 0, 0, 1)], ['SCDA', scda],
-                      ['SCTX', b'player.AddItem FNVVRMCHunterFootlockerKey 1'], ['SCRO', fid(0x14)], ['SCRO', fid(KEY_ID)]]
+# (the key itself is handed over by FNVR.dll when this answer is on screen - "I want you to have this")
 dial_items += [Rec('DIAL', T_GRAHAM, subs=[['EDID', z('FNVVRMCHunterTopicGraham')], ['QSTI', fid(QST_ID)], ['FULL', z("I've seen Joshua Graham. He didn't mention you.")], ['PNAM', f32(50.0)], ['DATA', b'\0\0']]),
                Grup(T_GRAHAM, 7, [gi]),
                Rec('DIAL', T_SCRIPT, subs=[['EDID', z('FNVVRMCHunterTopicScripture')], ['QSTI', fid(QST_ID)], ['FULL', z("So you've read the scriptures too, then?")], ['PNAM', f32(50.0)], ['DATA', b'\0\0']]),

@@ -482,6 +482,21 @@ static void Cy_Tick(void)
                 if (cScr && Cy_CallNum(cScr, 0, 0, &ok) && ok > 0.5) Log("Cyberware: Hunter took 50 Legion ears - NCR reputation back to Liked");
             }
             cSaid = clr;
+            /* his scripture talk ("I want you to have this"): the footlocker key, once; his Caesar talk ("some new chrome, if you
+               want to take a look"): the footlocker becomes yours - taking from it is no longer stealing */
+            static const struct { const char *said; const char *src; const char *log; } hx[2] = {
+                { "I want you to have this", "int iN\nBegin Function { }\nset iN to player.GetItemCount FNVVRMCHunterFootlockerKey\nif iN == 0\nplayer.AddItem FNVVRMCHunterFootlockerKey 1\nSetFunctionValue 1\nendif\nEnd\n", "gave you his footlocker key" },
+                { "if you want to take a look", "Begin Function { }\nFNVVRMCHunterFootlockerREF.SetOwnership\nSetFunctionValue 1\nEnd\n", "his footlocker is yours now (no more stealing)" } };
+            static bool hxSaid[2]; static void *hxScr[2]; static bool hxBad[2];
+            for (int k = 0; k < 2; k++) {
+                budget = 4000; bool on = dm && Cy_TileHasText(dm, hx[k].said, 0, &budget);
+                if (on && !hxSaid[k]) {
+                    if (!hxScr[k] && !hxBad[k]) { hxScr[k] = Cy_Compile(hx[k].src); hxBad[k] = !hxScr[k]; }
+                    double r = 0;
+                    if (hxScr[k] && Cy_CallNum(hxScr[k], 0, 0, &r) && r > 0.5) Log("Cyberware: Hunter %s", hx[k].log);
+                }
+                hxSaid[k] = on;
+            }
             /* Fiend ears: "50 caps a Fiend ear" */
             static bool fSaid = false; budget = 4000;
             bool fe = dm && Cy_TileHasText(dm, "caps a Fiend ear", 0, &budget);
