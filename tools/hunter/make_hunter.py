@@ -314,15 +314,18 @@ ni = info("I joined when I was a kid. Get food and shelter, learn to keep your h
 li = info("Took everything from me. Enough said. Killers, rapists, pedophiles... every sin you can think of, they live for. "
           "Give me Legion ears and I'll give you caps.", prompt="How do you feel about the Legion?", choices=ALL)
 LEGION_EAR, REP_NCR = 0x00125F4C, 0x000F43DE
-GOOD_NCR = [cond(575, REP_NCR, 0, op=0x60, val=2.0),    # GetReputationThreshold RepNVNCR fame >= 2
-            cond(575, REP_NCR, 1, op=0x80, val=2.0)]    # ... and infamy < 2  (the NCR likes you)
+# NCR standing from the raw numbers (GetReputation RepNVNCR: axis 1 fame, 0 infamy). The NCR's scale is 80, so its levels
+# start at 12 / 40 / 80 (15% / 50% / 100%): Accepted / Liked / Idolized, Shunned / Hated / Vilified the same way for infamy.
+FAME = lambda op, v: cond(573, REP_NCR, 1, op=op, val=v)
+INFAMY = lambda op, v, orflag=False: cond(573, REP_NCR, 0, op=op, val=v, orflag=orflag)
+GOOD_NCR = [FAME(0x60, 40.0), INFAMY(0x80, 12.0)]          # liked: fame >= 40, infamy < 12
+IDOLIZED_NCR = [FAME(0x60, 80.0), INFAMY(0x80, 12.0)]      # idolized: fame >= 80, infamy < 12
 HAS_EARS = [cond(47, LEGION_EAR, 0, op=0x60, val=1.0, runon=1)]   # the player (the one talked to) has a Legion ear
 # the bounty depends on what the NCR thinks of you (FNVR.dll sees "<n> caps an ear" and makes the trade):
 # idolized 400, liked 250, anything less (neutral, hated) 100
-IDOLIZED = [cond(575, REP_NCR, 0, op=0x60, val=4.0), cond(575, REP_NCR, 1, op=0x80, val=2.0)]
 ei = info("Another pile of Legion dogs put down. For a hero of the Republic, 400 caps an ear. Keep 'em coming.",
           prompt="I've got some Legion ears for you.", choices=ALL)
-add_conds(ei, HAS_EARS + IDOLIZED)
+add_conds(ei, HAS_EARS + IDOLIZED_NCR)
 ei2 = info("Good work. The NCR speaks well of you. 250 caps an ear.", prompt="I've got some Legion ears for you.", choices=ALL)
 add_conds(ei2, HAS_EARS + GOOD_NCR)
 ei2.set('PNAM', fid(ei.fid))
@@ -330,12 +333,32 @@ ei3 = info("The NCR doesn't think much of you, but a dead legionary is a dead le
            prompt="I've got some Legion ears for you.", choices=ALL)
 add_conds(ei3, HAS_EARS)
 ei3.set('PNAM', fid(ei2.fid))
+# 50 ears clear your name with the NCR (back to Liked) - FNVR.dll sees his answer and makes the change
+T_CLEAR = new()
+xi = info("Fifty ears. That's a lot of dead legionaries. I'll talk to command. Consider your record with the NCR cleaned up.",
+          prompt="[Give 50 Legion ears] Can you put in a good word for me with the NCR?", choices=ALL)
+add_conds(xi, [cond(47, LEGION_EAR, 0, op=0x60, val=50.0, runon=1),     # 50 ears or more
+               cond(573, REP_NCR, 1, op=0x80, val=40.0, orflag=True),     # and not liked yet: fame < 40 OR
+               INFAMY(0x60, 12.0)])                                       #   infamy >= 12
+dial_items += [topic(T_CLEAR, 'FNVVRMCHunterTopicClearName', "[Give 50 Legion ears] Can you put in a good word for me with the NCR?"), Grup(T_CLEAR, 7, [xi])]
 dial_items += [topic(T_NCR, 'FNVVRMCHunterTopicNCR', 'How do you feel about the NCR?'), Grup(T_NCR, 7, [ni]),
                topic(T_LEGION, 'FNVVRMCHunterTopicLegion', 'How do you feel about the Legion?'), Grup(T_LEGION, 7, [li]),
                topic(T_EARS, 'FNVVRMCHunterTopicEars', "I've got some Legion ears for you."), Grup(T_EARS, 7, [ei, ei2, ei3])]
 
+# (2.13.7) Fiend ears: every Fiend drops one (FNVR.dll puts it on the body), Hunter pays 50 caps each
+_, misc = read_plugin(UP + 'FalloutNV.esm', want={'MISC'})
+FEAR_ID = new()
+fear = [r for r in walk(misc) if r.edid() == 'LegionEar'][0].copy(); fear.fid = FEAR_ID
+fear.subs = [x for x in fear.subs if x[0] != 'SCRI']
+fear.set('EDID', z('FNVVRMCFiendEar')); fear.set('FULL', z('Fiend Ear'))
+T_FIEND = new()
+fi = info("Fiends. Chromed-up junkies with a death wish. 50 caps a Fiend ear, and the Mojave's a little safer.",
+          prompt="I've got some Fiend ears for you.", choices=ALL)
+add_conds(fi, [cond(47, FEAR_ID, 0, op=0x60, val=1.0, runon=1)])
+dial_items += [topic(T_FIEND, 'FNVVRMCHunterTopicFiendEars', "I've got some Fiend ears for you."), Grup(T_FIEND, 7, [fi])]
+
 # every answer offers the full list of his topics (each only shows when its conditions are met); Goodbye stays last
-TOPICS = [T_CHROME, T_OPEN, T_BURNED, T_NCR, T_LEGION, T_EARS, T_GRAHAM, T_CAESAR, T_BYE]
+TOPICS = [T_CHROME, T_OPEN, T_BURNED, T_NCR, T_LEGION, T_EARS, T_CLEAR, T_FIEND, T_GRAHAM, T_CAESAR, T_BYE]
 for r in walk(dial_items):
     if r.typ == 'INFO' and any(x[0] == 'TCLT' for x in r.subs):
         first = [k for k, x in enumerate(r.subs) if x[0] == 'TCLT'][0]
@@ -351,6 +374,7 @@ top = [
     Grup(b'WEAP', 0, [vec]),
     Grup(b'STAT', 0, [adstat]),
     Grup(b'KEYM', 0, [key]),
+    Grup(b'MISC', 0, [fear]),
     Grup(b'CONT', 0, [fl]),
     Grup(b'NPC_', 0, [npc]),
     Grup(b'CREA', 0, [boba]),

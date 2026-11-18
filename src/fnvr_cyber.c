@@ -339,9 +339,12 @@ static void Cy_OnHit(void *thisObj, void *params)
     if (p && pl && p[1] == pl && p[0] && p[0] != pl) InterlockedIncrement(&g_cyHits);
     else if (p && pl && p[1] && p[0] && p[1] != pl) Ce_Event(p[1], p[0], false);   /* (someone else's hit: a chromed enemy's?) */
 }
+/* everyone who dies is noted (handled on the next tick: a Fiend gets a Fiend Ear to loot - FNVVRMC - Hunter.esp) */
+static void *volatile g_cyDead[32]; static volatile LONG g_cyDeadW = 0, g_cyDeadR = 0;
 static void Cy_OnDeath(void *thisObj, void *params)
 {
     (void)thisObj; void **p = (void **)params; void *pl = GetPlayer();
+    if (p && p[0] && p[0] != pl && g_cyDeadW - g_cyDeadR < 32) { g_cyDead[g_cyDeadW & 31] = p[0]; InterlockedIncrement(&g_cyDeadW); }
     if (p && pl && p[1] == pl && p[0] && p[0] != pl) InterlockedIncrement(&g_cyKills);
     else if (p && pl && p[1] && p[0] && p[1] != pl) Ce_Event(p[1], p[0], true);
 }
@@ -464,6 +467,35 @@ static void Cy_Tick(void)
                 Cyber_Open(true);
             }
             hSaid = said;
+            /* 50 Legion ears clear your name with the NCR: back to Liked (infamy gone, fame up to 40 of the NCR's 80) */
+            static bool cSaid = false; budget = 4000;
+            bool clr = dm && Cy_TileHasText(dm, "record with the NCR cleaned up", 0, &budget);
+            if (clr && !cSaid) {
+                static void *cScr = NULL; static bool cBad = false;
+                if (!cScr && !cBad) {
+                    cScr = Cy_Compile("float fF\nfloat fI\nint iN\nBegin Function { }\nset iN to player.GetItemCount LegionEar\nif iN >= 50\n"
+                                      "player.RemoveItem LegionEar 50\nset fI to GetReputation RepNVNCR 0\nif fI > 0\nRemoveReputationExact RepNVNCR 0 fI\nendif\n"
+                                      "set fF to GetReputation RepNVNCR 1\nif fF < 40\nset fF to 40 - fF\nAddReputationExact RepNVNCR 1 fF\nendif\nSetFunctionValue 1\nendif\nEnd\n");
+                    cBad = !cScr; if (cBad) Log("Cyberware: the NCR name-clearing script wasn't accepted");
+                }
+                double ok = 0;
+                if (cScr && Cy_CallNum(cScr, 0, 0, &ok) && ok > 0.5) Log("Cyberware: Hunter took 50 Legion ears - NCR reputation back to Liked");
+            }
+            cSaid = clr;
+            /* Fiend ears: "50 caps a Fiend ear" */
+            static bool fSaid = false; budget = 4000;
+            bool fe = dm && Cy_TileHasText(dm, "caps a Fiend ear", 0, &budget);
+            if (fe && !fSaid) {
+                static void *fScr = NULL; static bool fBad = false;
+                if (!fScr && !fBad) {
+                    fScr = Cy_Compile("int iN\nint iC\nBegin Function { }\nset iN to player.GetItemCount FNVVRMCFiendEar\nif iN > 0\n"
+                                      "set iC to iN * 50\nplayer.RemoveItem FNVVRMCFiendEar iN\nplayer.AddItem Caps001 iC\nendif\nSetFunctionValue iN\nEnd\n");
+                    fBad = !fScr;
+                }
+                double n = 0;
+                if (fScr && Cy_CallNum(fScr, 0, 0, &n)) Log("Cyberware: Hunter bought %d Fiend ears (%d caps)", (int)n, (int)n * 50);
+            }
+            fSaid = fe;
             /* his Legion ear bounty: "<price> caps an ear" on screen (400 idolized by the NCR, 250 liked, 100 otherwise) -
                every Legion ear you carry is swapped for that many caps */
             static int eSaid = 0;
@@ -508,6 +540,18 @@ static void Cy_Tick(void)
         dlgWas = dlg;
     }
     if (!g_inGameplay || !GetPlayer()) return;
+    while (g_cyDeadR != g_cyDeadW) {   /* the dead: a Fiend leaves an ear */
+        void *who = g_cyDead[g_cyDeadR & 31]; InterlockedIncrement(&g_cyDeadR);
+        static void *dScr = NULL; static bool dBad = false;
+        if (!dScr && !dBad) {
+            dScr = Cy_Compile("ref rV\nBegin Function { rV }\nif rV.GetInFaction FiendsFactionNV\nrV.AddItem FNVVRMCFiendEar 1\nSetFunctionValue 1\nendif\nEnd\n");
+            dBad = !dScr; if (dBad) Log("Cyberware: no Fiend ears (FNVVRMC - Hunter.esp not loaded)");
+        }
+        typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+        struct { double num; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+        if (dScr && who && g_scriptIntf && g_scriptIntf->CallFunction && ((CallFn_t)g_scriptIntf->CallFunction)(dScr, GetPlayer(), NULL, &res, 1, who)
+            && res.type == 1 && res.num > 0.5) { static int fl = 0; if (fl++ < 20) Log("Cyberware: a Fiend died - one Fiend Ear on the body"); }
+    }
     double now = QpcMs();
     g_cyPlayerLvl = g_cyPlvShown;
     Ce_Tick(now);
