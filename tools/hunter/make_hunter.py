@@ -298,15 +298,45 @@ ci.subs.insert([k for k, x in enumerate(ci.subs) if x[0] == 'CTDA'][-1] + 1,
                ['CTDA', struct.pack('<B3sfHHIIII', 0x60, b'\0\0\0', 1.0, 84, 0, CAESAR, 0, 0, 0)])
 dial_items += [Rec('DIAL', T_CAESAR, subs=[['EDID', z('FNVVRMCHunterTopicCaesar')], ['QSTI', fid(QST_ID)], ['FULL', z("Caesar is dead. I killed him.")], ['PNAM', f32(50.0)], ['DATA', b'\0\0']]),
                Grup(T_CAESAR, 7, [ci])]
-# the Joshua Graham line is offered wherever his other topics are (it only shows once every DLC is done)
+# (2.13.6) the NCR, the Legion, and Legion ears for caps
+T_NCR, T_LEGION, T_EARS = new(), new(), new()
+def topic(t, edid, text):
+    return Rec('DIAL', t, subs=[['EDID', z(edid)], ['QSTI', fid(QST_ID)], ['FULL', z(text)], ['PNAM', f32(50.0)], ['DATA', b'\0\0']])
+def cond(fn, p1, p2=0, op=0, val=1.0, runon=0, orflag=False):
+    return ['CTDA', struct.pack('<B3sfHHIIII', op | (0x01 if orflag else 0), b'\0\0\0', val, fn, 0, p1, p2, runon, 0)]
+def add_conds(r, cs):
+    for c in cs: r.subs.insert([k for k, x in enumerate(r.subs) if x[0] == 'CTDA'][-1] + 1, c)
+ni = info("I joined when I was a kid. Get food and shelter, learn to keep your head on your shoulders. "
+          "Then we started expanding our borders. I joined the Rangers, and more and more death followed wherever we went. "
+          "We slaughtered the Brotherhood at HELIOS One, and then the Legion got on our radar, and the rest is history. A very painful history. "
+          "They have good intentions, and compared to the competition, well, there isn't much to debate.",
+          prompt="How do you feel about the NCR?", choices=ALL)
+li = info("Took everything from me. Enough said. Killers, rapists, pedophiles... every sin you can think of, they live for. "
+          "Give me Legion ears and I'll give you caps.", prompt="How do you feel about the Legion?", choices=ALL)
+LEGION_EAR, REP_NCR = 0x00125F4C, 0x000F43DE
+GOOD_NCR = [cond(575, REP_NCR, 0, op=0x60, val=2.0),    # GetReputationThreshold RepNVNCR fame >= 2
+            cond(575, REP_NCR, 1, op=0x80, val=2.0)]    # ... and infamy < 2  (the NCR likes you)
+HAS_EARS = [cond(47, LEGION_EAR, 0, op=0x60, val=1.0, runon=1)]   # the player (the one talked to) has a Legion ear
+# with a good name in the NCR: 400 caps an ear (FNVR.dll sees this line and makes the trade)
+ei = info("Another pile of Legion dogs put down. Here you go, 400 caps an ear. Keep 'em coming.",
+          prompt="I've got some Legion ears for you.", choices=ALL)
+add_conds(ei, HAS_EARS + GOOD_NCR)
+ei2 = info("I don't pay just anyone for those. Earn the NCR's trust first, then we'll talk about ears.",
+           prompt="I've got some Legion ears for you.", choices=ALL)
+add_conds(ei2, HAS_EARS)
+ei2.set('PNAM', fid(ei.fid))
+dial_items += [topic(T_NCR, 'FNVVRMCHunterTopicNCR', 'How do you feel about the NCR?'), Grup(T_NCR, 7, [ni]),
+               topic(T_LEGION, 'FNVVRMCHunterTopicLegion', 'How do you feel about the Legion?'), Grup(T_LEGION, 7, [li]),
+               topic(T_EARS, 'FNVVRMCHunterTopicEars', "I've got some Legion ears for you."), Grup(T_EARS, 7, [ei, ei2])]
+
+# every answer offers the full list of his topics (each only shows when its conditions are met); Goodbye stays last
+TOPICS = [T_CHROME, T_OPEN, T_BURNED, T_NCR, T_LEGION, T_EARS, T_GRAHAM, T_CAESAR, T_BYE]
 for r in walk(dial_items):
-    if r.typ == 'INFO' and r not in (gi, si, ci) and any(x[0] == 'TCLT' for x in r.subs):
-        r.subs.insert([k for k, x in enumerate(r.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
-        r.subs.insert([k for k, x in enumerate(r.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_CAESAR)])
-gi.subs.insert([k for k, x in enumerate(gi.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
-for x_ in (gi, si, ci): x_.subs.insert([k for k, x in enumerate(x_.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_CAESAR)])
-ci.subs.insert([k for k, x in enumerate(ci.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
-si.subs.insert([k for k, x in enumerate(si.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
+    if r.typ == 'INFO' and any(x[0] == 'TCLT' for x in r.subs):
+        first = [k for k, x in enumerate(r.subs) if x[0] == 'TCLT'][0]
+        extra = [fid(T_SCRIPT)] if r is gi else []
+        r.subs = [x for x in r.subs if x[0] != 'TCLT']
+        r.subs[first:first] = [['TCLT', t] for t in extra + [fid(t) for t in TOPICS]]
 
 # ---------------------------------------------------------------- write
 top = [

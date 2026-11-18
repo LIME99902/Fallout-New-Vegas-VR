@@ -464,6 +464,20 @@ static void Cy_Tick(void)
                 Cyber_Open(true);
             }
             hSaid = said;
+            /* his Legion ear bounty: "400 caps an ear" on screen - every Legion ear you carry is swapped for 400 caps */
+            static bool eSaid = false; budget = 4000;
+            bool ears = dm && Cy_TileHasText(dm, "400 caps an ear", 0, &budget);
+            if (ears && !eSaid) {
+                static void *eScr = NULL; static bool eBad = false;
+                if (!eScr && !eBad) {
+                    eScr = Cy_Compile("int iN\nint iC\nBegin Function { }\nset iN to player.GetItemCount LegionEar\nif iN > 0\n"
+                                      "set iC to iN * 400\nplayer.RemoveItem LegionEar iN\nplayer.AddItem Caps001 iC\nendif\nSetFunctionValue iN\nEnd\n");
+                    eBad = !eScr;
+                }
+                double n = 0;
+                if (eScr && Cy_CallNum(eScr, 0, 0, &n)) Log("Cyberware: Hunter bought %d Legion ears for %d caps", (int)n, (int)n * 400);
+            }
+            eSaid = ears;
         }
         if (!g_cyTalkHunter) hSaid = false;
         /* Hunter (FNVVRMC - Hunter.esp, New Vegas Medical Clinic), the ripperdoc: his "What kind of chrome do you have?" topic sets the
