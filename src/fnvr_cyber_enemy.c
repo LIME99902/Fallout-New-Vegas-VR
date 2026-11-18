@@ -1,8 +1,11 @@
 /* ==== Chromed enemies =================================================================================================
    Included by fnvr_cyber.c (it uses the implant catalogue and the script helpers there).
 
-   Human enemies (characters, not creatures or robots) can carry the same implants you can. Each one is decided the
-   first time it fights you: whether it has chrome, how much, and which, scaled by YOUR level - a few at the start,
+   Every human character (characters, not creatures or robots) - enemies, companions, townsfolk - can carry the same
+   implants you can. Each one is decided the first time it's near you: whether it has chrome, how much, and which -
+   picked to suit how it fights, read from its own skills: melee fighters (Veronica) get blades, hydraulics, knuckles
+   and plating; shooters (Boone) get optics, smart-link palms, recoil dampers - and stealth implants when their Sneak is
+   high; non-fighters get brain and immune implants. Your companions always have some. Amounts are scaled by YOUR level - a few at the start,
    most enemies well chromed by the end of the game. Bosses (enemies well above your level) are always chromed and carry
    far more. Their stat implants go in with the game's own ModAV on them (so the game keeps them with the save), and
    what each enemy carries is written into FNVR's co-save so its abilities come back after loading.
@@ -81,14 +84,16 @@ static bool Ce_ModAV(char *ref, const char *av, int amt)
     }
     return !cache[k].bad && Ce_Call(cache[k].scr, ref, 2, amt, NULL);
 }
-static double Ce_Num(int which, char *ref)   /* 0 health fraction, 1 level, 2 dead, 3 aggression */
+static double Ce_Num(int which, char *ref)   /* 0 health fraction, 1 level, 2 dead, 3 aggression, 4 in combat, 5 your companion */
 {
-    static void *s[4];
-    static const char *const src[4] = {
+    static void *s[6];
+    static const char *const src[6] = {
         "ref rW\nfloat fV\nBegin Function { rW }\nset fV to rW.GetHealthPercentage\nSetFunctionValue fV\nEnd\n",
         "ref rW\nint iV\nBegin Function { rW }\nset iV to rW.GetLevel\nSetFunctionValue iV\nEnd\n",
         "ref rW\nint iV\nBegin Function { rW }\nset iV to rW.GetDead\nSetFunctionValue iV\nEnd\n",
-        "ref rW\nint iV\nBegin Function { rW }\nset iV to rW.GetAV Aggression\nSetFunctionValue iV\nEnd\n" };
+        "ref rW\nint iV\nBegin Function { rW }\nset iV to rW.GetAV Aggression\nSetFunctionValue iV\nEnd\n",
+        "ref rW\nint iV\nBegin Function { rW }\nset iV to rW.IsInCombat\nSetFunctionValue iV\nEnd\n",
+        "ref rW\nint iV\nBegin Function { rW }\nset iV to rW.GetPlayerTeammate\nSetFunctionValue iV\nEnd\n" };
     if (!s[which]) s[which] = Cy_Compile(src[which]);
     double v = -1; if (!Ce_Call(s[which], ref, 1, 0, &v)) return -1;
     if (which == 0 && v > 1.5) v /= 100.0;
@@ -133,22 +138,73 @@ static void Ce_TempOff(CEnemy *e, char *ref)
 static const char *const g_ceNamed[] = { "Caesar", "Legate Lanius", "Vulpes Inculta", "Motor-Runner", "Benny", "Cook-Cook", "Driver Nephi",
     "Jessup", "McMurphy", "Papa Khan", "General Lee Oliver", "Chief Hanlon", "Elijah", "Ulysses", "Salt-Upon-Wounds", "Joshua Graham", "Big Sal", "Nero", "Dog", NULL };
 static bool Ce_IsNamedBoss(const char *nm) { for (int i = 0; g_ceNamed[i]; i++) if (!_stricmp(nm, g_ceNamed[i])) return true; return false; }
-/* the first fight with you: does this one have chrome, and what */
+/* what kind of fighter each implant suits */
+enum { CK_MELEE = 1, CK_GUN = 2, CK_STEALTH = 4, CK_TOUGH = 8, CK_MIND = 16 };
+static int Ce_Kind(const char *id)
+{
+    static const struct { const char *id; int k; } t[] = {
+        { "core_overclock", CK_GUN | CK_MELEE }, { "core_berserk", CK_MELEE }, { "core_ghost", CK_STEALTH },
+        { "cortex_recall", CK_MIND }, { "cortex_tactic", CK_GUN | CK_STEALTH }, { "cortex_tongue", CK_MIND },
+        { "optics_hunter", CK_GUN | CK_STEALTH }, { "optics_ballist", CK_GUN }, { "optics_threat", CK_STEALTH },
+        { "circ_heart", CK_TOUGH }, { "circ_adrenal", CK_GUN | CK_MELEE }, { "circ_backup", CK_TOUGH },
+        { "nerve_reflex", CK_GUN | CK_MELEE }, { "nerve_steady", CK_MIND | CK_STEALTH }, { "nerve_pain", CK_TOUGH | CK_MELEE },
+        { "derm_plate", CK_TOUGH | CK_MELEE }, { "derm_thresh", CK_TOUGH | CK_MELEE }, { "derm_fire", CK_TOUGH },
+        { "skel_titan", CK_TOUGH | CK_MELEE }, { "skel_spine", CK_TOUGH }, { "skel_lattice", CK_TOUGH },
+        { "imm_filter", CK_TOUGH | CK_MIND }, { "imm_rad", CK_TOUGH | CK_MIND }, { "imm_venom", CK_TOUGH | CK_MIND },
+        { "arm_kinetic", CK_MELEE }, { "arm_thermal", CK_MELEE }, { "arm_shock", CK_MELEE }, { "arm_toxin", CK_MELEE },
+        { "arm_hydraulic", CK_MELEE }, { "arm_recoil", CK_GUN }, { "hand_knuckle", CK_MELEE }, { "hand_link", CK_GUN },
+        { "hand_grip", CK_MELEE }, { "leg_sprint", CK_MELEE | CK_STEALTH } };
+    for (unsigned i = 0; i < sizeof t / sizeof t[0]; i++) if (!strcmp(t[i].id, id)) return t[i].k;
+    return CK_TOUGH;
+}
+static double Ce_AV(char *ref, const char *av)   /* one of a character's skills */
+{
+    static struct { char av[20]; void *scr; } cache[8]; static int n = 0;
+    int k = 0; for (; k < n; k++) if (!strcmp(cache[k].av, av)) break;
+    if (k == n) {
+        if (n >= 8) return 0;
+        snprintf(cache[n].av, sizeof cache[n].av, "%s", av);
+        char src[160]; snprintf(src, sizeof src, "ref rW\nint iV\nBegin Function { rW }\nset iV to rW.GetAV %s\nSetFunctionValue iV\nEnd\n", av);
+        cache[n].scr = Cy_Compile(src); n++;
+    }
+    double v = 0; return Ce_Call(cache[k].scr, ref, 1, 0, &v) ? v : 0;
+}
+/* how a character fights, from its own skills: the implants that suit it */
+static int Ce_Build(char *ref, const char **label)
+{
+    double mel = fmax(Ce_AV(ref, "MeleeWeapons"), Ce_AV(ref, "Unarmed"));
+    double gun = fmax(fmax(Ce_AV(ref, "Guns"), Ce_AV(ref, "EnergyWeapons")), Ce_AV(ref, "Explosives"));
+    double snk = Ce_AV(ref, "Sneak");
+    if (mel < 30 && gun < 30) { *label = "non-fighter"; return CK_MIND | CK_TOUGH; }
+    if (mel > gun + 5) {
+        if (snk >= mel - 10) { *label = "stealthy melee"; return CK_MELEE | CK_STEALTH | CK_TOUGH; }
+        *label = "melee"; return CK_MELEE | CK_TOUGH;
+    }
+    if (snk >= gun - 10) { *label = "sneaky shooter"; return CK_GUN | CK_STEALTH; }
+    *label = "shooter"; return CK_GUN | CK_TOUGH;
+}
+/* the first time near you: does this one have chrome, and what */
 static void Ce_Decide(char *ref)
 {
     uint32_t id = *(uint32_t *)(ref + 0x0C);
     Ce_MarkDecided(id);
     int plv = g_cyPlayerLvl > 0 ? g_cyPlayerLvl : 1, lvl = (int)Ce_Num(1, ref); if (lvl < 1) lvl = 1;
-    bool named = Ce_IsNamedBoss(Cy_RefName(ref));
+    bool named = Ce_IsNamedBoss(Cy_RefName(ref)), mate = Ce_Num(5, ref) > 0.5;
     bool boss = named || lvl >= plv + 5 || (plv >= 8 && lvl * 10 >= plv * 13);
-    int chance = boss ? 100 : (int)fminf(90.0f, 15.0f + plv * 2.5f);
+    int chance = boss || mate ? 100 : (int)fminf(90.0f, 15.0f + plv * 2.5f);
     if (rand() % 100 >= chance || g_ceN >= CE_MAX) return;
-    int want = named ? CE_MAXIMP : boss ? 3 + plv / 4 : 1 + plv / 7 + rand() % 2;
+    int want = named ? CE_MAXIMP : boss ? 3 + plv / 4 : mate ? 2 + plv / 6 : 1 + plv / 7 + rand() % 2;
     if (want > CE_MAXIMP) want = CE_MAXIMP;
+    const char *style = "any"; int kind = Ce_Build(ref, &style);
     CEnemy *e = &g_ce[g_ceN]; memset(e, 0, sizeof *e);
     e->refID = id; e->boss = boss; e->cap = 16 + 20 + lvl;
     int order[CY_NCAT]; for (int i = 0; i < CY_NCAT; i++) order[i] = i;
     for (int i = CY_NCAT - 1; i > 0; i--) { int j = rand() % (i + 1), t = order[i]; order[i] = order[j]; order[j] = t; }
+    {   /* the ones that suit how it fights first (its main style before general toughness), the rest after */
+        int score[CY_NCAT];
+        for (int i = 0; i < CY_NCAT; i++) { int k = Ce_Kind(g_cyCat[i].id), m = k & kind; score[i] = (m & ~CK_TOUGH) ? 2 : m ? 1 : 0; }
+        for (int i = 1; i < CY_NCAT; i++) { int v = order[i], j = i - 1; while (j >= 0 && score[order[j]] < score[v]) { order[j + 1] = order[j]; j--; } order[j + 1] = v; }
+    }
     if (named) for (int i = 0; i < CY_NCAT; i++) if (g_cyCat[order[i]].special == CYS_HEART) { int t = order[0]; order[0] = order[i]; order[i] = t; break; }   /* (always a Backup Heart) */
     int used[CY_NSLOT] = { 0 }; bool blade = false;
     for (int k = 0; k < CY_NCAT && e->nImp < want; k++) {
@@ -169,8 +225,9 @@ static void Ce_Decide(char *ref)
     e->over = e->load > e->cap;
     g_ceN++;
     char list[1200] = ""; for (int i = 0; i < e->nImp; i++) { strncat(list, g_cyCat[e->imp[i]].name, sizeof list - strlen(list) - 3); if (i + 1 < e->nImp) strncat(list, ", ", sizeof list - strlen(list) - 1); }
-    if (named) { char m[96]; snprintf(m, sizeof m, "%s is chromed to the limit", Cy_RefName(ref)); UIMessage(m); }
-    Log("Chromed enemy: %s (level %d%s) - %d implants%s: %s", Cy_RefName(ref), lvl, named ? ", MAXED-OUT BOSS" : boss ? ", BOSS" : "", e->nImp, e->over ? ", OVER CAPACITY" : "", list);
+    if (named && Ce_Num(4, ref) > 0.5) { char m[96]; snprintf(m, sizeof m, "%s is chromed to the limit", Cy_RefName(ref)); UIMessage(m); }
+    Log("Chromed: %s (level %d, %s%s%s) - %d implants%s: %s", Cy_RefName(ref), lvl, style, named ? ", MAXED-OUT BOSS" : boss ? ", BOSS" : "", mate ? ", YOUR COMPANION" : "",
+        e->nImp, e->over ? ", OVER CAPACITY" : "", list);
 }
 static int Ce_OverPct(const CEnemy *e) { if (e->load <= e->cap || e->cap <= 0) return 0; int p = (e->load - e->cap) * 100 / e->cap; return p > 100 ? 100 : p < 1 ? 1 : p; }
 static void Ce_PsychoStart(CEnemy *e, char *ref)
@@ -190,12 +247,12 @@ static void Ce_PsychoEnd(CEnemy *e, char *ref)
     Ce_TempOff(e, ref); e->psycho = false;
     if (ref) Ce_SetAggr(ref, e->aggrPrev);
 }
-/* the characters fighting you (one at a time: the next after rLast) */
+/* the living characters around you (one at a time: the next after rLast) */
 static char *Ce_NextFoe(char *last)
 {
     typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
     static void *s = NULL;
-    if (!s) s = Cy_Compile("ref rLast\nref rW\nref rOut\nint iSeen\nBegin Function { rLast }\nset iSeen to 0\nif rLast == 0\nset iSeen to 1\nendif\nset rW to GetFirstRef 200 1\nwhile rW != 0\nif iSeen\nif rW.GetDead == 0\nif rW.GetCombatTarget == player\nset rOut to rW\nbreak\nelseif rW.IsInCombat\nif rW.GetShouldAttack player\nset rOut to rW\nbreak\nendif\nendif\nendif\nelseif rW == rLast\nset iSeen to 1\nendif\nset rW to GetNextRef\nloop\nSetFunctionValue rOut\nEnd\n");
+    if (!s) s = Cy_Compile("ref rLast\nref rW\nref rOut\nint iSeen\nBegin Function { rLast }\nset iSeen to 0\nif rLast == 0\nset iSeen to 1\nendif\nset rW to GetFirstRef 200 1\nwhile rW != 0\nif iSeen\nif rW.GetDead == 0\nset rOut to rW\nbreak\nendif\nelseif rW == rLast\nset iSeen to 1\nendif\nset rW to GetNextRef\nloop\nSetFunctionValue rOut\nEnd\n");
     if (!s || !g_scriptIntf || !g_scriptIntf->CallFunction) return NULL;
     struct { union { double num; void *form; } u; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
     if (!((CallFn_t)g_scriptIntf->CallFunction)(s, GetPlayer(), NULL, &res, 1, last) || res.type != 2) return NULL;
@@ -213,14 +270,19 @@ static void Ce_Tick(double now)
     }
     g_ceUndoN = 0;
     static double nextScan = 0;
-    if (now > nextScan) {   /* who's fighting you: new ones are decided, chromed ones marked as in the fight */
-        nextScan = now + 1500.0;
-        char *r = NULL; int guard = 0;
-        while ((r = Ce_NextFoe(r)) != NULL && guard++ < 40) {
+    if (now > nextScan) {   /* everyone around: new ones are decided (a few at a time), chromed ones in a fight marked */
+        nextScan = now + 2500.0;
+        static unsigned scans = 0; scans++;
+        char *r = NULL; int guard = 0, decided = 0;
+        while ((r = Ce_NextFoe(r)) != NULL && guard++ < 80) {
             if (IsBadReadPtr(r, 0x80) || *(uint8_t *)(r + 4) != 0x3B) continue;   /* (characters only - not creatures or robots) */
             uint32_t id = *(uint32_t *)(r + 0x0C);
-            if (!Ce_Decided(id)) Ce_Decide(r);
-            CEnemy *e = Ce_Find(id); if (e) e->seenAt = now;
+            if (!Ce_Decided(id)) { if (decided >= 6) continue; decided++; Ce_Decide(r); }
+            CEnemy *e = Ce_Find(id);
+            if (!e && (scans & 3) == 0 && decided < 6 && Ce_Num(5, r) > 0.5) {   /* (met without chrome, now your companion: they get some) */
+                decided++; Ce_Decide(r); e = Ce_Find(id);
+            }
+            if (e && Ce_Num(4, r) > 0.5) e->seenAt = now;
         }
     }
     LONG nev = InterlockedExchange(&g_ceEvN, 0); if (nev > 64) nev = 64;
@@ -237,7 +299,7 @@ static void Ce_Tick(double now)
     nextAbil = now + 500.0;
     for (int i = 0; i < g_ceN; i++) {
         CEnemy *e = &g_ce[i];
-        bool fighting = now - e->seenAt < 4000.0;
+        bool fighting = now - e->seenAt < 6000.0;
         if (!fighting && !e->abilOn && !e->psycho) continue;
         char *ref = Ce_Ref(e);
         if (!ref || Ce_Num(2, ref) > 0.5) { if (e->abilOn) Ce_TempOff(e, ref); if (e->psycho) Ce_PsychoEnd(e, ref); continue; }
