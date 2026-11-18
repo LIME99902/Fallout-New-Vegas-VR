@@ -137,7 +137,7 @@ LINES = {
 dial_items = []
 # GREETING: Lonesome Road's own copy of the topic (it already lists the base game's and LR's quests) + ours
 greet = LR['GREETING'].copy(); greet.subs.append(['QSTI', fid(QST_ID)])
-g_info = info("So you're the Courier I've heard so much about.", choices=ALL)
+g_info = info("So you're the Courier I've heard so much about. Thought you'd be taller.", choices=ALL)
 dial_items += [greet, Grup(0xC8, 7, [g_info])]
 for t in ALL:
     edid, topic, text, scr, bye = LINES[t]
