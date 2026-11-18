@@ -263,7 +263,7 @@ static bool Cy_CanInstallHere(void) { return g_cyAtDoc || g_cyAnywhere; }
 static const char *Cy_Install(const CyImpl *c)
 {
     static char why[160];
-    if (!Cy_CanInstallHere()) return "Only a ripperdoc can do that - see Doc Usanagi at the New Vegas Medical Clinic";
+    if (!Cy_CanInstallHere()) return "Only a ripperdoc can do that - see Doc Usanagi (New Vegas Medical Clinic) or Hunter (Camp McCarran)";
     if (Cy_InstIdx(c->id) >= 0) return "Already installed";
     if (g_cyN >= CY_MAXINST) return "No room for more implants";
     if (strstr(c->name, "Arm Blades")) for (int i = 0; i < g_cyN; i++) { const CyImpl *o = Cy_Find(g_cyInst[i].id); if (o && strstr(o->name, "Arm Blades")) { snprintf(why, sizeof why, "You already have %s - one set of blades per forearm", o->name); return why; } }
@@ -432,6 +432,23 @@ static void Cy_Tick(void)
             if (nm && strstr(nm, "Usanagi")) {
                 g_cyAtDoc = true;
                 Log("Cyberware: Doc Usanagi - opening the ripperdoc");
+                Cyber_Open(true);
+            }
+        }
+        /* Hunter (FNVVRMC - Hunter.esp, Camp McCarran): his "What kind of chrome do you have?" topic sets the
+           global FNVVRMCHunterChrome to 1; it's read (and cleared) here while you're talking */
+        static void *hScr = NULL; static bool hBad = false; static int hWait = 0;
+        if (dlg && !hBad && ++hWait >= 10) {
+            hWait = 0;
+            if (!hScr) {
+                hScr = g_scriptIntf && g_scriptIntf->CompileScript ? g_scriptIntf->CompileScript(
+                    "int iV\nBegin Function { }\nset iV to FNVVRMCHunterChrome\nset FNVVRMCHunterChrome to 0\nSetFunctionValue iV\nEnd\n") : NULL;
+                if (!hScr) { hBad = true; Log("Cyberware: Hunter's plugin isn't loaded (no FNVVRMCHunterChrome) - only Doc Usanagi is a ripperdoc"); }
+            }
+            double v = 0;
+            if (hScr && Cy_CallNum(hScr, 0, 0, &v) && v > 0.5) {
+                g_cyAtDoc = true;
+                Log("Cyberware: Hunter - opening the ripperdoc");
                 Cyber_Open(true);
             }
         }
