@@ -23,6 +23,9 @@
      2% each time it hits something, and on each kill a chance equal to how far over capacity it is. It goes frenzied
      (the game's own "frenzied" aggression: it attacks anyone near it), +50 damage resistance, +50% speed, kills heal it
      and keep it going, for 20 seconds (+3 per kill).
+   - Ambidex Coprocessor: it dual-wields - a copy of its weapon in its left hand (pistols, revolvers, energy pistols,
+     automatic rifles and one-handed melee weapons; not sniper or other bolt/semi rifles, miniguns, launchers or energy
+     rifles). Guns fire twice, the second shot from the left gun's own muzzle; a melee hit lands a second blow (75%).
    Boosts that are on when the game is saved are undone again when that save is loaded. */
 
 #define CE_MAX 192
@@ -35,6 +38,7 @@ typedef struct {
     double seenAt, abilReady, abilEnd; int abilOn;
     CySavedMod temp[4]; int tempN;           /* an ability's boosts, on now */
     bool psycho; double psychoEnd, psychoRetarget; int aggrPrev;
+    bool ambi; char *dualModel, *dualParent, *dualProj; void *dualWeap; int dualType; bool dualOn;   /* (dual-wielding: the left-hand copy) */
 } CEnemy;
 typedef struct {                             /* (as kept in the co-save) */
     uint32_t refID; uint8_t nImp, boss, over, heartUsed; int32_t cap, load;
@@ -144,7 +148,7 @@ static int Ce_Kind(const char *id)
 {
     static const struct { const char *id; int k; } t[] = {
         { "core_overclock", CK_GUN | CK_MELEE }, { "core_berserk", CK_MELEE }, { "core_ghost", CK_STEALTH },
-        { "cortex_recall", CK_MIND }, { "cortex_tactic", CK_GUN | CK_STEALTH }, { "cortex_tongue", CK_MIND },
+        { "cortex_recall", CK_MIND }, { "cortex_ambidex", CK_GUN | CK_MELEE }, { "cortex_tactic", CK_GUN | CK_STEALTH }, { "cortex_tongue", CK_MIND },
         { "optics_hunter", CK_GUN | CK_STEALTH }, { "optics_ballist", CK_GUN }, { "optics_threat", CK_STEALTH },
         { "circ_heart", CK_TOUGH }, { "circ_adrenal", CK_GUN | CK_MELEE }, { "circ_backup", CK_TOUGH },
         { "nerve_reflex", CK_GUN | CK_MELEE }, { "nerve_steady", CK_MIND | CK_STEALTH }, { "nerve_pain", CK_TOUGH | CK_MELEE },
@@ -215,6 +219,7 @@ static void Ce_Decide(char *ref)
         used[c->slot]++; if (isBlade) blade = true;
         e->imp[e->nImp++] = (int16_t)order[k]; e->load += c->load;
         if (c->slot == CY_CORE) e->core = c->special;
+        if (!strcmp(c->id, "cortex_ambidex")) e->ambi = true;
         for (int m = 0; m < CY_MAXMOD && c->mod[m].av; m++) Ce_ModAV(ref, c->mod[m].av, c->mod[m].amt);
     }
     if (named) {   /* maxed out: a full borg's toughness, and too much chrome for any body */
@@ -258,6 +263,101 @@ static char *Ce_NextFoe(char *last)
     if (!((CallFn_t)g_scriptIntf->CallFunction)(s, GetPlayer(), NULL, &res, 1, last) || res.type != 2) return NULL;
     return (char *)res.u.form;
 }
+/* ---- dual wielding ---- */
+static int g_ceDualAxis = 2;   /* INI [Cyberware] iDualMirrorAxis: how the right hand's weapon is mirrored into the left */
+static struct { void *actor; char *proj; } g_ceDualAct[24]; static volatile int g_ceDualActN = 0;
+static bool Ce_DualType(int t) { return t == 1 || t == 3 || t == 4 || t == 6; }   /* one-hand melee, pistol, energy pistol, automatic rifle */
+static char *Ce_Equipped(char *ref)   /* the weapon in its hands (a form) */
+{
+    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+    static void *s = NULL; if (!s) s = Cy_Compile("ref rW\nref rO\nBegin Function { rW }\nset rO to rW.GetEquippedObject 5\nSetFunctionValue rO\nEnd\n");
+    if (!s || !g_scriptIntf || !g_scriptIntf->CallFunction) return NULL;
+    struct { union { double num; void *form; } u; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+    if (!((CallFn_t)g_scriptIntf->CallFunction)(s, GetPlayer(), NULL, &res, 1, ref) || res.type != 2) return NULL;
+    char *w = (char *)res.u.form; return w && !IsBadReadPtr(w, 0x120) && *(uint8_t *)(w + 4) == 0x28 ? w : NULL;   /* (a weapon) */
+}
+static bool Ce_WeaponOut(char *ref)
+{
+    static void *s = NULL; if (!s) s = Cy_Compile("ref rW\nint iV\nBegin Function { rW }\nset iV to rW.IsWeaponOut\nSetFunctionValue iV\nEnd\n");
+    double v = 0; return Ce_Call(s, ref, 1, 0, &v) && v > 0.5;
+}
+static void Ce_DualDetach(CEnemy *e)
+{
+    char *m = e->dualModel, *p = e->dualParent; e->dualParent = NULL; e->dualOn = false;
+    if (!m || IsBadReadPtr(m, 0xC0)) return;
+    *(uint32_t *)(m + 0x30) |= 1;   /* (hidden) */
+    if (!p || IsBadReadPtr(p, 0xB0) || *(char **)(m + NIAV_PARENT) != p) return;
+    char **kids = *(char ***)(p + 0xA0); uint16_t *cap = (uint16_t *)(p + 0xA4), *size = (uint16_t *)(p + 0xA6), *used = (uint16_t *)(p + 0xA8);
+    for (unsigned i = 0; kids && i < *size && i < *cap; i++) if (kids[i] == m) {
+        kids[i] = NULL; if (*used) (*used)--;
+        while (*size && !kids[*size - 1]) (*size)--;
+        *(char **)(m + NIAV_PARENT) = NULL;
+        InterlockedDecrement((volatile LONG *)(m + 4));   /* (the parent's hold; ours stays) */
+        break;
+    }
+}
+/* every half second for each dual-wielder in a fight: a copy of its weapon in its left hand */
+static void Ce_DualUpdate(CEnemy *e, char *ref)
+{
+    char *w = Ce_WeaponOut(ref) ? Ce_Equipped(ref) : NULL;
+    int t = w ? *(BYTE *)(w + 0xF4) : -1;
+    if (!w || !Ce_DualType(t)) { if (e->dualModel) *(uint32_t *)(e->dualModel + 0x30) |= 1; e->dualOn = false; return; }
+    char *rs = *(char **)(ref + 0x64), *root = rs && !IsBadReadPtr(rs, 0x18) ? *(char **)(rs + 0x14) : NULL;
+    if (!root || IsBadReadPtr(root, 0xB0)) { e->dualOn = false; return; }
+    char *lh = FindBone(root, "Bip01 L Hand", 0), *wn = FindBone(root, "Weapon", 0);
+    if (!lh || !wn || !AsNode(lh)) { static int nl = 0; if (nl++ < 5) Log("Dual wield: %s has no hand/weapon bones", Cy_RefName(ref)); e->dualOn = false; return; }
+    if (w != e->dualWeap || !e->dualModel) {   /* (a new weapon: its own copy) */
+        if (e->dualModel) { Ce_DualDetach(e); InterlockedDecrement((volatile LONG *)(e->dualModel + 4)); e->dualModel = NULL; }
+        const char *path = *(const char **)(w + 0x40);
+        void *loader = *(void **)0x011C3B3C;
+        if (!path || IsBadStringPtrA(path, 260) || !*path || !loader) { e->dualOn = false; return; }
+        char *src = (char *)((LoadModel_t)0x00447080)(loader, path, 0, true, 0, false, true);
+        char *m = src && !IsBadReadPtr(src, 0xC0) && AsNode(src) ? ((char *(__attribute__((thiscall)) *)(char *))0x00A5D680)(src) : NULL;   /* (its own copy) */
+        if (!m || IsBadReadPtr(m, 0xC0)) { Log("Dual wield: couldn't load %s", path); e->dualWeap = w; e->dualOn = false; return; }
+        InterlockedIncrement((volatile LONG *)(m + 4));   /* (FNVR's hold, so the copy outlives the character's 3D) */
+        e->dualModel = m; e->dualWeap = w; e->dualType = t;
+        e->dualProj = FindBone(m, "ProjectileNode", 0);
+        Log("Dual wield: %s - a second %s (%s) in the left hand", Cy_RefName(ref), *(const char **)(w + 0x34) && !IsBadStringPtrA(*(const char **)(w + 0x34), 64) ? *(const char **)(w + 0x34) : "weapon", path);
+    }
+    char *m = e->dualModel;
+    if (*(char **)(m + NIAV_PARENT) != lh) {   /* (on the left hand - again after the character's 3D was rebuilt) */
+        if (*(char **)(m + NIAV_PARENT)) Ce_DualDetach(e);
+        if (*(char **)(m + NIAV_PARENT)) { e->dualOn = false; return; }
+        ((NiAttach_t)(*(void ***)lh)[55])(lh, m, true);
+        if (*(char **)(m + NIAV_PARENT) != lh) { e->dualOn = false; return; }
+        e->dualParent = lh;
+        Pf1_TwoSided(m, 0);
+    }
+    {   /* placed as the mirror image of the right hand's weapon point */
+        const float *Wr = (const float *)(wn + NIAV_LOCAL_ROTATE), *Wt = (const float *)(wn + NIAV_LOCAL_TRANSLATE);
+        float *Lr = (float *)(m + NIAV_LOCAL_ROTATE), *Lt = (float *)(m + NIAV_LOCAL_TRANSLATE); int ax = g_ceDualAxis;
+        for (int i = 0; i < 3; i++) { for (int j = 0; j < 3; j++) Lr[i * 3 + j] = Wr[i * 3 + j] * (i == ax ? -1.0f : 1.0f); Lt[i] = Wt[i] * (i == ax ? -1.0f : 1.0f); }
+        *(float *)(m + NIAV_LOCAL_SCALE) = *(const float *)(wn + NIAV_LOCAL_SCALE);
+    }
+    *(uint32_t *)(m + 0x30) &= ~1u;
+    NodeUpdate(m);
+    e->dualOn = true;
+}
+/* (the fire hook, any thread: no game scripts here) a dual-wielder's shot - a second one from the left gun */
+static char *volatile g_ceDualNode = NULL;
+static void Ce_DualFire(void *weapon, void *actor, FireWeapon_t fire)
+{
+    int n = g_ceDualActN; char *proj = NULL; bool hit = false;
+    for (int i = 0; i < n && i < 24; i++) if (g_ceDualAct[i].actor == actor) { proj = g_ceDualAct[i].proj; hit = true; break; }
+    if (!hit || !weapon || !Ce_DualType(*(BYTE *)((char *)weapon + 0xF4))) return;
+    g_ceDualNode = proj && !IsBadReadPtr(proj, 0x90) ? proj : NULL;
+    fire(weapon, actor);
+    g_ceDualNode = NULL;
+}
+static void Ce_MeleeSecond(char *att, char *vic)   /* (a dual-wielder's melee hit: the off-hand blade, 75%) */
+{
+    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+    static void *s = NULL;
+    if (!s) s = Cy_Compile("ref rA\nref rV\nref rW\nfloat fD\nBegin Function { rA, rV }\nset rW to rA.GetEquippedObject 5\nif rW\nset fD to GetAttackDamage rW\nset fD to fD * 0.75\nrV.DamageAV Health fD\nendif\nEnd\n");
+    if (!s || !g_scriptIntf || !g_scriptIntf->CallFunction) return;
+    struct { double num; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+    ((CallFn_t)g_scriptIntf->CallFunction)(s, GetPlayer(), NULL, &res, 2, att, vic);
+}
 static void Ce_Tick(double now)
 {
     if (!g_cyEnemies) return;
@@ -289,6 +389,7 @@ static void Ce_Tick(double now)
     for (LONG k = 0; k < nev; k++) {   /* hits and kills by chromed enemies */
         char *att = (char *)g_ceEv[k].att; if (!att || IsBadReadPtr(att, 0x80) || *(uint8_t *)(att + 4) != 0x3B) continue;
         CEnemy *e = Ce_Find(*(uint32_t *)(att + 0x0C)); if (!e) continue;
+        if (!g_ceEv[k].kill && e->dualOn && e->dualType == 1 && g_ceEv[k].vic && !IsBadReadPtr(g_ceEv[k].vic, 0x80)) Ce_MeleeSecond(att, (char *)g_ceEv[k].vic);
         if (e->psycho) { if (g_ceEv[k].kill) { e->psychoEnd += 3000.0; Ce_Heal(att, 20); } continue; }
         if (!e->over) continue;
         int pct = g_ceEv[k].kill ? Ce_OverPct(e) : 2;
@@ -297,12 +398,17 @@ static void Ce_Tick(double now)
     static double nextAbil = 0;
     if (now < nextAbil) return;
     nextAbil = now + 500.0;
+    int nd = 0;
     for (int i = 0; i < g_ceN; i++) {
         CEnemy *e = &g_ce[i];
         bool fighting = now - e->seenAt < 6000.0;
-        if (!fighting && !e->abilOn && !e->psycho) continue;
+        if (!fighting && !e->abilOn && !e->psycho) { if (e->dualOn || (e->dualModel && e->dualParent)) Ce_DualDetach(e); continue; }
         char *ref = Ce_Ref(e);
-        if (!ref || Ce_Num(2, ref) > 0.5) { if (e->abilOn) Ce_TempOff(e, ref); if (e->psycho) Ce_PsychoEnd(e, ref); continue; }
+        if (!ref || Ce_Num(2, ref) > 0.5) { if (e->abilOn) Ce_TempOff(e, ref); if (e->psycho) Ce_PsychoEnd(e, ref); if (e->dualModel) Ce_DualDetach(e); continue; }
+        if (e->ambi) {
+            Ce_DualUpdate(e, ref);
+            if (e->dualOn && nd < 24) { g_ceDualAct[nd].actor = ref; g_ceDualAct[nd].proj = e->dualProj; nd++; }
+        }
         if (e->psycho) {
             if (now > e->psychoEnd) { Ce_PsychoEnd(e, ref); Log("Chromed enemy: %s came out of it", Cy_RefName(ref)); }
             else if (now > e->psychoRetarget) { e->psychoRetarget = now + 3000.0; Ce_AttackNearest(ref); }
@@ -331,10 +437,11 @@ static void Ce_Tick(double now)
         default: break;
         }
     }
+    g_ceDualActN = nd;
 }
 static void Ce_Reset(void)
 {   /* (a game left or loaded: nothing undone by hand - the game's own values go with it) */
-    g_ceN = 0; g_ceDoneN = 0; g_ceDoneHead = 0; g_ceUndoN = 0; g_ceEvN = 0;
+    g_ceN = 0; g_ceDoneN = 0; g_ceDoneHead = 0; g_ceUndoN = 0; g_ceEvN = 0; g_ceDualActN = 0;
 }
 static void Ce_Save(void)
 {
@@ -371,7 +478,7 @@ static void Ce_Load(uint32_t ver)
         e->refID = nid; e->boss = s.boss; e->over = s.over; e->heartUsed = s.heartUsed; e->cap = s.cap; e->load = s.load;
         for (int k = 0; k < s.nImp && k < CE_MAXIMP; k++) {
             s.ids[k][23] = 0;
-            for (int c = 0; c < CY_NCAT; c++) if (!strcmp(g_cyCat[c].id, s.ids[k])) { e->imp[e->nImp++] = (int16_t)c; if (g_cyCat[c].slot == CY_CORE) e->core = g_cyCat[c].special; break; }
+            for (int c = 0; c < CY_NCAT; c++) if (!strcmp(g_cyCat[c].id, s.ids[k])) { e->imp[e->nImp++] = (int16_t)c; if (g_cyCat[c].slot == CY_CORE) e->core = g_cyCat[c].special; if (!strcmp(g_cyCat[c].id, "cortex_ambidex")) e->ambi = true; break; }
         }
         g_ceN++;
     }

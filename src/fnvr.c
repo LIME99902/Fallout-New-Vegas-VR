@@ -32,9 +32,9 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        225
-#define FNVR_VERSION_STR    "2.11.0 (chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
-#define FNVR_VERSION_SHORT  "2.11.0"
+#define FNVR_VERSION        226
+#define FNVR_VERSION_STR    "2.12.0 (dual-wielding characters: Ambidex Coprocessor implant; 2.11.0: chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_SHORT  "2.12.0"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -6962,6 +6962,8 @@ static FireWeapon_t o_FireWeapon = NULL;
 static unsigned g_shotsRedirected = 0;
 static bool Barrel_Aim(float *h, float *p);
 
+static void Ce_DualFire(void *weapon, void *actor, FireWeapon_t fire);   /* (cyberware: dual-wielding characters) */
+static char *volatile g_ceDualNode;
 static bool g_scopeSighting; static bool g_brlShot = false; static double g_mrShot0At = 0;   /* (the gun hand's gun fired - its slide cycles) */   /* (this shot goes out along the drawn barrel) */
 static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unusedEdx, void *actor)
 {
@@ -7053,6 +7055,7 @@ static void __attribute__((fastcall)) Hook_FireWeapon(void *weapon, void *unused
         return;
     }
     o_FireWeapon(weapon, actor);
+    if (actor && actor != player) Ce_DualFire(weapon, actor, o_FireWeapon);   /* (a dual-wielder: the left gun fires too) */
 }
 
 /* Projectile::Spawn(projectile, shooter, combatCtrl, weapon, pos x/y/z, rotZ, rotX, ...) - cdecl.
@@ -7148,6 +7151,10 @@ static void BT_Tick(void)
 static void *__cdecl Hook_ProjSpawn(void *proj, void *shooter, void *cc, void *weap, float px, float py, float pz, float rotZ, float rotX,
                                     void *node, void *target, uint32_t b1, uint32_t b2, float f1, float f2, uint32_t z)
 {
+    if (g_ceDualNode && shooter && shooter != GetPlayer()) {   /* (a dual-wielder's second shot: out of the left gun's muzzle) */
+        char *dn = g_ceDualNode; const float *P = (const float *)(dn + NIAV_WORLD_TRANSLATE);
+        node = dn; px = P[0]; py = P[1]; pz = P[2];
+    }
     if (g_launch.on && shooter && shooter == GetPlayer()) { (void)px; (void)py; (void)pz; (void)rotZ; (void)rotX; (void)node; return Thr_Spawn(proj, shooter, cc, weap, target, b1, b2, f1, f2, z); }
     if (shooter && shooter == GetPlayer() && g_handAimValid && !g_menuCached && !g_adsActive && QpcMs() >= g_weaponSettleUntil) {
         float h = g_handAimHeading + g_shotYawTrimDeg / RAD2DEG, pt = g_handAimPitch + g_shotPitchTrimDeg / RAD2DEG;

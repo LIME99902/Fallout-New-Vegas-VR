@@ -169,6 +169,7 @@ A ripperdoc and implants, inspired by cyberpunk ripperdocs (original names and d
   - **Ghost Core:** optical camo for 8 seconds now and then.
   - **Backup Heart:** once, below 15% health, back to full.
   - **Cyberpsychosis:** an enemy over its capacity can snap (2% per hit it lands, its over-capacity % per kill): it goes **frenzied** and attacks anyone near it, tougher and faster, for 20 seconds plus 3 per kill.
+  - **Ambidex Coprocessor** (Cortex): anyone else carrying one **dual-wields** - a copy of their weapon in the left hand (pistols, revolvers, energy pistols, automatic rifles, one-handed melee; not sniper or other bolt/semi-auto rifles, miniguns, launchers or energy rifles). Guns fire twice, the second shot out of the left gun's own muzzle; melee hits land a second blow (75%). In your own hands it's +5 Guns and Melee Weapons. If the left-hand copy sits wrong, *iDualMirrorAxis* (0, 1 or 2) in the [Cyberware] section of FNVR.ini changes how it's mirrored.
   - **Story bosses** - Caesar, Legate Lanius, Vulpes Inculta, Motor-Runner, Benny, Cook-Cook, Driver Nephi, Jessup, McMurphy, Papa Khan, General Lee Oliver, Chief Hanlon, Elijah, Ulysses, Salt-Upon-Wounds, Joshua Graham, Big Sal, Nero and Dog - are **maxed out** at any level: every slot filled, always a Backup Heart, +30 damage resistance (a full borg's toughness) and far over capacity, so they can go cyberpsycho.
   - Turn it off in FNVR settings > Advanced > *Chrome on everyone*.
 - **Saves:** installed implants are kept beside each save (xNVSE co-save) and cleared for a new game.

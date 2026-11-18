@@ -46,6 +46,8 @@ static const CyImpl g_cyCat[] = {
       "Reads an enemy's stance and gait and marks the soft spots. More critical hits." },
     { "cortex_tongue",  CY_CORTEX, "Silver Tongue Coprocessor", 2000, 3, CYS_NONE, { { "Speech", 10 }, { "Barter", 10 } },
       "Micro-expression analysis whispered straight into your inner ear. Better deals, better lies." },
+    { "cortex_ambidex", CY_CORTEX, "Ambidex Coprocessor", 4000, 5, CYS_NONE, { { "Guns", 5 }, { "MeleeWeapons", 5 } },
+      "Splits your motor cortex so each hand runs on its own. Anyone else who carries one dual-wields: a second pistol, revolver, automatic rifle or one-handed blade in the other hand." },
     { "optics_hunter",  CY_OPTICS, "Hunter Lenses", 1800, 3, CYS_NONE, { { "Perception", 1 }, { "Guns", 5 } },
       "Replacement eyes with rangefinding and motion highlighting." },
     { "optics_ballist", CY_OPTICS, "Ballistic Overlay", 3500, 5, CYS_NONE, { { "Guns", 10 }, { "EnergyWeapons", 10 } },
@@ -561,6 +563,7 @@ static void Cyber_Init(NVSEInterface *nvse, PluginHandle h)
     g_cyOn = GetPrivateProfileIntA("Cyberware", "bEnabled", 1, g_iniPath) != 0;
     g_cyAnywhere = GetPrivateProfileIntA("Cyberware", "bRipperdocAnywhere", 0, g_iniPath) != 0;
     g_cyEnemies = GetPrivateProfileIntA("Cyberware", "bChromedEnemies", 1, g_iniPath) != 0;
+    g_ceDualAxis = GetPrivateProfileIntA("Cyberware", "iDualMirrorAxis", 2, g_iniPath); if (g_ceDualAxis < 0 || g_ceDualAxis > 2) g_ceDualAxis = 2;
     g_ser = (NVSESerializationInterface *)nvse->QueryInterface(kInterface_Serialization);
     if (g_ser && g_ser->SetSaveCallback && g_ser->SetLoadCallback) {
         g_ser->SetSaveCallback(h, Cy_SaveCb); g_ser->SetLoadCallback(h, Cy_LoadCb);
