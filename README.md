@@ -153,7 +153,7 @@ Three separate switches:
 
 A ripperdoc and implants, inspired by cyberpunk ripperdocs (original names and designs).
 
-- **Where:** the ripperdoc is **Hunter** (FNVVRMC - Hunter.esp; needs Lonesome Road and the KRISS Vector mod's Kriss.esp), an NCR veteran in black elite riot gear by the Auto-Doc in the New Vegas Medical Clinic's operating room. Ask him "What kind of chrome do you have?" and the cyberware screen opens over the dialogue (B goes back to talking). The plugin is built by tools/hunter/make_hunter.py. Your implants can be looked at any time in FNVR settings > Cyberware.
+- **Where:** the ripperdoc is **Hunter** (FNVVRMC - Hunter.esp; needs Lonesome Road, Honest Hearts and the KRISS Vector mod's Kriss.esp), an NCR veteran in black elite riot gear by the Auto-Doc in the New Vegas Medical Clinic's operating room. Ask him "What kind of chrome do you have?" and the cyberware screen opens over the dialogue (B goes back to talking). The plugin is built by tools/hunter/make_hunter.py. Your implants can be looked at any time in FNVR settings > Cyberware.
 - **Slots:** Neural Core, Cortex, Optics, Circulatory, Nervous, Dermal, Skeleton, Immune, Arms, Hands, Legs - three implants each (the Neural Core holds one). One set of arm blades at a time.
 - **Cost:** caps, plus body capacity (16 + Endurance x 4 + your level). Removing one gives a quarter of its price back.
 - **Effects:** most implants raise stats (health, action points, damage resistance and threshold, skills, carry weight, speed...). What an implant changed is recorded when it goes in, so taking it out undoes exactly that.

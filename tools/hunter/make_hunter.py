@@ -17,7 +17,7 @@ KR = {r.edid(): r for r in walk(kr) if r.edid()}
 cell = [r for r in walk(cells) if r.typ == 'CELL' and r.fid == 0xED19F][0]
 
 # masters: 00 FalloutNV.esm, 01 LonesomeRoad.esm, 02 Kriss.esp ; our own forms 03xxxxxx
-nid = [0x03000800]
+nid = [0x04000800]   # (4 masters: our own forms are 04xxxxxx; the low part - what saves keep - stays the same)
 def new(): nid[0] += 1; return nid[0] - 1
 def fid(v): return struct.pack('<I', v)
 
@@ -51,7 +51,9 @@ vec.set('EDID', z('FNVVRMCHunterVector')); vec.set('FULL', z("Hunter's Vector"))
 vec.set('MODL', z('weapons\\Kriss\\Kriss_hunter.nif'))
 for i, n in ((1, 'acc'), (2, 'holo'), (3, 'acc_holo'), (4, 'supp'), (5, 'acc_supp'), (6, 'holo_supp'), (7, 'full')):
     vec.set('MWD%d' % i, z('weapons\\Kriss\\Kriss_%s_hunter.nif' % n))
-AMMO = struct.unpack('<I', KR['WeapKriss'].get('NAM0'))[0]   # the Vector's own ammo (FalloutNV form)
+# .45 ACP like a real Vector: Honest Hearts' .45 Auto (HonestHearts.esm is our 4th master, index 03)
+AMMO = 0x0300947B                     # NVDLC02Ammo45Auto
+vec.set('NAM0', fid(0x03009E70))       # NVDLC02AmmoList45Auto (all .45 Auto kinds)
 
 # ---------------------------------------------------------------- Hunter
 NPC_ID = new()
@@ -73,6 +75,7 @@ for s, d in npc.subs:
         subs.append(['PKID', fid(FNV['DefaultSandboxEditorLocation256NoSleepOrWander'].fid)])
 npc.subs = subs
 npc.set('DATA', struct.pack('<I7B', 300, 6, 6, 10, 5, 6, 6, 6))
+npc.set('NAM6', f32(1.17))   # a foot taller than an average man
 skills = [40, 40, 50, 50, 45, 85, 60, 65, 75, 90, 55, 40, 60, 60]
 npc.set('DNAM', bytes(skills) + bytes(14))
 
@@ -164,7 +167,8 @@ g_info.subs.insert([i for i, x in enumerate(g_info.subs) if x[0] == 'CTDA'][0] +
 dial_items[1].items.append(g_info2)
 
 # an Auto-Doc beside him (the clinic's own Auto-Doc model, as a plain static)
-_, objs = read_plugin(UP + 'FalloutNV.esm', want={'ACTI'})
+_, objs = read_plugin(UP + 'FalloutNV.esm', want={'ACTI', 'CONT'})
+FNV_CONT = {r.edid(): r for r in walk(objs) if r.typ == 'CONT'}
 ad = [r for r in walk(objs) if r.edid() == 'MedicalClinicAutoDoc'][0]
 STAT_ID = new()
 adstat = Rec('STAT', STAT_ID, subs=[['EDID', z('FNVVRMCHunterAutoDoc')], ['OBND', ad.get('OBND')], ['MODL', ad.get('MODL')]])
@@ -214,6 +218,18 @@ BOBA_REF = new()
 bobaref = Rec('ACRE', BOBA_REF, flags=0x400, subs=[['EDID', z('FNVVRMCBobaREF')], ['NAME', fid(BOBA_ID)],
                                                   ['DATA', f32(2120.0, -40.0, 10114.0, 0.0, 0.0, 3.6)]])
 pers.append(bobaref)
+# a footlocker with a spare set of his gear, lock level 100 (Very Hard)
+fl = FNV_CONT['Footlocker01Empty'].copy()
+CHEST_ID = new(); fl.fid = CHEST_ID; strip_hashes(fl)
+fl.subs = [x for x in fl.subs if x[0] not in ('CNTO', 'COED', 'SCRI')]
+fl.set('EDID', z('FNVVRMCHunterFootlocker')); fl.set('FULL', z("Hunter's Footlocker"))
+i_ = [k for k, x in enumerate(fl.subs) if x[0] == 'MODL'][0] + 1
+for item, n_ in ((ARM_ID, 1), (HLM_ID, 1), (VEC_ID, 1), (AMMO, 200)):
+    fl.subs.insert(i_, ['CNTO', fid(item) + struct.pack('<i', n_)]); i_ += 1
+CHEST_REF = new()
+chestref = Rec('REFR', CHEST_REF, subs=[['NAME', fid(CHEST_ID)], ['XLOC', bytes([100, 0, 0, 0]) + fid(0) + bytes(12)],
+                                        ['DATA', f32(2140.0, -300.0, 10112.0, 0.0, 0.0, 4.71)]])
+temp.append(chestref)
 cell_grp = Grup(b'CELL', 0, [Grup(7, 2, [Grup(6, 3, [cellov, Grup(0xED19F, 6, [Grup(0xED19F, 8, pers), Grup(0xED19F, 9, temp)])])])])
 
 # ---------------------------------------------------------------- write
@@ -222,6 +238,7 @@ top = [
     Grup(b'ARMO', 0, [arm, hlm]),
     Grup(b'WEAP', 0, [vec]),
     Grup(b'STAT', 0, [adstat]),
+    Grup(b'CONT', 0, [fl]),
     Grup(b'NPC_', 0, [npc]),
     Grup(b'CREA', 0, [boba]),
     cell_grp,
@@ -232,7 +249,7 @@ nrec = sum(1 for _ in walk(top)) + sum(1 for g in top for _ in [0])
 def count(items): return sum(1 + (count(x.items) if isinstance(x, Grup) else 0) for x in items)
 hdr = Rec('TES4', 0, subs=[['HEDR', struct.pack('<fiI', 1.34, count(top), nid[0])], ['CNAM', z('FNVVRMC')],
                            ['SNAM', z("Hunter - an NCR veteran ripperdoc at the New Vegas Medical Clinic (FNVVRMC cyberware).")]])
-for m in ('FalloutNV.esm', 'LonesomeRoad.esm', 'Kriss.esp'):
+for m in ('FalloutNV.esm', 'LonesomeRoad.esm', 'Kriss.esp', 'HonestHearts.esm'):
     hdr.subs += [['MAST', z(m)], ['DATA', bytes(8)]]
 open(OUT, 'wb').write(hdr.pack() + b''.join(g.pack() for g in top))
 print('wrote', OUT, 'records', count(top), 'next id', hex(nid[0]))
