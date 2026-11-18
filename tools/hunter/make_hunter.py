@@ -283,11 +283,29 @@ dial_items += [Rec('DIAL', T_GRAHAM, subs=[['EDID', z('FNVVRMCHunterTopicGraham'
                Grup(T_GRAHAM, 7, [gi]),
                Rec('DIAL', T_SCRIPT, subs=[['EDID', z('FNVVRMCHunterTopicScripture')], ['QSTI', fid(QST_ID)], ['FULL', z("So you've read the scriptures too, then?")], ['PNAM', f32(50.0)], ['DATA', b'\0\0']]),
                Grup(T_SCRIPT, 7, [si])]
+# (2.13.5) Caesar dead (GetDeadCount Caesar >= 1)
+T_CAESAR = new()
+CAESAR = 0x00121FEF   # FortCaesar (the NPC)
+ci = info("Good, that'll slow 'em down. Won't bring my friends back, or my arms. Or my legs. "
+          "But it can bring some peace to Boone, after all the horrors he had to witness and the loss he had to bear. "
+          "Lanius is next in line, the only one they'll listen to the way they listened to Caesar. "
+          "With them both gone, the Legion will fall, and maybe the Mojave will finally be rid of their filth. "
+          "Next the Fiends and the raiders. Maybe with a robot army those goals wouldn't seem so far away. "
+          "Oh well, there isn't one of those anywhere around here. But there is some new chrome, if you want to take a look.",
+          prompt="Caesar is dead. I killed him.", choices=ALL)
+ci.set('DATA', bytes([0, 0, 0x04, 0]))   # (said once)
+ci.subs.insert([k for k, x in enumerate(ci.subs) if x[0] == 'CTDA'][-1] + 1,
+               ['CTDA', struct.pack('<B3sfHHIIII', 0x60, b'\0\0\0', 1.0, 84, 0, CAESAR, 0, 0, 0)])
+dial_items += [Rec('DIAL', T_CAESAR, subs=[['EDID', z('FNVVRMCHunterTopicCaesar')], ['QSTI', fid(QST_ID)], ['FULL', z("Caesar is dead. I killed him.")], ['PNAM', f32(50.0)], ['DATA', b'\0\0']]),
+               Grup(T_CAESAR, 7, [ci])]
 # the Joshua Graham line is offered wherever his other topics are (it only shows once every DLC is done)
 for r in walk(dial_items):
-    if r.typ == 'INFO' and r not in (gi, si) and any(x[0] == 'TCLT' for x in r.subs):
+    if r.typ == 'INFO' and r not in (gi, si, ci) and any(x[0] == 'TCLT' for x in r.subs):
         r.subs.insert([k for k, x in enumerate(r.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
+        r.subs.insert([k for k, x in enumerate(r.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_CAESAR)])
 gi.subs.insert([k for k, x in enumerate(gi.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
+for x_ in (gi, si, ci): x_.subs.insert([k for k, x in enumerate(x_.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_CAESAR)])
+ci.subs.insert([k for k, x in enumerate(ci.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
 si.subs.insert([k for k, x in enumerate(si.subs) if x[0] == 'TCLT'][-1] + 1, ['TCLT', fid(T_GRAHAM)])
 
 # ---------------------------------------------------------------- write
