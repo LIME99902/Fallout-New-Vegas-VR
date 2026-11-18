@@ -208,6 +208,7 @@ for s_, d_ in boba.subs:
         subs.append(['PKID', fid(FNV['DefaultSandboxEditorLocation256NoSleepOrWander'].fid)])
 boba.subs = subs
 boba.set('EDID', z('FNVVRMCBoba')); boba.set('FULL', z('Boba'))
+boba.set('NIFZ', b'eyessetyellow.nif\0boba.nif\0boba_skullcap.nif\0\0')   # black metal body, red glass over the brain
 ac = bytearray(boba.get('ACBS')); struct.pack_into('<I', ac, 0, struct.unpack_from('<I', ac, 0)[0] | 0x02); boba.set('ACBS', bytes(ac))
 BOBA_REF = new()
 bobaref = Rec('ACHR', BOBA_REF, flags=0x400, subs=[['EDID', z('FNVVRMCBobaREF')], ['NAME', fid(BOBA_ID)],
