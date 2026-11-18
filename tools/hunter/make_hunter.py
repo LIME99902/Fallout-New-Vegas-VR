@@ -211,7 +211,7 @@ boba.set('EDID', z('FNVVRMCBoba')); boba.set('FULL', z('Boba'))
 boba.set('NIFZ', b'eyessetyellow.nif\0boba.nif\0boba_skullcap.nif\0\0')   # black metal body, red glass over the brain
 ac = bytearray(boba.get('ACBS')); struct.pack_into('<I', ac, 0, struct.unpack_from('<I', ac, 0)[0] | 0x02); boba.set('ACBS', bytes(ac))
 BOBA_REF = new()
-bobaref = Rec('ACHR', BOBA_REF, flags=0x400, subs=[['EDID', z('FNVVRMCBobaREF')], ['NAME', fid(BOBA_ID)],
+bobaref = Rec('ACRE', BOBA_REF, flags=0x400, subs=[['EDID', z('FNVVRMCBobaREF')], ['NAME', fid(BOBA_ID)],
                                                   ['DATA', f32(2120.0, -40.0, 10114.0, 0.0, 0.0, 3.6)]])
 pers.append(bobaref)
 cell_grp = Grup(b'CELL', 0, [Grup(7, 2, [Grup(6, 3, [cellov, Grup(0xED19F, 6, [Grup(0xED19F, 8, pers), Grup(0xED19F, 9, temp)])])])])
