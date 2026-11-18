@@ -407,6 +407,25 @@ static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *
     else if (phase == 2 && both) { phase = 0; if (Cy_Core()) g_cyActivate = true; }
 }
 #include "fnvr_cyber_enemy.c"
+static bool g_cyTalkHunter = false;
+static bool g_cyFromDoc;
+/* does any text in this piece of the interface (or below it) contain needle */
+static bool Cy_TileHasText(char *t, const char *needle, int depth, int *budget)
+{
+    if (!Rd(t, 0x30) || depth > 16 || --(*budget) < 0) return false;
+    char **vals = *(char ***)(t + 0x14); uint32_t nv = *(uint32_t *)(t + 0x18);
+    if (vals && nv < 4096 && Rd(vals, nv * 4))
+        for (uint32_t i = 0; i < nv; i++) {
+            char *v = vals[i];
+            if (!Rd(v, 0x14) || *(uint32_t *)v != 0xFC4 /* string */) continue;
+            const char *s = *(const char **)(v + 0x0C);
+            if (Rd(s, 1) && !IsBadStringPtrA(s, 1024) && strstr(s, needle)) return true;
+        }
+    char *node = *(char **)(t + 0x04);
+    for (int k = 0; node && k < 300 && Rd(node, 12); k++, node = *(char **)node)
+        if (Cy_TileHasText(*(char **)(node + 8), needle, depth + 1, budget)) return true;
+    return false;
+}
 static void Cy_Tick(void)
 {
     if (g_cyRevertN && g_inGameplay && GetPlayer()) {   /* (a save made while a boost was on: the boost is undone) */
@@ -429,7 +448,24 @@ static void Cy_Tick(void)
                 if (s && !IsBadStringPtrA(s, 64) && s[0] >= 'A' && s[0] <= 'Z' && strlen(s) < 48) nm = s;
             }
             if (nm || !tries) { tries = 0; static int logged = 0; if (logged++ < 40) Log("Cyberware: talking to %s", nm ? nm : "(no name found)"); }
+            if (nm || !tries) g_cyTalkHunter = nm && !strcmp(nm, "Hunter");
         }
+        if (!dlg) g_cyTalkHunter = false;
+        /* Hunter's answer to "What kind of chrome do you have?" - "Everything you need." - on screen: the ripperdoc opens
+           (2.13.2: read from the dialogue itself, so it works however the topic was picked) */
+        static bool hSaid = false; static int hScan = 0;
+        if (g_cyTalkHunter && ++hScan >= 6) {
+            hScan = 0;
+            char *dm = Vc_DialogTileMenu(); int budget = 4000;
+            bool said = dm && Cy_TileHasText(dm, "Everything you need", 0, &budget);
+            if (said && !hSaid && !(g_setOpen && g_setPage == SP_CYBER)) {
+                g_cyAtDoc = true;
+                Log("Cyberware: Hunter - \"Everything you need.\" - opening the ripperdoc");
+                Cyber_Open(true);
+            }
+            hSaid = said;
+        }
+        if (!g_cyTalkHunter) hSaid = false;
         /* Hunter (FNVVRMC - Hunter.esp, New Vegas Medical Clinic), the ripperdoc: his "What kind of chrome do you have?" topic sets the
            global FNVVRMCHunterChrome to 1; it's read (and cleared) here while you're talking */
         static void *hScr = NULL; static bool hBad = false; static int hWait = 0;
@@ -441,13 +477,13 @@ static void Cy_Tick(void)
                 if (!hScr) { hBad = true; Log("Cyberware: Hunter's plugin isn't loaded (no FNVVRMCHunterChrome) - no ripperdoc; install FNVVRMC - Hunter.esp"); }
             }
             double v = 0;
-            if (hScr && Cy_CallNum(hScr, 0, 0, &v) && v > 0.5) {
+            if (hScr && Cy_CallNum(hScr, 0, 0, &v) && v > 0.5 && !(g_setOpen && g_setPage == SP_CYBER)) {
                 g_cyAtDoc = true;
                 Log("Cyberware: Hunter - opening the ripperdoc");
                 Cyber_Open(true);
             }
         }
-        if (!dlg && dlgWas) g_cyAtDoc = false;
+        if (!dlg && !(g_setOpen && g_cyFromDoc)) g_cyAtDoc = false;   /* (still at the ripperdoc while his screen stays open, even if the talk closed) */
         dlgWas = dlg;
     }
     if (!g_inGameplay || !GetPlayer()) return;

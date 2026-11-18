@@ -146,17 +146,60 @@ for t in ALL:
     dial_items += [d, Grup(t, 7, [i])]
 
 # ---------------------------------------------------------------- placed in the New Vegas Medical Clinic's operating room, by the Auto-Doc
+# Hunter stands in the cleared lecture corner, the new Auto-Doc at his side
+HUNTER_POS = (2050.0, -90.0, 10114.0, 0.0, 0.0, 0.0)
+HUNTER_AUTODOC = (2020.0, -255.0, 10190.0, 0.0, 0.0, 1.57)   # (the model sits 78 above its centre)
 REF_ID = new()
 achr = Rec('ACHR', REF_ID, flags=0x400, subs=[['EDID', z('FNVVRMCHunterREF')], ['NAME', fid(NPC_ID)],
-                                              ['DATA', f32(2110.0, 120.0, 10114.0, 0.0, 0.0, 1.57)]])
+                                              ['DATA', f32(*HUNTER_POS)]])
 cellov = cell.copy()
-cell_grp = Grup(b'CELL', 0, [Grup(7, 2, [Grup(6, 3, [cellov, Grup(0xED19F, 6, [Grup(0xED19F, 8, [achr])])])])])
+
+# (2.13.2 additions - new form IDs come after the ones above so saves keep Hunter)
+# the greeting once you've met him
+g_info2 = info("My favorite Courier returns. How can I help you today?", choices=ALL)
+g_info2.set('PNAM', fid(g_info.fid))
+# first meeting only: GetTalkedToPC == 0
+g_info.subs.insert([i for i, x in enumerate(g_info.subs) if x[0] == 'CTDA'][0] + 1,
+                   ['CTDA', struct.pack('<B3sfHHIIII', 0, b'\0\0\0', 0.0, 50, 0, 0, 0, 0, 0)])
+dial_items[1].items.append(g_info2)
+
+# an Auto-Doc beside him (the clinic's own Auto-Doc model, as a plain static)
+_, objs = read_plugin(UP + 'FalloutNV.esm', want={'ACTI'})
+ad = [r for r in walk(objs) if r.edid() == 'MedicalClinicAutoDoc'][0]
+STAT_ID = new()
+adstat = Rec('STAT', STAT_ID, subs=[['EDID', z('FNVVRMCHunterAutoDoc')], ['OBND', ad.get('OBND')], ['MODL', ad.get('MODL')]])
+AD_REF = new()
+adref = Rec('REFR', AD_REF, subs=[['NAME', fid(STAT_ID)], ['DATA', f32(*HUNTER_AUTODOC)]])
+
+# the lecture corner of the operating room cleared: the medical student, the chalkboards and the chairs (initially disabled)
+GONE = ('NVMedicalStudentAM', 'Chalkboard02', 'ChalkboardDirty02', 'BlackboardMarker', 'SchoolChairDirty01', 'NavalChair01F')
+objn = pickle.load(open('/home/claude/hunter/data/objnames.pkl', 'rb'))
+objn.update({r.fid: (r.typ, r.edid()) for r in walk(small)})
+def cell_children(items, cf):
+    for x in items:
+        if isinstance(x, Grup):
+            if x.gtype == 6 and x.label == cf: return x
+            g = cell_children(x.items, cf)
+            if g: return g
+kids = cell_children(cells, 0xED19F)
+pers, temp = [achr], [adref]
+for g in kids.items:
+    for r in walk(g.items):
+        if r.typ not in ('REFR', 'ACHR') or not r.get('DATA'): continue
+        p = struct.unpack('<6f', r.get('DATA'))
+        base = objn.get(struct.unpack('<I', r.get('NAME'))[0], (None, None))[1]
+        if base in GONE and 1880 < p[0] < 2176 and -400 < p[1] < 60 and abs(p[2] - 10112) < 150:
+            o = r.copy(); o.flags |= 0x800
+            (pers if g.gtype == 8 else temp).append(o)
+            print('  disabled', base, [round(v) for v in p[:3]])
+cell_grp = Grup(b'CELL', 0, [Grup(7, 2, [Grup(6, 3, [cellov, Grup(0xED19F, 6, [Grup(0xED19F, 8, pers), Grup(0xED19F, 9, temp)])])])])
 
 # ---------------------------------------------------------------- write
 top = [
     Grup(b'GLOB', 0, [glob]),
     Grup(b'ARMO', 0, [arm, hlm]),
     Grup(b'WEAP', 0, [vec]),
+    Grup(b'STAT', 0, [adstat]),
     Grup(b'NPC_', 0, [npc]),
     cell_grp,
     Grup(b'QUST', 0, [qst]),
