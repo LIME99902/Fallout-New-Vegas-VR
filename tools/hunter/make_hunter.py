@@ -41,6 +41,12 @@ hlm.set('MODL', z('NVDLC04\\Armor\\NVDLC04RiotGearArmor\\NVDLC04RiotGearArmorHel
 hlm.set('MOD2', z('NVDLC04\\Armor\\NVDLC04RiotGearArmor\\NVDLC04RiotGearArmorHelmetH_GO.nif'))
 for r in (arm, hlm): r.subs = [s for s in r.subs if s[0] not in ('MOD3', 'MOD4') or r is arm and s[0] == 'MOD3']
 
+# (2.13.3) both pieces: +20 critical chance and 2 HP a second each, and light armor
+def light_and_enchanted(r, ench_id):
+    b = bytearray(r.get('BMDT')); b[4] &= ~(0x08 | 0x80) & 0xFF; r.set('BMDT', bytes(b))   # (general flags: 0x08 medium, 0x80 heavy)
+    i_ = [k for k, x in enumerate(r.subs) if x[0] == 'FULL'][0] + 1
+    r.subs = [x for x in r.subs if x[0] != 'EITM']
+    r.subs.insert(i_, ['EITM', fid(ench_id)])
 # ---------------------------------------------------------------- white/black Vector
 VEC_ID = new()
 vec = KR['WeapKrissCamo'].copy(); vec.fid = VEC_ID; strip_hashes(vec)
@@ -230,11 +236,18 @@ CHEST_REF = new()
 chestref = Rec('REFR', CHEST_REF, subs=[['NAME', fid(CHEST_ID)], ['XLOC', bytes([100, 0, 0, 0]) + fid(0) + bytes(12)],
                                         ['DATA', f32(2140.0, -300.0, 10112.0, 0.0, 0.0, 4.71)]])
 temp.append(chestref)
+ENCH_ID = new()
+ench = Rec('ENCH', ENCH_ID, subs=[['EDID', z('FNVVRMCHunterGearEnch')], ['FULL', z("Hunter's Chrome-Lined Gear")],
+                                  ['ENIT', struct.pack('<IIIB3s', 3, 0, 0, 0, b'\0\0\0')],          # apparel enchantment
+                                  ['EFID', fid(0x6AA5D)], ['EFIT', struct.pack('<IIIIi', 20, 0, 0, 0, 14)],   # IncreaseCritChance +20
+                                  ['EFID', fid(0xF3D42)], ['EFIT', struct.pack('<IIIIi', 2, 0, 0, 0, 16)]])   # Regen: 2 health a second
+light_and_enchanted(arm, ENCH_ID); light_and_enchanted(hlm, ENCH_ID)
 cell_grp = Grup(b'CELL', 0, [Grup(7, 2, [Grup(6, 3, [cellov, Grup(0xED19F, 6, [Grup(0xED19F, 8, pers), Grup(0xED19F, 9, temp)])])])])
 
 # ---------------------------------------------------------------- write
 top = [
     Grup(b'GLOB', 0, [glob]),
+    Grup(b'ENCH', 0, [ench]),
     Grup(b'ARMO', 0, [arm, hlm]),
     Grup(b'WEAP', 0, [vec]),
     Grup(b'STAT', 0, [adstat]),
