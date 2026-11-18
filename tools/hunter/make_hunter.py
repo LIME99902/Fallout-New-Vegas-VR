@@ -131,7 +131,7 @@ LINES = {
                "When they retrieved my body they realized I wasn't dead like the rest of First Company, so they brought me here, and the rest is history. "
                "I've been holding down the fort here against any Fiends or Legion that wander too far from home. "
                "Even the Fiends have chrome now. Jesus, what's next? Chromed-out Deathclaws?", False, False),
-    T_BYE: ('FNVVRMCHunterTopicGoodbye', 'Goodbye.', "Stay in one piece out there. Or come back and I'll make you more pieces.", False, True),
+    T_BYE: ('FNVVRMCHunterTopicGoodbye', 'Goodbye.', "So you're the Courier I've heard so much about. See you later, kid.", False, True),
 }
 
 dial_items = []
