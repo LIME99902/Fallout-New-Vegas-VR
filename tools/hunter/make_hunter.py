@@ -192,6 +192,27 @@ for g in kids.items:
             o = r.copy(); o.flags |= 0x800
             (pers if g.gtype == 8 else temp).append(o)
             print('  disabled', base, [round(v) for v in p[:3]])
+# Boba: Hunter's cyberdog (Rex's cyberdog body, his own dog: NCR, essential, stays by Hunter)
+_, crea = read_plugin(UP + 'FalloutNV.esm', want={'CREA'})
+rex = [r for r in walk(crea) if r.edid() == 'Rex'][0]
+BOBA_ID = new()
+boba = rex.copy(); boba.fid = BOBA_ID
+subs = []
+for s_, d_ in boba.subs:
+    if s_ in ('SCRI', 'PKID', 'SNAM'): continue
+    subs.append([s_, d_])
+    if s_ == 'ACBS':
+        subs.append(['SNAM', fid(FNV['NCRFactionNV'].fid) + bytes(4)])
+        subs.append(['SNAM', fid(0x7E26A) + bytes(4)])   # CreatureHitDog
+    if s_ == 'AIDT':
+        subs.append(['PKID', fid(FNV['DefaultSandboxEditorLocation256NoSleepOrWander'].fid)])
+boba.subs = subs
+boba.set('EDID', z('FNVVRMCBoba')); boba.set('FULL', z('Boba'))
+ac = bytearray(boba.get('ACBS')); struct.pack_into('<I', ac, 0, struct.unpack_from('<I', ac, 0)[0] | 0x02); boba.set('ACBS', bytes(ac))
+BOBA_REF = new()
+bobaref = Rec('ACHR', BOBA_REF, flags=0x400, subs=[['EDID', z('FNVVRMCBobaREF')], ['NAME', fid(BOBA_ID)],
+                                                  ['DATA', f32(2120.0, -40.0, 10114.0, 0.0, 0.0, 3.6)]])
+pers.append(bobaref)
 cell_grp = Grup(b'CELL', 0, [Grup(7, 2, [Grup(6, 3, [cellov, Grup(0xED19F, 6, [Grup(0xED19F, 8, pers), Grup(0xED19F, 9, temp)])])])])
 
 # ---------------------------------------------------------------- write
@@ -201,6 +222,7 @@ top = [
     Grup(b'WEAP', 0, [vec]),
     Grup(b'STAT', 0, [adstat]),
     Grup(b'NPC_', 0, [npc]),
+    Grup(b'CREA', 0, [boba]),
     cell_grp,
     Grup(b'QUST', 0, [qst]),
     Grup(b'DIAL', 0, dial_items),
