@@ -131,13 +131,13 @@ LINES = {
                "When they retrieved my body they realized I wasn't dead like the rest of First Company, so they brought me here, and the rest is history. "
                "I've been holding down the fort here against any Fiends or Legion that wander too far from home. "
                "Even the Fiends have chrome now. Jesus, what's next? Chromed-out Deathclaws?", False, False),
-    T_BYE: ('FNVVRMCHunterTopicGoodbye', 'Goodbye.', "So you're the Courier I've heard so much about. See you later, kid.", False, True),
+    T_BYE: ('FNVVRMCHunterTopicGoodbye', 'Goodbye.', "See you later, kid.", False, True),
 }
 
 dial_items = []
 # GREETING: Lonesome Road's own copy of the topic (it already lists the base game's and LR's quests) + ours
 greet = LR['GREETING'].copy(); greet.subs.append(['QSTI', fid(QST_ID)])
-g_info = info("You looking for chrome, or just staring at the machine parts?", choices=ALL)
+g_info = info("So you're the Courier I've heard so much about.", choices=ALL)
 dial_items += [greet, Grup(0xC8, 7, [g_info])]
 for t in ALL:
     edid, topic, text, scr, bye = LINES[t]
