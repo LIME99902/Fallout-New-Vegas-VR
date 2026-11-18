@@ -8,6 +8,8 @@ xrear=x0+(800-20)/sc; xfront=x0+(1868-20)/sc
 # white: only the polymer body (both sides of the receiver and lower, and its edge strips); everything else black -
 # stock, rails, barrel, muzzle, charging handle, slot, pins, screws, buttons, logo
 WHITE = {173, 174, 52, 48, 56, 60, 61, 49}
+# ...and the very back of the stock, the butt plate (every piece behind x -16.5)
+WHITE |= {k for k in range(lab.max() + 1) if V[lab == k][:, 0].max() < -16.5}
 black = set(range(lab.max() + 1)) - WHITE
 S=2048
 mask=np.zeros((S,S),np.float32)
