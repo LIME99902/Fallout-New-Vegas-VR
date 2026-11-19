@@ -214,8 +214,9 @@ static void Ce_Decide(char *ref)
     for (int k = 0; k < CY_NCAT && e->nImp < want; k++) {
         const CyImpl *c = &g_cyCat[order[k]];
         if (c->special == CYS_DJUMP || c->special == CYS_NOFALL) continue;   /* (nothing for the AI to do with these) */
+        if (Cy_ArmSide(c->id) == 0 || Cy_ArmSide(c->id) == 1) continue;   /* (enemies carry the paired arm weapons) */
         if (used[c->slot] >= g_cySlotMax[c->slot]) continue;
-        bool isBlade = strstr(c->name, "Arm Blades") != NULL; if (isBlade && blade) continue;
+        bool isBlade = Cy_ArmSide(c->id) == 2; if (isBlade && blade) continue;
         used[c->slot]++; if (isBlade) blade = true;
         e->imp[e->nImp++] = (int16_t)order[k]; e->load += c->load;
         if (c->slot == CY_CORE) e->core = c->special;

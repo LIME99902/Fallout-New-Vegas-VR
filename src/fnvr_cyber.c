@@ -96,6 +96,20 @@ static const CyImpl g_cyCat[] = {
       "Heavy hydraulic arms. +4 Strength, +40 unarmed damage per fist. Grab someone to knock them off their feet and throw them (robots, deathclaws and other giants need Strength 10); grab with both hands and pull to rip a limb off; a punch to the chest sends them flying. (Their own bigger arm model comes in a later update.)" },
     { "arm_hydraulic",  CY_ARMS, "Hydraulic Forearms", 3000, 5, CYS_NONE, { { "MeleeDamage", 10 } },
       "Hydraulic rams along both forearms. Every swing of a melee weapon lands harder (+10 melee damage)." },
+    /* one arm at a time (left and right can differ - a mantis blade on one, a Mech Arm on the other): half the price and
+       capacity of a pair, and the fist's own damage goes to that hand only (FNVR deals it where the blow lands) */
+    { "arm_kinetic_l",  CY_ARMS, "Arm Blade: Kinetic (left)", 2500, 4, CYS_NONE, { { 0 } }, "A serrated blade rising out of the left forearm: +15 damage to that hand's blows." },
+    { "arm_kinetic_r",  CY_ARMS, "Arm Blade: Kinetic (right)", 2500, 4, CYS_NONE, { { 0 } }, "A serrated blade rising out of the right forearm: +15 damage to that hand's blows." },
+    { "arm_thermal_l",  CY_ARMS, "Arm Blade: Thermal (left)", 3250, 4, CYS_NONE, { { "FireResist", 5 } }, "A heated blade in the left forearm: +12 damage to that hand's blows." },
+    { "arm_thermal_r",  CY_ARMS, "Arm Blade: Thermal (right)", 3250, 4, CYS_NONE, { { "FireResist", 5 } }, "A heated blade in the right forearm: +12 damage to that hand's blows." },
+    { "arm_shock_l",    CY_ARMS, "Arm Blade: Shock (left)", 3250, 4, CYS_NONE, { { 0 } }, "An arcing blade in the left forearm: +12 damage to that hand's blows." },
+    { "arm_shock_r",    CY_ARMS, "Arm Blade: Shock (right)", 3250, 4, CYS_NONE, { { 0 } }, "An arcing blade in the right forearm: +12 damage to that hand's blows." },
+    { "arm_toxin_l",    CY_ARMS, "Arm Blade: Toxin (left)", 3250, 4, CYS_NONE, { { "PoisonResist", 5 } }, "A venom blade in the left forearm: +12 damage to that hand's blows." },
+    { "arm_toxin_r",    CY_ARMS, "Arm Blade: Toxin (right)", 3250, 4, CYS_NONE, { { "PoisonResist", 5 } }, "A venom blade in the right forearm: +12 damage to that hand's blows." },
+    { "arm_mech_l",     CY_ARMS, "Mech Arm (left)", 4500, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic left arm: +2 Strength, +40 damage to that fist. It grabs people off their feet and throws them, a punch with it to the chest sends them flying, and with both hands on someone it rips a limb off. Robots, deathclaws and giants need Strength 10." },
+    { "arm_mech_r",     CY_ARMS, "Mech Arm (right)", 4500, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic right arm: +2 Strength, +40 damage to that fist. It grabs people off their feet and throws them, a punch with it to the chest sends them flying, and with both hands on someone it rips a limb off. Robots, deathclaws and giants need Strength 10." },
     { "arm_recoil",     CY_ARMS, "Recoil Dampers", 2500, 4, CYS_NONE, { { "Guns", 8 } },
       "Shock absorbers in the elbow and shoulder joints soak up every kick." },
     { "hand_knuckle",   CY_HANDS, "Ripper Knuckles", 1500, 2, CYS_NONE, { { "UnarmedDamage", 8 } },
@@ -130,6 +144,18 @@ static void Ce_Event(void *attacker, void *victim, bool kill);
 #define CY_PERK_END 10   /* Endurance needed for the chrome perks (any level) */                   /* (read on the game's thread, shown by the panel) */
 static void Cyber_Open(bool atDoc);
 
+/* the arm weapons: blades and Mech Arms. Those with _l / _r go on one arm; the old pairs (arm_kinetic, arm_mech...) are
+   no longer sold but still work in saves that have them (and enemies carry them) */
+static bool Cy_ArmWeapon(const char *id) { return !strncmp(id, "arm_kinetic", 11) || !strncmp(id, "arm_thermal", 11) || !strncmp(id, "arm_shock", 9) || !strncmp(id, "arm_toxin", 9) || !strncmp(id, "arm_mech", 8); }
+static int Cy_ArmSide(const char *id)   /* 0 left, 1 right, 2 both (the old pairs), -1 not an arm weapon */
+{
+    if (!Cy_ArmWeapon(id)) return -1;
+    size_t n = strlen(id); return n > 2 && id[n - 2] == '_' ? (id[n - 1] == 'l' ? 0 : id[n - 1] == 'r' ? 1 : 2) : 2;
+}
+static float Cy_ArmBonus(const char *id)   /* (a one-arm weapon's damage to that hand's blows) */
+{
+    return !strncmp(id, "arm_mech", 8) ? 40.0f : !strncmp(id, "arm_kinetic", 11) ? 15.0f : 12.0f;
+}
 static const CyImpl *Cy_Find(const char *id) { for (int i = 0; i < CY_NCAT; i++) if (!strcmp(g_cyCat[i].id, id)) return &g_cyCat[i]; return NULL; }
 static int Cy_InstIdx(const char *id) { for (int i = 0; i < g_cyN; i++) if (!strcmp(g_cyInst[i].id, id)) return i; return -1; }
 static int Cy_SlotUsed(int slot) { int n = 0; for (int i = 0; i < g_cyN; i++) { const CyImpl *c = Cy_Find(g_cyInst[i].id); if (c && c->slot == slot) n++; } return n; }
@@ -268,8 +294,9 @@ static const char *Cy_Install(const CyImpl *c)
     if (!Cy_CanInstallHere()) return "Only a ripperdoc can do that - see Hunter at the New Vegas Medical Clinic";
     if (Cy_InstIdx(c->id) >= 0) return "Already installed";
     if (g_cyN >= CY_MAXINST) return "No room for more implants";
-    #define CY_ARMWEAPON(x) (strstr((x)->name, "Arm Blades") || (x)->special == CYS_MECH)
-    if (CY_ARMWEAPON(c)) for (int i = 0; i < g_cyN; i++) { const CyImpl *o = Cy_Find(g_cyInst[i].id); if (o && CY_ARMWEAPON(o)) { snprintf(why, sizeof why, "You already have %s - one arm weapon at a time (blades or Mech Arms)", o->name); return why; } }
+    {   int sd = Cy_ArmSide(c->id);   /* one arm weapon per arm (blade or Mech Arm) */
+        if (sd >= 0) for (int i = 0; i < g_cyN; i++) { int so = Cy_ArmSide(g_cyInst[i].id); const CyImpl *o = Cy_Find(g_cyInst[i].id);
+            if (so >= 0 && o && (so == sd || so == 2 || sd == 2)) { snprintf(why, sizeof why, "That arm already has %s - one arm weapon per arm", o->name); return why; } } }
     if (Cy_SlotUsed(c->slot) >= g_cySlotMax[c->slot]) { snprintf(why, sizeof why, "Your %s slot is full - remove one first", g_cySlotName[c->slot]); return why; }
     int cap = Cy_Capacity(), used = Cy_LoadUsed();
     bool over = used + c->load > cap;   /* (allowed - but too much chrome risks a Chrome Overload) */
@@ -577,7 +604,12 @@ static void Cy_Tick(void)
         dlgWas = dlg;
     }
     if (!g_inGameplay || !GetPlayer()) return;
-    g_cyMechArms = g_cyOn && Cy_Has(CYS_MECH);
+    {   float b[2] = { 0, 0 }; bool m[2] = { false, false };
+        if (g_cyOn) for (int i = 0; i < g_cyN; i++) { int sd = Cy_ArmSide(g_cyInst[i].id); if (sd < 0) continue;
+            bool mech = !strncmp(g_cyInst[i].id, "arm_mech", 8);
+            for (int h = 0; h < 2; h++) if (sd == h || sd == 2) { if (mech) m[h] = true; if (sd != 2) b[h] += Cy_ArmBonus(g_cyInst[i].id); } }   /* (the old pairs raised Unarmed Damage itself) */
+        g_cyMechHand[0] = m[0]; g_cyMechHand[1] = m[1]; g_cyArmDmg[0] = b[0]; g_cyArmDmg[1] = b[1];
+        g_cyMechArms = m[0] || m[1]; }
     while (g_cyDeadR != g_cyDeadW) {   /* the dead: a Fiend leaves an ear */
         void *who = g_cyDead[g_cyDeadR & 31]; InterlockedIncrement(&g_cyDeadR);
         static void *dScr = NULL; static bool dBad = false;
@@ -737,7 +769,10 @@ static char g_cyMsg[200]; static double g_cyMsgUntil = 0;
 static bool g_cyFromDoc = false;
 static int Cy_SlotItems(int slot, const CyImpl **out, int max)
 {
-    int n = 0; for (int i = 0; i < CY_NCAT && n < max; i++) if (g_cyCat[i].slot == slot) out[n++] = &g_cyCat[i]; return n;
+    int n = 0; for (int i = 0; i < CY_NCAT && n < max; i++) if (g_cyCat[i].slot == slot) {
+        if (Cy_ArmSide(g_cyCat[i].id) == 2 && Cy_InstIdx(g_cyCat[i].id) < 0) continue;   /* (the old pairs: sold one arm at a time now) */
+        out[n++] = &g_cyCat[i]; }
+    return n;
 }
 static void Cyber_Open(bool atDoc)
 {
