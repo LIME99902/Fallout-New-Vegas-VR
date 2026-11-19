@@ -26,7 +26,7 @@ enum { CY_CORE, CY_CORTEX, CY_OPTICS, CY_CIRC, CY_NERVE, CY_DERMAL, CY_SKEL, CY_
 static const char *const g_cySlotName[CY_NSLOT] = { "NEURAL CORE", "CORTEX", "OPTICS", "CIRCULATORY", "NERVOUS", "DERMAL",
                                                     "SKELETON", "IMMUNE", "ARMS", "HANDS", "LEGS" };
 static const int g_cySlotMax[CY_NSLOT] = { 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };   /* (one Neural Core: the grip squeeze sets off one ability) */
-enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH, CYS_LAUNCH };
+enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH, CYS_LAUNCH, CYS_DASH };
 typedef struct { const char *av; int amt; } CyMod;
 typedef struct {
     const char *id; int slot; const char *name; int price, load, special;
@@ -162,6 +162,8 @@ static const CyImpl g_cyCat[] = {
       "Hydraulic assists in the calves. You move 10% faster." },
     { "leg_jump",       CY_LEGS, "Kinetic Calves", 4500, 6, CYS_DJUMP, { { 0 } },
       "Stored-energy actuators in your calves. Press jump again in mid-air to jump a second time." },
+    { "leg_dash",       CY_LEGS, "Dash Actuators", 5000, 5, CYS_DASH, { { 0 } },
+      "Explosive-burst pistons in your thighs. Hold the right grip and press jump to dash about 5 feet the way your left stick points (forward with the stick at rest), on the ground or in the air. Each dash costs 20 Action Points." },
     { "leg_absorb",     CY_LEGS, "Shock Absorbers", 3000, 4, CYS_NOFALL, { { 0 } },
       "Dampers in your knees and ankles. Falls never hurt you." },
 };
@@ -213,6 +215,7 @@ static int Cy_InstIdx(const char *id) { for (int i = 0; i < g_cyN; i++) if (!str
 static int Cy_SlotUsed(int slot) { int n = 0; for (int i = 0; i < g_cyN; i++) { const CyImpl *c = Cy_Find(g_cyInst[i].id); if (c && c->slot == slot) n++; } return n; }
 static int Cy_LoadUsed(void) { int n = 0; for (int i = 0; i < g_cyN; i++) { const CyImpl *c = Cy_Find(g_cyInst[i].id); if (c) n += c->load; } return n; }
 static bool Cy_Has(int special) { for (int i = 0; i < g_cyN; i++) { const CyImpl *c = Cy_Find(g_cyInst[i].id); if (c && c->special == special) return true; } return false; }
+static bool Cy_HasDash(void) { return Cy_Has(CYS_DASH); }
 static const CyImpl *Cy_Core(void) { for (int i = 0; i < g_cyN; i++) { const CyImpl *c = Cy_Find(g_cyInst[i].id); if (c && c->slot == CY_CORE) return c; } return NULL; }
 
 /* ---- the game's own script commands (compiled once each) ---- */
@@ -481,7 +484,7 @@ static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *
     if (!g_cyOn || !okL || !okR || !g_inGameplay || IsMenuMode() || g_pipOpen) { phase = 0; return; }
     {   /* jump (A) pressed: a second jump in the air with Kinetic Calves */
         static bool aPrev = false; bool a = Pressed(r, EVRButtonId_k_EButton_A);
-        if (a && !aPrev) g_cyJumpEdge = true;
+        if (a && !aPrev && !g_cyDashGrip) g_cyJumpEdge = true;   /* (right grip + jump is the dash) */
         aPrev = a;
     }
     float gl = l->rAxis[2].x, gr = r->rAxis[2].x; double now = QpcMs();
@@ -596,6 +599,43 @@ static void Cy_LaunchTick(void)
         Log("Cyberware: %s arm launcher - %s rocket (%.0f damage), %d left%s", h ? "right" : "left", kn[k], dmg, g_cyLn[h].rounds,
             g_cyLn[h].rounds <= 0 ? " - refilling" : "");
     }
+}
+/* Dash Actuators: right grip held + jump - a quick burst about 5 feet (1.5 m) the way the left stick points, for 20 AP */
+static void Cy_DashTick(void)
+{
+    static struct { bool on; float dir[3], left; double last; } d;
+    char *player = (char *)GetPlayer(); if (!player) return;
+    double now = QpcMs();
+    if (g_cyDashReq) {
+        g_cyDashReq = false;
+        if (!Cy_Has(CYS_DASH) || d.on || g_climbing || Grapple_Busy()) goto run;
+        static void *apScr = NULL; static bool bad = false;
+        if (!apScr && !bad) { apScr = Cy_Compile("int iOk\nBegin Function { }\nset iOk to 0\nif player.GetAV ActionPoints >= 20\nplayer.DamageAV ActionPoints 20\nset iOk to 1\nendif\nSetFunctionValue iOk\nEnd\n"); bad = !apScr; }
+        double ok = 0;
+        if (!apScr || !Cy_CallNum(apScr, 0, 0, &ok) || ok < 0.5) { UIMessage("Not enough Action Points to dash (20)"); Cy_Buzz(300); goto run; }
+        float hd = *PlayerRotZ(player), sx = g_cyDashStick[0], sy = g_cyDashStick[1];
+        if (sx * sx + sy * sy < 0.04f) { sx = 0; sy = 1; }   /* (stick at rest: straight ahead) */
+        float fw[2] = { sinf(hd), cosf(hd) }, rt[2] = { cosf(hd), -sinf(hd) };
+        d.dir[0] = fw[0] * sy + rt[0] * sx; d.dir[1] = fw[1] * sy + rt[1] * sx; d.dir[2] = 0;
+        float l = sqrtf(d.dir[0] * d.dir[0] + d.dir[1] * d.dir[1]); d.dir[0] /= l; d.dir[1] /= l;
+        d.left = 1.524f * g_unitsPerMeter; d.on = true; d.last = now;
+        Cy_Buzz(3999);
+        static int ln = 0; if (ln++ < 10) Log("Cyberware: dash (stick %.2f %.2f)", sx, sy);
+    }
+run:
+    if (!d.on) return;
+    float dt = (float)((now - d.last) / 1000.0); d.last = now; if (dt > 0.05f) dt = 0.05f;
+    float step = fminf(d.left, 11.0f * g_unitsPerMeter * dt);   /* (11 m/s: the 5 feet in about a seventh of a second) */
+    if (step <= 0.01f || g_climbing || Grapple_Busy() || !g_inGameplay) { d.on = false; return; }
+    float *P = (float *)(player + 0x30);
+    for (int k = 0; k < 2; k++) {   /* a wall in the way (knee and chest height) ends it there */
+        float a[3] = { P[0], P[1], P[2] + (k ? 0.45f : 1.2f) * g_unitsPerMeter }, b[3] = { a[0] + d.dir[0] * (step + 25.0f), a[1] + d.dir[1] * (step + 25.0f), a[2] }, fr;
+        char *o = RayCast(a, b, &fr);
+        if (o && fr < 1.0f) { d.on = false; return; }
+    }
+    float np[3] = { P[0] + d.dir[0] * step, P[1] + d.dir[1] * step, P[2] };
+    Climb_MovePlayer(player, np);
+    d.left -= step; if (d.left <= 0.01f) d.on = false;
 }
 static bool g_cyTalkHunter = false;
 static bool g_cyFromDoc;
@@ -841,6 +881,7 @@ static void Cy_Tick(void)
         }
     }
     g_cyJumpEdge = false;
+    Cy_DashTick();
     static double nextHeart = 0;
     if (now > nextHeart && Cy_Has(CYS_HEART)) {
         nextHeart = now + 200.0;
@@ -1023,7 +1064,7 @@ static void Cy_Draw(void)
         }
         if (c->special) {
             const char *sp = c->special == CYS_HEART ? "AUTOMATIC: saves you below 15% health" : c->special == CYS_NOFALL ? "ALWAYS ON: no fall damage" :
-                             c->special == CYS_DJUMP ? "ALWAYS ON: jump again in mid-air" : "ACTIVE ABILITY: squeeze both grips twice";
+                             c->special == CYS_DJUMP ? "ALWAYS ON: jump again in mid-air" : c->special == CYS_DASH ? "HOLD RIGHT GRIP + JUMP: dash (20 AP)" : "ACTIVE ABILITY: squeeze both grips twice";
             Set_Fill(CY_RX0 + 22, ey + 14, CY_RX0 + 34, ey + 26, CY_RED);
             Set_Text(g_setFontSmall, CY_RED, CY_RX0 + 48, ey, CY_RX1 - 20, ey + 40, sp, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
         }
