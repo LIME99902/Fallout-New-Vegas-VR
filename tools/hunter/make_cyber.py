@@ -52,6 +52,18 @@ for name, base, en in kinds:
     d = bytearray(p.get('DATA')); struct.pack_into('<I', d, 36, x.fid); p.set('DATA', bytes(d))
     projs.append(p)
 
+# Jack's Favorite (legendary launcher arm): a laser beam - the RCW's auto beam, each bolt bursting into a small burn on what it hits
+jx = R[0x60C2E].copy(); jx.fid = new(); jx.subs = [x for x in jx.subs if x[0] != 'EITM']
+jx.set('EDID', z('FNVVRMCArmRocketExplosionJack'))
+d = bytearray(jx.get('DATA')); struct.pack_into('<3f', d, 0, 2.0, 5.0, 40.0); jx.set('DATA', bytes(d))
+i = [k for k, x in enumerate(jx.subs) if x[0] == 'MODL']
+jx.subs.insert(i[0] + 1 if i else 2, ['EITM', fid(E_THERMAL.fid)])
+expls.append(jx)
+jp = R[0x3BF08].copy(); jp.fid = new(); jp.subs = [y for y in jp.subs if y[0] != 'MODT']
+jp.set('EDID', z('FNVVRMCArmRocketJack')); jp.set('FULL', z("Jack's Favorite"))
+d = bytearray(jp.get('DATA')); fl, = struct.unpack_from('<H', d, 0); struct.pack_into('<H', d, 0, fl | 0x2); struct.pack_into('<I', d, 36, jx.fid); jp.set('DATA', bytes(d))
+projs.append(jp)
+
 top = [Grup(b'ENCH', 0, enchs), Grup(b'EXPL', 0, expls), Grup(b'PROJ', 0, projs)]
 def count(items): return sum(1 + (count(x.items) if isinstance(x, Grup) else 0) for x in items)
 hdr = Rec('TES4', 0, subs=[['HEDR', struct.pack('<fiI', 1.34, count(top), nid[0])], ['CNAM', z('FNVVRMC')],

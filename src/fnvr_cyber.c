@@ -144,6 +144,10 @@ static const CyImpl g_cyCat[] = {
       "A heavy hydraulic left arm with venom-fed knuckle spikes: hits poison them. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands. Cyber Gorilla (STR 10, END 10): up to +100% from fast swings and moving fast." },
     { "arm_mechtoxic_r", CY_ARMS, "Mech Arm: Toxic (right)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
       "A heavy hydraulic right arm with venom-fed knuckle spikes: hits poison them. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands. Cyber Gorilla (STR 10, END 10): up to +100% from fast swings and moving fast." },
+    { "arm_launchjack_l", CY_ARMS, "Jack's Favorite (left) - LEGENDARY", 10000, 6, CYS_LAUNCH, { { 0 } },
+      "A legendary left-forearm launcher rebuilt into a laser: make a fist (grip) and hold the trigger - a beam at 1200 shots a minute that sets what it hits burning, for up to 6 seconds of fire, then a 6 second recharge. Every bolt has a 0.05% chance to upload Rogue AI into whoever it's aimed at - a person or robot dies outright." },
+    { "arm_launchjack_r", CY_ARMS, "Jack's Favorite (right) - LEGENDARY", 10000, 6, CYS_LAUNCH, { { 0 } },
+      "A legendary right-forearm launcher rebuilt into a laser: make a fist (grip) and hold the trigger - a beam at 1200 shots a minute that sets what it hits burning, for up to 6 seconds of fire, then a 6 second recharge. Every bolt has a 0.05% chance to upload Rogue AI into whoever it's aimed at - a person or robot dies outright." },
     { "arm_launchfrag_l", CY_ARMS, "Launcher: Frag (left)", 4000, 5, CYS_LAUNCH, { { 0 } },
       "A rocket launcher that folds out of the left forearm: explosive mini-rockets. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchfrag_r", CY_ARMS, "Launcher: Frag (right)", 4000, 5, CYS_LAUNCH, { { 0 } },
@@ -233,7 +237,7 @@ static int Cy_ArmFx(const char *id)   /* an arm weapon's effect on what it hits:
 }
 static int Cy_LaunchKind(const char *id)   /* 0 frag, 1 thermal, 2 electric, 3 toxic, 4 shrapnel */
 {
-    return strstr(id, "thermal") ? 1 : strstr(id, "shock") ? 2 : strstr(id, "toxic") ? 3 : strstr(id, "shrapnel") ? 4 : 0;
+    return strstr(id, "jack") ? 5 : strstr(id, "thermal") ? 1 : strstr(id, "shock") ? 2 : strstr(id, "toxic") ? 3 : strstr(id, "shrapnel") ? 4 : 0;
 }
 static const CyImpl *Cy_Find(const char *id) { for (int i = 0; i < CY_NCAT; i++) if (!strcmp(g_cyCat[i].id, id)) return &g_cyCat[i]; return NULL; }
 static int Cy_InstIdx(const char *id) { for (int i = 0; i < g_cyN; i++) if (!strcmp(g_cyInst[i].id, id)) return i; return -1; }
@@ -801,10 +805,32 @@ static void *Cy_Form(void *scr)
     if (!((CallFn_t)g_scriptIntf->CallFunction)(scr, GetPlayer(), NULL, &res, 0) || res.type != 2) return NULL;
     return res.v.form;
 }
+/* Jack's Favorite's 0.05%: Rogue AI into whoever the beam is aimed at (within 4 degrees, 60 m) - a person or robot dies */
+static void Cy_JackRogue(const float *o, const float *f)
+{
+    char *best = NULL, *pl = (char *)GetPlayer(), *r = NULL; float bestA = cosf(4.0f * 3.14159265f / 180.0f); int guard = 0;
+    while ((r = Ce_NextFoe(r)) != NULL && guard++ < 120) {
+        if (r == pl || IsBadReadPtr(r, 0x40)) continue;
+        const float *P = (const float *)(r + 0x30);
+        float d[3] = { P[0] - o[0], P[1] - o[1], P[2] + 0.9f * g_unitsPerMeter - o[2] };
+        float L = V3Len(d); if (L < 1.0f || L > 60.0f * g_unitsPerMeter) continue;
+        float c = (d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / L;
+        if (c > bestA) { bestA = c; best = r; }
+    }
+    if (!best) return;
+    static void *sK = NULL, *sKind = NULL;
+    if (!sK) sK = Cy_Compile("ref rT\nBegin Function { rT }\nrT.Kill player\nEnd\n");
+    if (!sKind) sKind = Cy_Compile("ref rT\nint iV\nBegin Function { rT }\nset iV to rT.GetCreatureType\nSetFunctionValue iV\nEnd\n");
+    if (*(BYTE *)(best + 0x04) == 0x3C) { double kd = -1; Ce_Call(sKind, best, 1, 0, &kd); if ((int)kd != 6) return; }   /* (people and robots only) */
+    Ce_Call(sK, best, 1, 0, NULL);
+    char m[96]; snprintf(m, sizeof m, "Jack's Favorite: ROGUE AI uploaded - %s", Cy_RefName(best)); UIMessage(m); Cy_Buzz(3999);
+    Log("Jack's Favorite: Rogue AI on %s (%08X)", Cy_RefName(best), *(uint32_t *)(best + 0x0C));
+}
 static void Cy_LaunchTick(void)
 {
-    static const char *const kn[5] = { "Frag", "Thermal", "Electric", "Toxic", "Shrapnel" };
-    static void *proj[5], *expl[5], *launcherW; static int dmgOff[5]; static bool tried = false, ok = false;
+    static const char *const kn[6] = { "Frag", "Thermal", "Electric", "Toxic", "Shrapnel", "Jack" };
+    static void *proj[6], *expl[6], *launcherW, *laserW; static int dmgOff[6]; static bool tried = false, ok = false;
+    static struct { double fireLeft, reloadAt, nextShot, last; bool init; } jk[2];   /* (Jack's Favorite: seconds of beam left, recharge) */
     double now = QpcMs();
     float sk = (float)(g_cySkExpl > 100 ? 100 : g_cySkExpl < 0 ? 0 : g_cySkExpl);
     double refillMs = g_cyBrainOk ? 3000.0 : (20.0 - 15.0 * sk / 100.0) * 1000.0;   /* (Cyber Brained: 3 s) */
@@ -824,8 +850,24 @@ static void Cy_LaunchTick(void)
                 Log("Missile Barrage: a rocket kill (crit %d%%) - %d -> %d rockets", g_cyCrit, r0, g_cyLn[lastH].rounds);
             }
     }
+    if (g_cyLaunchH[0] >= 0 || g_cyLaunchH[1] >= 0) {
+    if (!tried) {
+        tried = true; char src[160]; ok = true;
+        for (int k = 0; k < 6; k++) {
+            snprintf(src, sizeof src, "ref r\nBegin Function { }\nset r to FNVVRMCArmRocket%s\nSetFunctionValue r\nEnd\n", kn[k]); void *s1 = Cy_Compile(src);
+            snprintf(src, sizeof src, "ref r\nBegin Function { }\nset r to FNVVRMCArmRocketExplosion%s\nSetFunctionValue r\nEnd\n", kn[k]); void *s2 = Cy_Compile(src);
+            proj[k] = Cy_Form(s1); expl[k] = Cy_Form(s2); dmgOff[k] = -1;
+            if (expl[k]) for (int o = 0x18; o < 0x100; o += 4) if (!IsBadReadPtr((char *)expl[k] + o, 4) && *(float *)((char *)expl[k] + o) == 70.0f) { dmgOff[k] = o; break; }
+            if ((!proj[k] || !expl[k]) && k < 5) ok = false;
+            Log("Cyberware: arm launcher %s rocket %s, explosion damage %s", kn[k], proj[k] ? "found" : "MISSING", dmgOff[k] >= 0 ? "found" : "not found (fixed 70)");
+        }
+        launcherW = LookupForm(0x00004340);   /* (WeapMissileLauncher: the rockets count as an explosive weapon of yours) */
+        laserW = LookupForm(0x0009073B);      /* (WeapNVLaserRCW: Jack's Favorite's bolts) */
+        if (!ok) UIMessage("The arm launcher needs FNVVRMC - Cyberware.esp");
+    }
+    }
     for (int h = 0; h < 2; h++) {
-        if (g_cyLaunchH[h] < 0 || (h == 0 && g_cyEyes)) { g_cyLn[h].trigWas = false; continue; }   /* (Cyber Eyes: the left grip + trigger is the scan) */
+        if (g_cyLaunchH[h] < 0 || (h == 0 && g_cyEyes)) { g_cyLn[h].trigWas = false; jk[h].init = false; continue; }   /* (Cyber Eyes: the left grip + trigger is the scan) */
         if (g_cyLn[h].refillAt > 0 && now >= g_cyLn[h].refillAt) {
             g_cyLn[h].rounds = cap; g_cyLn[h].refillAt = 0;
             if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 1500);
@@ -838,24 +880,40 @@ static void Cy_LaunchTick(void)
         int ah = g_leftHanded ? 0 : 1;
         if (h == ah && g_weaponOutThisFrame && PlayerWeaponType() > 2) pull = false;   /* (the gun hand with a gun out: its trigger fires the gun) */
         bool edge = pull && !g_cyLn[h].trigWas; g_cyLn[h].trigWas = pull;
+        if (g_cyLaunchH[h] == 5) {   /* Jack's Favorite: a held beam - 20 bolts a second, 6 s of fire, then a 6 s recharge (Cyber Brained: 3 s) */
+            if (!jk[h].init) { jk[h].init = true; jk[h].fireLeft = 6000.0; jk[h].reloadAt = 0; jk[h].last = now; }
+            double dt = now - jk[h].last; jk[h].last = now; if (dt > 100.0) dt = 100.0;
+            if (jk[h].reloadAt > 0 && now >= jk[h].reloadAt) { jk[h].reloadAt = 0; jk[h].fireLeft = 6000.0; if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 1500); Log("Jack's Favorite: recharged"); }
+            if (!pull) { jk[h].nextShot = 0; continue; }
+            if (jk[h].reloadAt > 0) { if (edge) { char m[80]; snprintf(m, sizeof m, "Jack's Favorite recharging (%.0f s)", (jk[h].reloadAt - now) / 1000.0); UIMessage(m); } continue; }
+            if (!ok || !proj[5] || !expl[5] || !o_ProjSpawn || !laserW) { if (edge) UIMessage("Jack's Favorite needs the newest FNVVRMC - Cyberware.esp"); continue; }
+            jk[h].fireLeft -= dt;
+            if (jk[h].nextShot < now - 100.0) jk[h].nextShot = now;
+            int shots = 0;
+            while (now >= jk[h].nextShot && shots < 3) {
+                jk[h].nextShot += 50.0; shots++;
+                float d[3]; bool fd = now - g_foreDirAt[h] < 150.0 && V3Len(g_foreDirW[h]) > 0.5f;
+                for (int i = 0; i < 3; i++) d[i] = fd ? g_foreDirW[h][i] : -g_handWR[h][i][2];
+                float dl = V3Len(d); if (dl < 0.5f) break; for (int i = 0; i < 3; i++) d[i] /= dl;
+                float pos[3]; for (int i = 0; i < 3; i++) pos[i] = g_handW[h][i] + d[i] * 12.0f + g_handWR[h][i][1] * 2.0f;
+                char *player = (char *)GetPlayer(); void *cell = *(void **)(player + 0x40);
+                float hh = atan2f(d[0], d[1]), pp = -asinf(fminf(fmaxf(d[2], -1.0f), 1.0f));
+                void *r = o_ProjSpawn(proj[5], player, NULL, laserW, pos[0], pos[1], pos[2], hh, pp, NULL, NULL, 0, 0, 0.0f, 0.0f, (uint32_t)(uintptr_t)cell);
+                if (r) { int fo[4]; int nfo = BT_DirOffsets((char *)r, hh, pp, fo); BT_Add((char *)r, hh, pp, fo, nfo); }
+                if (rand() % 10000 < 5) Cy_JackRogue(pos, d);   /* (0.05%: Rogue AI) */
+            }
+            if (shots && g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 900);
+            if (jk[h].fireLeft <= 0) {
+                jk[h].reloadAt = now + (g_cyBrainOk ? 3000.0 : 6000.0); jk[h].nextShot = 0;
+                UIMessage("Jack's Favorite overheated - recharging"); Log("Jack's Favorite: 6 s of fire spent - recharging");
+            }
+            continue;
+        }
         if (!edge) continue;
         if (g_cyLn[h].rounds <= 0) {
             if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 300);
             char m[80]; snprintf(m, sizeof m, "Arm launcher refilling (%.0f s)", g_cyLn[h].refillAt > now ? (g_cyLn[h].refillAt - now) / 1000.0 : 0.0); UIMessage(m);
             continue;
-        }
-        if (!tried) {
-            tried = true; char src[160]; ok = true;
-            for (int k = 0; k < 5; k++) {
-                snprintf(src, sizeof src, "ref r\nBegin Function { }\nset r to FNVVRMCArmRocket%s\nSetFunctionValue r\nEnd\n", kn[k]); void *s1 = Cy_Compile(src);
-                snprintf(src, sizeof src, "ref r\nBegin Function { }\nset r to FNVVRMCArmRocketExplosion%s\nSetFunctionValue r\nEnd\n", kn[k]); void *s2 = Cy_Compile(src);
-                proj[k] = Cy_Form(s1); expl[k] = Cy_Form(s2); dmgOff[k] = -1;
-                if (expl[k]) for (int o = 0x18; o < 0x100; o += 4) if (!IsBadReadPtr((char *)expl[k] + o, 4) && *(float *)((char *)expl[k] + o) == 70.0f) { dmgOff[k] = o; break; }
-                if (!proj[k] || !expl[k]) ok = false;
-                Log("Cyberware: arm launcher %s rocket %s, explosion damage %s", kn[k], proj[k] ? "found" : "MISSING", dmgOff[k] >= 0 ? "found" : "not found (fixed 70)");
-            }
-            launcherW = LookupForm(0x00004340);   /* (WeapMissileLauncher: the rockets count as an explosive weapon of yours) */
-            if (!ok) UIMessage("The arm launcher needs FNVVRMC - Cyberware.esp");
         }
         int k = g_cyLaunchH[h];
         if (!ok || !proj[k] || !o_ProjSpawn) continue;
