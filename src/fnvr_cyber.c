@@ -26,7 +26,7 @@ enum { CY_CORE, CY_CORTEX, CY_OPTICS, CY_CIRC, CY_NERVE, CY_DERMAL, CY_SKEL, CY_
 static const char *const g_cySlotName[CY_NSLOT] = { "NEURAL CORE", "CORTEX", "OPTICS", "CIRCULATORY", "NERVOUS", "DERMAL",
                                                     "SKELETON", "IMMUNE", "ARMS", "HANDS", "LEGS" };
 static const int g_cySlotMax[CY_NSLOT] = { 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };   /* (one Neural Core: the grip squeeze sets off one ability) */
-enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH, CYS_LAUNCH, CYS_DASH };
+enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH, CYS_LAUNCH, CYS_DASH, CYS_RAM };
 typedef struct { const char *av; int amt; } CyMod;
 typedef struct {
     const char *id; int slot; const char *name; int price, load, special;
@@ -150,6 +150,8 @@ static const CyImpl g_cyCat[] = {
       "A grappling line that fires out of the left wrist. Make a fist (grip), then pull the trigger: it pulls you to where your hand points, or hooks a person and drags them to you - they arrive taking 50 damage and bleeding." },
     { "arm_grapple_r", CY_ARMS, "Grapple Arm (right)", 1000, 2, CYS_NONE, { { 0 } },
       "A grappling line that fires out of the right wrist. Make a fist (grip), then pull the trigger: it pulls you to where your hand points, or hooks a person and drags them to you - they arrive taking 50 damage and bleeding." },
+    { "arm_ram",        CY_ARMS, "More RAM, Please", 3000, 3, CYS_RAM, { { 0 } },
+      "Extra memory banks wired along the forearm. Every kill takes 1 second off your Neural Core ability's cooldown." },
     { "arm_recoil",     CY_ARMS, "Recoil Dampers", 2500, 4, CYS_NONE, { { "Guns", 8 } },
       "Shock absorbers in the elbow and shoulder joints soak up every kick." },
     { "hand_knuckle",   CY_HANDS, "Ripper Knuckles", 1500, 2, CYS_NONE, { { "UnarmedDamage", 8 } },
@@ -946,6 +948,11 @@ static void Cy_Tick(void)
                 for (LONG i = 0; i < kills && !g_cyCO; i++) if (rand() % 100 < pct) { Log("Cyberware: a kill set off Chrome Overload (%d%% over capacity)", pct); Cy_CoStart(); kills = 0; }
             }
         }
+        if (kills && Cy_Has(CYS_RAM) && g_cyAbilReady > now) {   /* More RAM, Please: each kill 1 s off the ability's cooldown */
+            double floor = g_cyAbil ? g_cyAbilEnd : now;
+            g_cyAbilReady -= 1000.0 * (double)kills; if (g_cyAbilReady < floor) g_cyAbilReady = floor;
+            Log("More RAM, Please: %ld kill%s - ability ready in %.1f s", (long)kills, kills == 1 ? "" : "s", (g_cyAbilReady - now) / 1000.0);
+        }
         if (kills && g_cyCO) {   /* each kill: 20% health back and 3 more seconds */
             Cy_HealPct(20 * (int)(kills > 5 ? 5 : kills));
             g_cyCOEnd += 3000.0 * (double)kills;
@@ -1156,7 +1163,7 @@ static void Cy_Draw(void)
         }
         if (c->special) {
             const char *sp = c->special == CYS_HEART ? "AUTOMATIC: saves you below 15% health" : c->special == CYS_NOFALL ? "ALWAYS ON: no fall damage" :
-                             c->special == CYS_DJUMP ? "ALWAYS ON: jump again in mid-air" : c->special == CYS_DASH ? "HOLD RIGHT GRIP + JUMP: dash (20 AP)" : "ACTIVE ABILITY: squeeze both grips twice";
+                             c->special == CYS_DJUMP ? "ALWAYS ON: jump again in mid-air" : c->special == CYS_DASH ? "HOLD RIGHT GRIP + JUMP: dash (20 AP)" : c->special == CYS_RAM ? "ALWAYS ON: each kill -1 s ability cooldown" : "ACTIVE ABILITY: squeeze both grips twice";
             Set_Fill(CY_RX0 + 22, ey + 14, CY_RX0 + 34, ey + 26, CY_RED);
             Set_Text(g_setFontSmall, CY_RED, CY_RX0 + 48, ey, CY_RX1 - 20, ey + 40, sp, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
         }
