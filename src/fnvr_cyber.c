@@ -473,6 +473,7 @@ static void Cy_AbilityStart(void)
     case CYS_CAMO: Cy_TempMod("Chameleon", 1); dur = 12000; cool = 90000; break;
     default: g_cyAbil = 0; return;
     }
+    if (g_cyBrainOk) dur += 4000.0;   /* (Cyber Brained: the ability lasts 4 s longer) */
     if (g_cyBrainOk) { double c0 = cool; cool -= 4000.0 * g_cyN; if (cool < 6000.0) cool = 6000.0;   /* (Cyber Brained: 4 s less per piece of chrome, 6 s at least) */
         Log("Cyber Brained: %d pieces of chrome - cooldown %.0f s instead of %.0f s", g_cyN, cool / 1000.0, c0 / 1000.0); }
     g_cyAbilEnd = now + dur; g_cyAbilReady = now + dur + cool;
