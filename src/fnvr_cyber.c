@@ -26,7 +26,7 @@ enum { CY_CORE, CY_CORTEX, CY_OPTICS, CY_CIRC, CY_NERVE, CY_DERMAL, CY_SKEL, CY_
 static const char *const g_cySlotName[CY_NSLOT] = { "NEURAL CORE", "CORTEX", "OPTICS", "CIRCULATORY", "NERVOUS", "DERMAL",
                                                     "SKELETON", "IMMUNE", "ARMS", "HANDS", "LEGS" };
 static const int g_cySlotMax[CY_NSLOT] = { 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };   /* (one Neural Core: the grip squeeze sets off one ability) */
-enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH, CYS_LAUNCH, CYS_DASH, CYS_RAM };
+enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH, CYS_LAUNCH, CYS_DASH, CYS_RAM, CYS_BLOOD };
 typedef struct { const char *av; int amt; } CyMod;
 typedef struct {
     const char *id; int slot; const char *name; int price, load, special;
@@ -152,6 +152,8 @@ static const CyImpl g_cyCat[] = {
       "A grappling line that fires out of the right wrist. Make a fist (grip), then pull the trigger: it pulls you to where your hand points, or hooks a person and drags them to you - they arrive taking 50 damage and bleeding." },
     { "arm_ram",        CY_ARMS, "More RAM, Please", 3000, 3, CYS_RAM, { { 0 } },
       "Extra memory banks wired along the forearm. Every kill takes 1 second off your Neural Core ability's cooldown." },
+    { "arm_blood",      CY_ARMS, "Blood Driver", 3500, 4, CYS_BLOOD, { { 0 } },
+      "Micro-pumps in the forearm drink from every blow. Each melee or unarmed hit that lands heals you 3% of your health." },
     { "arm_recoil",     CY_ARMS, "Recoil Dampers", 2500, 4, CYS_NONE, { { "Guns", 8 } },
       "Shock absorbers in the elbow and shoulder joints soak up every kick." },
     { "hand_knuckle",   CY_HANDS, "Ripper Knuckles", 1500, 2, CYS_NONE, { { "UnarmedDamage", 8 } },
@@ -908,6 +910,15 @@ static void Cy_Tick(void)
     Cy_FxFlush();
     Cy_LaunchTick();
     Cy_MantisTick();
+    {   /* Blood Driver: 3% of your health back for every melee / unarmed hit that landed */
+        int n = g_cyBloodHits; g_cyBloodHits = 0;
+        if (n && Cy_Has(CYS_BLOOD)) {
+            static void *scr = NULL; static bool bad = false;
+            if (!scr && !bad) { scr = Cy_Compile("int iP\nfloat fM\nBegin Function { iP }\nset fM to player.GetBaseAV Health\nset fM to fM * iP / 100\nplayer.RestoreAV Health fM\nEnd\n"); bad = !scr; }
+            double o = 0; if (scr) Cy_CallNum(scr, 1, 3 * n, &o);
+            static int l = 0; if (l++ < 20) Log("Blood Driver: %d hit%s - %d%% health back", n, n == 1 ? "" : "s", 3 * n);
+        }
+    }
     while (g_cyDeadR != g_cyDeadW) {   /* the dead: a Fiend leaves an ear */
         void *who = g_cyDead[g_cyDeadR & 31]; InterlockedIncrement(&g_cyDeadR);
         static void *dScr = NULL; static bool dBad = false;
@@ -1163,7 +1174,7 @@ static void Cy_Draw(void)
         }
         if (c->special) {
             const char *sp = c->special == CYS_HEART ? "AUTOMATIC: saves you below 15% health" : c->special == CYS_NOFALL ? "ALWAYS ON: no fall damage" :
-                             c->special == CYS_DJUMP ? "ALWAYS ON: jump again in mid-air" : c->special == CYS_DASH ? "HOLD RIGHT GRIP + JUMP: dash (20 AP)" : c->special == CYS_RAM ? "ALWAYS ON: each kill -1 s ability cooldown" : "ACTIVE ABILITY: squeeze both grips twice";
+                             c->special == CYS_DJUMP ? "ALWAYS ON: jump again in mid-air" : c->special == CYS_DASH ? "HOLD RIGHT GRIP + JUMP: dash (20 AP)" : c->special == CYS_RAM ? "ALWAYS ON: each kill -1 s ability cooldown" : c->special == CYS_BLOOD ? "ALWAYS ON: melee / unarmed hits heal 3%" : "ACTIVE ABILITY: squeeze both grips twice";
             Set_Fill(CY_RX0 + 22, ey + 14, CY_RX0 + 34, ey + 26, CY_RED);
             Set_Text(g_setFontSmall, CY_RED, CY_RX0 + 48, ey, CY_RX1 - 20, ey + 40, sp, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
         }
