@@ -98,14 +98,14 @@ static const CyImpl g_cyCat[] = {
       "Hydraulic rams along both forearms. Every swing of a melee weapon lands harder (+10 melee damage)." },
     /* one arm at a time (left and right can differ - a mantis blade on one, a Mech Arm on the other): half the price and
        capacity of a pair, and the fist's own damage goes to that hand only (FNVR deals it where the blow lands) */
-    { "arm_kinetic_l",  CY_ARMS, "Arm Blade: Kinetic (left)", 2500, 4, CYS_NONE, { { 0 } }, "A serrated blade rising out of the left forearm: +15 damage to that hand's blows." },
-    { "arm_kinetic_r",  CY_ARMS, "Arm Blade: Kinetic (right)", 2500, 4, CYS_NONE, { { 0 } }, "A serrated blade rising out of the right forearm: +15 damage to that hand's blows." },
-    { "arm_thermal_l",  CY_ARMS, "Arm Blade: Thermal (left)", 3250, 4, CYS_NONE, { { "FireResist", 5 } }, "A heated blade in the left forearm: +12 damage to that hand's blows." },
-    { "arm_thermal_r",  CY_ARMS, "Arm Blade: Thermal (right)", 3250, 4, CYS_NONE, { { "FireResist", 5 } }, "A heated blade in the right forearm: +12 damage to that hand's blows." },
-    { "arm_shock_l",    CY_ARMS, "Arm Blade: Shock (left)", 3250, 4, CYS_NONE, { { 0 } }, "An arcing blade in the left forearm: +12 damage to that hand's blows." },
-    { "arm_shock_r",    CY_ARMS, "Arm Blade: Shock (right)", 3250, 4, CYS_NONE, { { 0 } }, "An arcing blade in the right forearm: +12 damage to that hand's blows." },
-    { "arm_toxin_l",    CY_ARMS, "Arm Blade: Toxin (left)", 3250, 4, CYS_NONE, { { "PoisonResist", 5 } }, "A venom blade in the left forearm: +12 damage to that hand's blows." },
-    { "arm_toxin_r",    CY_ARMS, "Arm Blade: Toxin (right)", 3250, 4, CYS_NONE, { { "PoisonResist", 5 } }, "A venom blade in the right forearm: +12 damage to that hand's blows." },
+    { "arm_kinetic_l",  CY_ARMS, "Arm Blade: Kinetic (left)", 2500, 4, CYS_NONE, { { 0 } }, "A serrated blade rising out of the left forearm: +15 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
+    { "arm_kinetic_r",  CY_ARMS, "Arm Blade: Kinetic (right)", 2500, 4, CYS_NONE, { { 0 } }, "A serrated blade rising out of the right forearm: +15 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
+    { "arm_thermal_l",  CY_ARMS, "Arm Blade: Thermal (left)", 3250, 4, CYS_NONE, { { "FireResist", 5 } }, "A heated blade in the left forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
+    { "arm_thermal_r",  CY_ARMS, "Arm Blade: Thermal (right)", 3250, 4, CYS_NONE, { { "FireResist", 5 } }, "A heated blade in the right forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
+    { "arm_shock_l",    CY_ARMS, "Arm Blade: Shock (left)", 3250, 4, CYS_NONE, { { 0 } }, "An arcing blade in the left forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
+    { "arm_shock_r",    CY_ARMS, "Arm Blade: Shock (right)", 3250, 4, CYS_NONE, { { 0 } }, "An arcing blade in the right forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
+    { "arm_toxin_l",    CY_ARMS, "Arm Blade: Toxin (left)", 3250, 4, CYS_NONE, { { "PoisonResist", 5 } }, "A venom blade in the left forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
+    { "arm_toxin_r",    CY_ARMS, "Arm Blade: Toxin (right)", 3250, 4, CYS_NONE, { { "PoisonResist", 5 } }, "A venom blade in the right forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
     { "arm_mech_l",     CY_ARMS, "Mech Arm (left)", 4500, 5, CYS_MECH, { { "Strength", 2 } },
       "A heavy hydraulic left arm: +2 Strength, +40 damage to that fist (twice that at Unarmed 100). Cyber Gorilla (STR 10, END 10): up to +100% from fast swings and moving fast. It grabs people off their feet and throws them, a punch with it to the chest sends them flying, and with both hands on someone it rips a limb off. Robots, deathclaws and giants need Strength 10." },
     { "arm_mech_r",     CY_ARMS, "Mech Arm (right)", 4500, 5, CYS_MECH, { { "Strength", 2 } },
@@ -497,6 +497,50 @@ static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *
 #include "fnvr_cyber_enemy.c"
 /* ---- arm weapons: skills, the effects they put on what they hit, the arm launcher ---- */
 static int g_cySkExpl = 0, g_cySkMelee = 0, g_cySkUnarmed = 0;
+/* ---- Praying Mantis (perk: a mantis blade, Agility 10, Endurance 10) ----
+   every blade hit adds a bleed stack (no limit) and sets the one it hit bleeding (10 s, renewed by each hit). While anyone is
+   bleeding: each stack heals you 5% of your health a second (20 stacks: 100%/s), and every bleeding enemy loses 1% of their
+   health a second per stack (20 stacks: 20%/s). When the last bleed ends (dead or run out) the stacks reset. */
+static bool g_cyMantisOk = false;
+static int g_cyMantisStacks = 0;
+static struct { char *ref; uint32_t id; double until; } g_cyMantis[32]; static int g_cyMantisN = 0;
+static void Cy_MantisHit(char *ref, uint32_t id)
+{
+    double now = QpcMs(); int i;
+    for (i = 0; i < g_cyMantisN; i++) if (g_cyMantis[i].id == id && g_cyMantis[i].ref == ref) break;
+    if (i == g_cyMantisN) { if (g_cyMantisN >= 32) return; g_cyMantis[g_cyMantisN].ref = ref; g_cyMantis[g_cyMantisN].id = id; g_cyMantisN++; }
+    g_cyMantis[i].until = now + 10000.0;
+    g_cyMantisStacks++;
+    if (g_cyMantisStacks == 1 || g_cyMantisStacks % 5 == 0) { char m[80]; snprintf(m, sizeof m, "Praying Mantis x%d", g_cyMantisStacks); UIMessage(m); }
+    static int l = 0; if (l++ < 40) Log("Praying Mantis: %08X bleeding - %d stacks", id, g_cyMantisStacks);
+}
+static void Cy_MantisTick(void)
+{
+    static double next = 0; double now = QpcMs();
+    if (!g_cyMantisN) { if (g_cyMantisStacks) { Log("Praying Mantis: every bleed is over - %d stacks reset", g_cyMantisStacks); g_cyMantisStacks = 0; } return; }
+    if (now < next) return; next = now + 250.0;   /* (four ticks a second, a quarter of the per-second amounts each) */
+    static void *dmg = NULL, *heal = NULL; static bool bad = false;
+    if (!dmg && !bad) {
+        dmg = Cy_Compile("ref rWho\nint iP\nfloat fM\nfloat fD\nfloat fHP\nBegin Function { rWho, iP }\nset fHP to rWho.GetAV Health\nif fHP > 0\n"
+                         "set fM to rWho.GetBaseAV Health\nset fD to fM * iP / 10000\nif fD >= fHP\nrWho.Kill player\nset fHP to 0\nelse\nrWho.DamageAV Health fD\nset fHP to fHP - fD\nendif\nendif\nSetFunctionValue fHP\nEnd\n");
+        heal = Cy_Compile("int iP\nfloat fM\nBegin Function { iP }\nset fM to player.GetBaseAV Health\nset fM to fM * iP / 10000\nplayer.RestoreAV Health fM\nEnd\n");
+        bad = !dmg || !heal; if (bad) Log("Praying Mantis: couldn't set up its scripts");
+    }
+    if (bad) { g_cyMantisN = 0; return; }
+    int pDmg = g_cyMantisStacks * 100 / 4, pHeal = g_cyMantisStacks * 500 / 4;   /* (hundredths of a percent per tick) */
+    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+    CallFn_t call = (CallFn_t)g_scriptIntf->CallFunction; if (!call || !GetPlayer()) return;
+    for (int i = 0; i < g_cyMantisN; ) {
+        bool live = now < g_cyMantis[i].until && LookupForm(g_cyMantis[i].id) == (void *)g_cyMantis[i].ref;
+        if (live) {
+            struct { double num; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+            live = call(dmg, GetPlayer(), NULL, &res, 2, g_cyMantis[i].ref, pDmg) && res.type == 1 && res.num > 0;
+        }
+        if (!live) { g_cyMantis[i] = g_cyMantis[--g_cyMantisN]; continue; }
+        i++;
+    }
+    if (g_cyMantisN) { struct { double num; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res); call(heal, GetPlayer(), NULL, &res, 1, pHeal); }
+}
 static void Cy_SkillsTick(void)
 {
     static double at = 0; if (QpcMs() < at) return; at = QpcMs() + 2000.0;
@@ -504,12 +548,17 @@ static void Cy_SkillsTick(void)
     if (!scr && !bad) { scr = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetAV Explosives * 1000000 + player.GetAV MeleeWeapons * 1000 + player.GetAV Unarmed\nSetFunctionValue iV\nEnd\n"); bad = !scr; }
     double v = 0; if (!scr || !Cy_CallNum(scr, 0, 0, &v) || v < 0) return;
     long long n = (long long)(v + 0.5); g_cySkExpl = (int)(n / 1000000); g_cySkMelee = (int)(n / 1000 % 1000); g_cySkUnarmed = (int)(n % 1000);
-    static void *se = NULL; static bool sbad = false;   /* (Strength and Endurance: Cyber Gorilla needs 10 of each) */
-    if (!se && !sbad) { se = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetAV Strength * 100 + player.GetAV Endurance\nSetFunctionValue iV\nEnd\n"); sbad = !se; }
+    static void *se = NULL; static bool sbad = false;   /* (Strength, Agility, Endurance: Cyber Gorilla needs STR 10 + END 10, Praying Mantis AGI 10 + END 10) */
+    if (!se && !sbad) { se = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetAV Strength * 10000 + player.GetAV Agility * 100 + player.GetAV Endurance\nSetFunctionValue iV\nEnd\n"); sbad = !se; }
     double w = 0; if (se && Cy_CallNum(se, 0, 0, &w) && w >= 0) {
-        int n2 = (int)(w + 0.5); bool ok = n2 / 100 >= 10 && n2 % 100 >= 10;
+        int n2 = (int)(w + 0.5), st = n2 / 10000, ag = n2 / 100 % 100, en = n2 % 100;
+        bool ok = st >= 10 && en >= 10;
         if (ok != g_cyGorillaOk && g_cyMechArms) UIMessage(ok ? "Cyber Gorilla: active" : "Cyber Gorilla needs Strength 10 and Endurance 10");
-        g_cyGorillaOk = ok; }
+        g_cyGorillaOk = ok;
+        bool blades = (g_cyArmKindH[0] == 1 && g_cyArmDmg[0] > 0) || (g_cyArmKindH[1] == 1 && g_cyArmDmg[1] > 0);
+        bool mk = ag >= 10 && en >= 10;
+        if (mk != g_cyMantisOk && blades) UIMessage(mk ? "Praying Mantis: active" : "Praying Mantis needs Agility 10 and Endurance 10");
+        g_cyMantisOk = mk; }
 }
 /* (from the hit code) the extra damage this hand's arm weapon adds to a blow: blades x(1 + Melee Weapons/100), Mech Arms
    x(1 + Unarmed/100) - double at 100 - and its effect queued to go on whoever was hit */
@@ -517,6 +566,7 @@ static float Cy_ArmBlow(int h, char *ref, uint32_t id)
 {
     if (h < 0 || h > 1 || g_cyArmDmg[h] <= 0) return 0;
     float sk = g_cyArmKindH[h] == 2 ? (float)g_cySkUnarmed : (float)g_cySkMelee; if (sk > 100) sk = 100; if (sk < 0) sk = 0;
+    if (g_cyArmKindH[h] == 1 && g_cyMantisOk && ref) Cy_MantisHit(ref, id);   /* (Praying Mantis: a blade hit is a bleed stack) */
     if (g_cyArmFxH[h] && ref && g_cyFxN < 16) { g_cyFxQ[g_cyFxN].ref = ref; g_cyFxQ[g_cyFxN].id = id; g_cyFxQ[g_cyFxN].fx = g_cyArmFxH[h]; g_cyFxN++; }
     return g_cyArmDmg[h] * (1.0f + sk / 100.0f);
 }
@@ -821,6 +871,7 @@ static void Cy_Tick(void)
     Cy_SkillsTick();
     Cy_FxFlush();
     Cy_LaunchTick();
+    Cy_MantisTick();
     while (g_cyDeadR != g_cyDeadW) {   /* the dead: a Fiend leaves an ear */
         void *who = g_cyDead[g_cyDeadR & 31]; InterlockedIncrement(&g_cyDeadR);
         static void *dScr = NULL; static bool dBad = false;
@@ -913,6 +964,7 @@ static void Cy_Reset(const char *why)
     if (g_cyAbil == CYS_SLOWMO) Cy_SlowTime(false);
     g_cyAbil = 0; g_cyTempN = 0; g_cyAtDoc = false;
     g_cyCO = false; g_cyCoTempN = 0; g_cyCOReady = 0; g_cyBorg = false;
+    g_cyMantisN = 0; g_cyMantisStacks = 0;
     if (g_cyGsHave) { Cy_GsSet(0, 1.0f); Cy_GsSet(1, 1.0f); }
     g_cyN = 0; g_cyRevertN = 0; g_cyAbilReady = g_cyHeartReady = 0;
     Ce_Reset();
