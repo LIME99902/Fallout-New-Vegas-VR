@@ -127,25 +127,25 @@ static const CyImpl g_cyCat[] = {
     { "arm_mechtoxic_r", CY_ARMS, "Mech Arm: Toxic (right)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
       "A heavy hydraulic right arm with venom-fed knuckle spikes: hits poison them. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands. Cyber Gorilla (STR 10, END 10): up to +100% from fast swings and moving fast." },
     { "arm_launchfrag_l", CY_ARMS, "Launcher: Frag (left)", 4000, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the left forearm: explosive mini-rockets. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the left forearm: explosive mini-rockets. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchfrag_r", CY_ARMS, "Launcher: Frag (right)", 4000, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the right forearm: explosive mini-rockets. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the right forearm: explosive mini-rockets. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchthermal_l", CY_ARMS, "Launcher: Thermal (left)", 4500, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the left forearm: incendiary mini-rockets: the blast sets everyone in it burning. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the left forearm: incendiary mini-rockets: the blast sets everyone in it burning. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchthermal_r", CY_ARMS, "Launcher: Thermal (right)", 4500, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the right forearm: incendiary mini-rockets: the blast sets everyone in it burning. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the right forearm: incendiary mini-rockets: the blast sets everyone in it burning. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchshock_l", CY_ARMS, "Launcher: Electric (left)", 4500, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the left forearm: shock mini-rockets: the blast shocks everyone in it and stuns robots. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the left forearm: shock mini-rockets: the blast shocks everyone in it and stuns robots. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchshock_r", CY_ARMS, "Launcher: Electric (right)", 4500, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the right forearm: shock mini-rockets: the blast shocks everyone in it and stuns robots. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the right forearm: shock mini-rockets: the blast shocks everyone in it and stuns robots. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchtoxic_l", CY_ARMS, "Launcher: Toxic (left)", 4500, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the left forearm: gas mini-rockets: the blast poisons everyone in it. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the left forearm: gas mini-rockets: the blast poisons everyone in it. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchtoxic_r", CY_ARMS, "Launcher: Toxic (right)", 4500, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the right forearm: gas mini-rockets: the blast poisons everyone in it. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the right forearm: gas mini-rockets: the blast poisons everyone in it. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchshrapnel_l", CY_ARMS, "Launcher: Shrapnel (left)", 4500, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the left forearm: shrapnel mini-rockets: everyone in the blast bleeds. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the left forearm: shrapnel mini-rockets: everyone in the blast bleeds. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_launchshrapnel_r", CY_ARMS, "Launcher: Shrapnel (right)", 4500, 5, CYS_LAUNCH, { { 0 } },
-      "A rocket launcher that folds out of the right forearm: shrapnel mini-rockets: everyone in the blast bleeds. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+      "A rocket launcher that folds out of the right forearm: shrapnel mini-rockets: everyone in the blast bleeds. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100). Missile Barrage (LCK 10, END 10): 5 rockets, kills can refund them." },
     { "arm_grapple_l", CY_ARMS, "Grapple Arm (left)", 1000, 2, CYS_NONE, { { 0 } },
       "A grappling line that fires out of the left wrist. Make a fist (grip), then pull the trigger: it pulls you to where your hand points, or hooks a person and drags them to you - they arrive taking 50 damage and bleeding." },
     { "arm_grapple_r", CY_ARMS, "Grapple Arm (right)", 1000, 2, CYS_NONE, { { 0 } },
@@ -175,7 +175,7 @@ static CyInst g_cyInst[CY_MAXINST]; static int g_cyN = 0;
 static CySavedMod g_cyTemp[8]; static int g_cyTempN = 0;          /* an active ability's boosts, undone when it ends */
 static CySavedMod g_cyCoTemp[4]; static int g_cyCoTempN = 0;     /* Chrome Overload's boosts */
 static CySavedMod g_cyRevert[12]; static int g_cyRevertN = 0;     /* boosts that were active when the loaded save was made */
-static volatile LONG g_cyHits = 0, g_cyKills = 0;                  /* (from xNVSE's events: hits and kills by you, not handled yet) */
+static volatile LONG g_cyHits = 0, g_cyKills = 0, g_cyKillsL = 0;                  /* (from xNVSE's events: hits and kills by you, not handled yet) */
 static volatile bool g_cyJumpEdge = false;
 static bool g_cyBorg = false, g_cyCO = false; static double g_cyCOEnd = 0, g_cyCOReady = 0;
 static bool g_cyAtDoc = false;                                     /* talking to the ripperdoc right now */
@@ -430,7 +430,7 @@ static void Cy_OnDeath(void *thisObj, void *params)
 {
     (void)thisObj; void **p = (void **)params; void *pl = GetPlayer();
     if (p && p[0] && p[0] != pl && g_cyDeadW - g_cyDeadR < 32) { g_cyDead[g_cyDeadW & 31] = p[0]; InterlockedIncrement(&g_cyDeadW); }
-    if (p && pl && p[1] == pl && p[0] && p[0] != pl) InterlockedIncrement(&g_cyKills);
+    if (p && pl && p[1] == pl && p[0] && p[0] != pl) { InterlockedIncrement(&g_cyKills); InterlockedIncrement(&g_cyKillsL); }
     else if (p && pl && p[1] && p[0] && p[1] != pl) Ce_Event(p[1], p[0], true);
 }
 static NVSEInterface *g_cyNvse = NULL;
@@ -496,7 +496,7 @@ static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *
 }
 #include "fnvr_cyber_enemy.c"
 /* ---- arm weapons: skills, the effects they put on what they hit, the arm launcher ---- */
-static int g_cySkExpl = 0, g_cySkMelee = 0, g_cySkUnarmed = 0;
+static int g_cySkExpl = 0, g_cySkMelee = 0, g_cySkUnarmed = 0, g_cyCrit = 0; static bool g_cyBarrageOk = false;
 /* ---- Praying Mantis (perk: a mantis blade, Agility 10, Endurance 10) ----
    every blade hit adds a bleed stack (no limit) and sets the one it hit bleeding (10 s, renewed by each hit). While anyone is
    bleeding: each stack heals you 5% of your health a second (20 stacks: 100%/s), and every bleeding enemy loses 1% of their
@@ -550,8 +550,8 @@ static void Cy_SkillsTick(void)
     long long n = (long long)(v + 0.5); g_cySkExpl = (int)(n / 1000000); g_cySkMelee = (int)(n / 1000 % 1000); g_cySkUnarmed = (int)(n % 1000);
     static void *se = NULL; static bool sbad = false;   /* (Strength, Agility, Endurance: Cyber Gorilla needs STR 10 + END 10, Praying Mantis AGI 10 + END 10) */
     if (!se && !sbad) { se = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetAV Strength * 10000 + player.GetAV Agility * 100 + player.GetAV Endurance\nSetFunctionValue iV\nEnd\n"); sbad = !se; }
-    double w = 0; if (se && Cy_CallNum(se, 0, 0, &w) && w >= 0) {
-        int n2 = (int)(w + 0.5), st = n2 / 10000, ag = n2 / 100 % 100, en = n2 % 100;
+    static int en = 0; double w = 0; if (se && Cy_CallNum(se, 0, 0, &w) && w >= 0) {
+        int n2 = (int)(w + 0.5), st = n2 / 10000, ag = n2 / 100 % 100; en = n2 % 100;
         bool ok = st >= 10 && en >= 10;
         if (ok != g_cyGorillaOk && g_cyMechArms) UIMessage(ok ? "Cyber Gorilla: active" : "Cyber Gorilla needs Strength 10 and Endurance 10");
         g_cyGorillaOk = ok;
@@ -559,6 +559,14 @@ static void Cy_SkillsTick(void)
         bool mk = ag >= 10 && en >= 10;
         if (mk != g_cyMantisOk && blades) UIMessage(mk ? "Praying Mantis: active" : "Praying Mantis needs Agility 10 and Endurance 10");
         g_cyMantisOk = mk; }
+    static void *sl = NULL; static bool lbad = false;   /* (Luck and crit chance: Missile Barrage) */
+    if (!sl && !lbad) { sl = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetAV Luck * 1000 + player.GetAV CritChance\nSetFunctionValue iV\nEnd\n"); lbad = !sl; }
+    double u = 0; if (sl && Cy_CallNum(sl, 0, 0, &u) && u >= 0) {
+        int n3 = (int)(u + 0.5); g_cyCrit = n3 % 1000;
+        bool bo = n3 / 1000 >= 10 && en >= 10;
+        bool launcher = g_cyLaunchH[0] >= 0 || g_cyLaunchH[1] >= 0;
+        if (bo != g_cyBarrageOk && launcher) UIMessage(bo ? "Missile Barrage: active - 5 rockets" : "Missile Barrage needs Luck 10 and Endurance 10");
+        g_cyBarrageOk = bo; }
 }
 /* (from the hit code) the extra damage this hand's arm weapon adds to a blow: blades x(1 + Melee Weapons/100), Mech Arms
    x(1 + Unarmed/100) - double at 100 - and its effect queued to go on whoever was hit */
@@ -604,12 +612,28 @@ static void Cy_LaunchTick(void)
     double now = QpcMs();
     float sk = (float)(g_cySkExpl > 100 ? 100 : g_cySkExpl < 0 ? 0 : g_cySkExpl);
     double refillMs = (20.0 - 15.0 * sk / 100.0) * 1000.0;
+    int cap = g_cyBarrageOk ? 5 : 3;   /* (Missile Barrage: 5 rockets) */
+    static bool capWas = false; static int lastH = -1; static double lastShot = 0;
+    if (g_cyBarrageOk != capWas) { capWas = g_cyBarrageOk;   /* (perk on: a full launcher tops up to 5; off: down to 3) */
+        for (int h = 0; h < 2; h++) { if (g_cyBarrageOk && g_cyLn[h].rounds == 3 && !g_cyLn[h].refillAt) g_cyLn[h].rounds = 5; if (g_cyLn[h].rounds > cap) g_cyLn[h].rounds = cap; } }
+    {   /* Missile Barrage: a kill soon after a rocket - your crit chance to get 1 rocket back (over 50%: a 50% chance of 2) */
+        LONG k = InterlockedExchange(&g_cyKillsL, 0);
+        if (k && g_cyBarrageOk && lastH >= 0 && g_cyLaunchH[lastH] >= 0 && now - lastShot < 4000.0)
+            for (LONG i = 0; i < k; i++) {
+                int ch = g_cyCrit > 50 ? 50 : g_cyCrit, n = g_cyCrit > 50 ? 2 : 1;
+                if (rand() % 100 >= ch) continue;
+                int r0 = g_cyLn[lastH].rounds; g_cyLn[lastH].rounds = r0 + n > cap ? cap : r0 + n;
+                if (g_cyLn[lastH].rounds >= cap) g_cyLn[lastH].refillAt = 0;
+                char m[64]; snprintf(m, sizeof m, "Missile Barrage: +%d rocket%s", g_cyLn[lastH].rounds - r0, g_cyLn[lastH].rounds - r0 == 1 ? "" : "s"); if (g_cyLn[lastH].rounds > r0) UIMessage(m);
+                Log("Missile Barrage: a rocket kill (crit %d%%) - %d -> %d rockets", g_cyCrit, r0, g_cyLn[lastH].rounds);
+            }
+    }
     for (int h = 0; h < 2; h++) {
         if (g_cyLaunchH[h] < 0) { g_cyLn[h].trigWas = false; continue; }
-        if (g_cyLn[h].rounds <= 0 && g_cyLn[h].refillAt > 0 && now >= g_cyLn[h].refillAt) {
-            g_cyLn[h].rounds = 3; g_cyLn[h].refillAt = 0;
+        if (g_cyLn[h].refillAt > 0 && now >= g_cyLn[h].refillAt) {
+            g_cyLn[h].rounds = cap; g_cyLn[h].refillAt = 0;
             if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 1500);
-            Log("Cyberware: %s arm launcher refilled - 3 rockets", h ? "right" : "left");
+            Log("Cyberware: %s arm launcher refilled - %d rockets", h ? "right" : "left", cap);
         }
         if (g_gripHeld[h] && !g_cyLn[h].gripWas) g_cyLn[h].gripFirst = g_grapTrigH[h] < 0.35f;   /* (fist first, then trigger - a trigger pulled first stays bullet time) */
         if (!g_gripHeld[h]) g_cyLn[h].gripFirst = false;
@@ -649,8 +673,8 @@ static void Cy_LaunchTick(void)
         float hh = atan2f(d[0], d[1]), pp = -asinf(fminf(fmaxf(d[2], -1.0f), 1.0f));
         void *r = o_ProjSpawn(proj[k], player, NULL, launcherW, pos[0], pos[1], pos[2], hh, pp, NULL, NULL, 0, 0, 0.0f, 0.0f, (uint32_t)(uintptr_t)cell);
         if (r) { int fo[4]; int nfo = BT_DirOffsets((char *)r, hh, pp, fo); BT_Add((char *)r, hh, pp, fo, nfo); }
-        g_cyLn[h].rounds--;
-        if (g_cyLn[h].rounds <= 0) g_cyLn[h].refillAt = now + refillMs;
+        g_cyLn[h].rounds--; lastH = h; lastShot = now;
+        if (g_cyLn[h].rounds <= 0 && !g_cyLn[h].refillAt) g_cyLn[h].refillAt = now + refillMs;
         if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
         Log("Cyberware: %s arm launcher - %s rocket (%.0f damage), %d left%s", h ? "right" : "left", kn[k], dmg, g_cyLn[h].rounds,
             g_cyLn[h].rounds <= 0 ? " - refilling" : "");
