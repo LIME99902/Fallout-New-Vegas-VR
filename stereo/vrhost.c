@@ -16,6 +16,7 @@
 #include <string.h>
 #include "../src/openvr_capi.h"
 #include "vripc.h"
+#include "../src/fnvr_tip.h"
 #define VRIN_IMPL
 #include "vrinput.h"
 
@@ -224,7 +225,13 @@ static void Handle(int fn)
         i32 = e; memcpy(out + 4, &i32, 4); break; }
     case S_STRINGPROP: { uint32_t d, n; int32_t pr; memcpy(&d, in, 4); memcpy(&pr, in + 4, 4); memcpy(&n, in + 8, 4); if (n > 4000) n = 4000;
         ETrackedPropertyError e = ETrackedPropertyError_TrackedProp_UnknownProperty; char *buf = (char *)out + 8; memset(buf, 0, n ? n : 1);
-        uint32_t len = S ? S->GetStringTrackedDeviceProperty(d, (ETrackedDeviceProperty)pr, buf, n, &e) : 0; memcpy(out, &len, 4); i32 = e; memcpy(out + 4, &i32, 4); break; }
+        uint32_t len;
+        if (pr == FNVR_TIP_PROP) {   /* (FNVR asks where this controller points from - its render model's 'tip') */
+            static struct VR_IVRRenderModels_FnTable *R = NULL;
+            if (!R && pGet) { char v[64]; EVRInitError e2; snprintf(v, sizeof v, "FnTable:%s", IVRRenderModels_Version); R = (struct VR_IVRRenderModels_FnTable *)pGet(v, &e2); }
+            len = FNVR_TipString(S, R, d, buf, n); e = len ? ETrackedPropertyError_TrackedProp_Success : ETrackedPropertyError_TrackedProp_UnknownProperty;
+        } else len = S ? S->GetStringTrackedDeviceProperty(d, (ETrackedDeviceProperty)pr, buf, n, &e) : 0;
+        memcpy(out, &len, 4); i32 = e; memcpy(out + 4, &i32, 4); break; }
     case S_CONNECTED: { uint32_t d; memcpy(&d, in, 4); i32 = S && S->IsTrackedDeviceConnected(d); memcpy(out, &i32, 4); break; }
     case S_DEVCLASS: { uint32_t d; memcpy(&d, in, 4); i32 = S ? S->GetTrackedDeviceClass(d) : 0; memcpy(out, &i32, 4); break; }
     case S_EVENT: { uint32_t sz; memcpy(&sz, in, 4); if (sz > sizeof(struct VREvent_t)) sz = sizeof(struct VREvent_t);

@@ -429,6 +429,22 @@ static bool Cy_TileHasText(char *t, const char *needle, int depth, int *budget)
         if (Cy_TileHasText(*(char **)(node + 8), needle, depth + 1, budget)) return true;
     return false;
 }
+/* (diagnostics) the texts on the dialogue screen while talking to Hunter, logged once per line he says */
+static void Cy_TileTexts(char *t, int depth, int *budget, char *out, size_t cap)
+{
+    if (!Rd(t, 0x30) || depth > 16 || --(*budget) < 0) return;
+    char **vals = *(char ***)(t + 0x14); uint32_t nv = *(uint32_t *)(t + 0x18);
+    if (vals && nv < 4096 && Rd(vals, nv * 4))
+        for (uint32_t i = 0; i < nv; i++) {
+            char *v = vals[i];
+            if (!Rd(v, 0x14) || *(uint32_t *)v != 0xFC4) continue;
+            const char *s = *(const char **)(v + 0x0C);
+            if (!Rd(s, 1) || IsBadStringPtrA(s, 1024) || strlen(s) < 12) continue;
+            size_t l = strlen(out); if (l + 70 < cap) snprintf(out + l, cap - l, "%s\"%.60s\"", l ? ", " : "", s);
+        }
+    char *node = *(char **)(t + 0x04);
+    for (int k = 0; node && k < 300 && Rd(node, 12); k++, node = *(char **)node) Cy_TileTexts(*(char **)(node + 8), depth + 1, budget, out, cap);
+}
 static void Cy_Tick(void)
 {
     if (g_cyRevertN && g_inGameplay && GetPlayer()) {   /* (a save made while a boost was on: the boost is undone) */
@@ -460,6 +476,9 @@ static void Cy_Tick(void)
         if (g_cyTalkHunter && ++hScan >= 6) {
             hScan = 0;
             char *dm = Vc_DialogTileMenu(); int budget = 4000;
+            {   static char lastT[600]; char now[600] = ""; int b2 = 4000; static int logs = 0;
+                if (dm) Cy_TileTexts(dm, 0, &b2, now, sizeof now);
+                if (strcmp(now, lastT) && logs < 60) { logs++; Log("Cyberware: Hunter's dialogue screen shows: %s", now[0] ? now : "(no text found)"); snprintf(lastT, sizeof lastT, "%s", now); } }
             bool said = dm && Cy_TileHasText(dm, "Everything you need", 0, &budget);
             if (said && !hSaid && !(g_setOpen && g_setPage == SP_CYBER)) {
                 g_cyAtDoc = true;

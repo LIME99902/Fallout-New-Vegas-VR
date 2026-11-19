@@ -29,12 +29,13 @@
 #include <ctype.h>
 #include "nvse_api.h"
 #include "openvr_capi.h"
+#include "fnvr_tip.h"
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        233
-#define FNVR_VERSION_STR    "2.13.6 (KRISS Vector: the real charging handle on the left side - cut out of the body model as its own part - swings out and pulls back; 2.13.5: KRISS Vector: its folding charging handle swings out, pulls back and folds away when you work it; Hunter: the footlocker key and the chest made yours by the DLL; 2.13.4: Fiends drop a Fiend Ear, Hunter pays 50 caps each; 50 Legion ears clear your name with the NCR back to Liked; 2.13.3: Hunter buys Legion ears: 400 caps each if the NCR idolizes you, 250 if it likes you, 100 otherwise; 2.13.2: Hunter's \"Everything you need.\" opens the ripperdoc - read off the dialogue screen; the screen stays a ripperdoc while open; 2.13.1: Hunter is the only ripperdoc, at the New Vegas Medical Clinic; chromed characters: the script that finds them is accepted by the game now (2.10-2.13.0 never chromed anyone); 2.13.0: Hunter (FNVVRMC - Hunter.esp), his chrome topic opens the cyberware screen; 2.12.0: dual-wielding characters: Ambidex Coprocessor implant; 2.11.0: chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
-#define FNVR_VERSION_SHORT  "2.13.6"
+#define FNVR_VERSION        234
+#define FNVR_VERSION_STR    "2.13.7 (PS VR2 Sense: the aim angle taken from SteamVR's own description of the controller (its tip); every controller's tip and grip logged; 2.13.6: KRISS Vector: the real charging handle on the left side - cut out of the body model as its own part - swings out and pulls back; 2.13.5: KRISS Vector: its folding charging handle swings out, pulls back and folds away when you work it; Hunter: the footlocker key and the chest made yours by the DLL; 2.13.4: Fiends drop a Fiend Ear, Hunter pays 50 caps each; 50 Legion ears clear your name with the NCR back to Liked; 2.13.3: Hunter buys Legion ears: 400 caps each if the NCR idolizes you, 250 if it likes you, 100 otherwise; 2.13.2: Hunter's \"Everything you need.\" opens the ripperdoc - read off the dialogue screen; the screen stays a ripperdoc while open; 2.13.1: Hunter is the only ripperdoc, at the New Vegas Medical Clinic; chromed characters: the script that finds them is accepted by the game now (2.10-2.13.0 never chromed anyone); 2.13.0: Hunter (FNVVRMC - Hunter.esp), his chrome topic opens the cyberware screen; 2.12.0: dual-wielding characters: Ambidex Coprocessor implant; 2.11.0: chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_SHORT  "2.13.7"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -1296,6 +1297,38 @@ static void OPENVR_FNTABLE_CALLTYPE W_TriggerHapticPulse(TrackedDeviceIndex_t d,
     if (pIn_Haptic) pIn_Haptic(h, secs, 160.0f, amp); else VrIn_Haptic(g_vrInput, &g_vrInH, h, secs, 160.0f, amp);
 }
 static void UIMessage(const char *msg);
+/* (once a controller is there) the aim angle from SteamVR's own description of the controller: its 'tip' is where it
+   points from. Every controller model is held differently, so one built-in angle (-60, Quest Touch) aims a PS VR2 Sense
+   controller off. Used when the angle was never set by hand (no fAimPitchOffset in FNVR.ini, or still the -60 default) and
+   for the controllers that need it; the 'click both sticks' calibration still overrides it. */
+static void Aim_FromControllerModel(TrackedDeviceIndex_t idx, const char *type)
+{
+    char s[256] = ""; ETrackedPropertyError pe = ETrackedPropertyError_TrackedProp_UnknownProperty;
+    uint32_t len = g_vrSystem->GetStringTrackedDeviceProperty(idx, (ETrackedDeviceProperty)FNVR_TIP_PROP, s, sizeof s, &pe);   /* (the VR host answers this) */
+    if (!len || pe != ETrackedPropertyError_TrackedProp_Success || !s[0]) {   /* (OpenVR in the game: ask its render models directly) */
+        static struct VR_IVRRenderModels_FnTable *rm = NULL;
+        if (!rm && g_ovrDll) {
+            typedef intptr_t (*GetIntf_t)(const char *, EVRInitError *); GetIntf_t gi = (GetIntf_t)GetProcAddress(g_ovrDll, "VR_GetGenericInterface");
+            char v[64]; EVRInitError e = EVRInitError_VRInitError_None; snprintf(v, sizeof v, "FnTable:%s", IVRRenderModels_Version);
+            if (gi) { rm = (struct VR_IVRRenderModels_FnTable *)gi(v, &e); if (e != EVRInitError_VRInitError_None) rm = NULL; }
+        }
+        len = FNVR_TipString(g_vrSystem, rm, idx, s, sizeof s);
+    }
+    float t[9] = { 0 };
+    if (!len || sscanf(s, "%f %f %f %f %f %f %f %f %f", &t[0], &t[1], &t[2], &t[3], &t[4], &t[5], &t[6], &t[7], &t[8]) < 6) {
+        Log("Aim: SteamVR didn't describe where the %s controller points from - aim angle stays %.1f", type, g_aimPitchOffsetDeg); return;
+    }
+    float ang = atan2f(t[4], -t[5]) * RAD2DEG;   /* (FNVR aims along the controller's -Z tilted about its X axis by this much) */
+    Log("Aim: %s controller - SteamVR's tip %.3f %.3f %.3f m, pointing %.3f %.3f %.3f (an aim angle of %.1f deg); handgrip %.3f %.3f %.3f m",
+        type, t[0], t[1], t[2], t[3], t[4], t[5], ang, t[6], t[7], t[8]);
+    char buf[32] = ""; GetPrivateProfileStringA("Controls", "fAimPitchOffset", "", buf, sizeof buf, g_iniPath);
+    bool byHand = buf[0] && fabsf((float)atof(buf) - (-60.0f)) > 0.05f;
+    bool use = !strcmp(type, "playstation_vr2_sense");   /* (the others aim right with the built-in angle) */
+    if (use && !byHand && ang >= -90.0f && ang <= 90.0f) {
+        g_aimPitchOffsetDeg = ang;
+        Log("Aim: angle set to %.1f deg from the %s controller's own description (click both sticks to calibrate it by hand)", ang, type);
+    } else if (use) Log("Aim: keeping your own angle %.1f deg", g_aimPitchOffsetDeg);
+}
 /* (controls, once a controller is there) which way this player's controllers are read */
 static void VrIn_Start(void)
 {
@@ -1306,6 +1339,7 @@ static void VrIn_Start(void)
     g_vrSystem->GetStringTrackedDeviceProperty(idx, ETrackedDeviceProperty_Prop_ControllerType_String, type, sizeof type, &pe);
     static int waited = 0; if (!type[0] && ++waited < 400) return;   /* (its kind comes a moment after it connects) */
     g_vrInTried = true; snprintf(g_vrInType, sizeof g_vrInType, "%s", type[0] ? type : "unknown");
+    Aim_FromControllerModel(idx, type);
     bool bound = !strcmp(type, "knuckles") || !strcmp(type, "vive_controller") || !strcmp(type, "holographic_controller") ||
                  !strcmp(type, "hpmotioncontroller") || !strcmp(type, "vive_cosmos_controller") || !strcmp(type, "oculus_touch") ||
                  !strcmp(type, "playstation_vr2_sense");
