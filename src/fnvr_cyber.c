@@ -122,6 +122,10 @@ static const CyImpl g_cyCat[] = {
     { "arm_toxin_r",    CY_ARMS, "Arm Blade: Toxin (right)", 3250, 4, CYS_NONE, { { "PoisonResist", 5 } }, "A venom blade in the right forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
     { "arm_mech_l",     CY_ARMS, "Mech Arm (left)", 4500, 5, CYS_MECH, { { "Strength", 2 } },
       "A heavy hydraulic left arm: +2 Strength, +40 damage to that fist (twice that at Unarmed 100). Cyber Gorilla (STR 10, END 10): up to +100% from fast swings and moving fast. It grabs people off their feet and throws them, a punch with it to the chest sends them flying, and with both hands on someone it rips a limb off. Robots, deathclaws and giants need Strength 10." },
+    { "arm_mechthunder_l", CY_ARMS, "Thunder Cannon (left) - LEGENDARY", 9000, 6, CYS_MECH, { { "Strength", 2 } },
+      "A legendary Mech Arm with a capacitor bank in the forearm: +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and a 20% chance on every hit to discharge - 100 electric damage to them and to every enemy within 6 m. Cyber Gorilla (STR 10, END 10): up to +100% from fast swings and moving fast. Everything a Mech Arm does: grab and throw, chest punches, ripping limbs off." },
+    { "arm_mechthunder_r", CY_ARMS, "Thunder Cannon (right) - LEGENDARY", 9000, 6, CYS_MECH, { { "Strength", 2 } },
+      "A legendary Mech Arm with a capacitor bank in the forearm: +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and a 20% chance on every hit to discharge - 100 electric damage to them and to every enemy within 6 m. Cyber Gorilla (STR 10, END 10): up to +100% from fast swings and moving fast. Everything a Mech Arm does: grab and throw, chest punches, ripping limbs off." },
     { "arm_mech_r",     CY_ARMS, "Mech Arm (right)", 4500, 5, CYS_MECH, { { "Strength", 2 } },
       "A heavy hydraulic right arm: +2 Strength, +40 damage to that fist (twice that at Unarmed 100). Cyber Gorilla (STR 10, END 10): up to +100% from fast swings and moving fast. It grabs people off their feet and throws them, a punch with it to the chest sends them flying, and with both hands on someone it rips a limb off. Robots, deathclaws and giants need Strength 10." },
     { "arm_mechblade_l", CY_ARMS, "Mech Arm: Bladed (left)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
@@ -754,6 +758,7 @@ static float Cy_ArmBlow(int h, char *ref, uint32_t id)
     if (h < 0 || h > 1 || g_cyArmDmg[h] <= 0) return 0;
     float sk = g_cyArmKindH[h] == 2 ? (float)g_cySkUnarmed : (float)g_cySkMelee; if (sk > 100) sk = 100; if (sk < 0) sk = 0;
     if (g_cyArmKindH[h] == 1 && g_cyMantisOk && ref) Cy_MantisHit(ref, id);   /* (Praying Mantis: a blade hit is a bleed stack) */
+    if (g_cyThunderH[h] && ref && rand() % 100 < 20 && g_cyFxN < 16) { g_cyFxQ[g_cyFxN].ref = ref; g_cyFxQ[g_cyFxN].id = id; g_cyFxQ[g_cyFxN].fx = 6; g_cyFxN++; }   /* (Thunder Cannon: discharge) */
     if (g_cyQuickieH[h] && ref && rand() % 100 < 30 && g_cyFxN < 16) { g_cyFxQ[g_cyFxN].ref = ref; g_cyFxQ[g_cyFxN].id = id; g_cyFxQ[g_cyFxN].fx = 5; g_cyFxN++; }   /* (Quickie: the daemon goes in) */
     if (g_cyArmFxH[h] && ref && g_cyFxN < 16) { g_cyFxQ[g_cyFxN].ref = ref; g_cyFxQ[g_cyFxN].id = id; g_cyFxQ[g_cyFxN].fx = g_cyArmFxH[h]; g_cyFxN++; }
     return g_cyArmDmg[h] * (1.0f + sk / 100.0f);
@@ -768,6 +773,16 @@ static void Cy_FxFlush(void)
     }
     for (int i = 0; i < g_cyFxN; i++)
         if (scr && LookupForm(g_cyFxQ[i].id) == (void *)g_cyFxQ[i].ref && g_scriptIntf->CallFunctionAlt) {
+            if (g_cyFxQ[i].fx == 6) {   /* Thunder Cannon: 100 electric damage to them and every enemy within 6 m (not your companions) */
+                static void *th = NULL; static bool thBad = false;
+                if (!th && !thBad) { th = Cy_Compile("ref rT\nref rW\nfloat fH\nint iN\nBegin Function { rT }\nset iN to 0\nset rW to GetFirstRef 200 1\nLabel 1\nif rW\nif rW != player\nif rW.GetDead == 0\nif rW.GetDistance rT < 420\n"
+                    "if rW == rT || rW.GetPlayerTeammate == 0\nset fH to rW.GetAV Health\nif fH <= 100\nrW.Kill player\nelse\nrW.DamageAV Health 100\nendif\nrW.CastImmediateOnSelf FNVVRMCEnchElectric\nrW.PlayMagicShaderVisuals PulseDisableFXShader 1\nset iN to iN + 1\nendif\nendif\nendif\nendif\nset rW to GetNextRef\nGoTo 1\nendif\nSetFunctionValue iN\nEnd\n");
+                    thBad = !th; if (thBad) Log("Thunder Cannon: couldn't set up its discharge"); }
+                double n = 0; if (th) Ce_Call(th, g_cyFxQ[i].ref, 1, 0, &n);
+                char m[80]; snprintf(m, sizeof m, "THUNDER CANNON - %d hit", (int)n); UIMessage(m); Cy_Buzz(3999);
+                Log("Thunder Cannon: discharge from %08X - %d hit for 100", g_cyFxQ[i].id, (int)n);
+                continue;
+            }
             if (g_cyFxQ[i].fx == 5) { Cy_QuickieProc(g_cyFxQ[i].ref, g_cyFxQ[i].id); g_scriptIntf->CallFunctionAlt(scr, GetPlayer(), 2, g_cyFxQ[i].ref, 2); continue; }
             g_scriptIntf->CallFunctionAlt(scr, GetPlayer(), 2, g_cyFxQ[i].ref, g_cyFxQ[i].fx);
             static int l = 0; static const char *const nm[] = { "", "burning", "shocked", "poisoned", "bleeding" };
@@ -1062,17 +1077,18 @@ static void Cy_Tick(void)
         dlgWas = dlg;
     }
     if (!g_inGameplay || !GetPlayer()) return;
-    {   float b[2] = { 0, 0 }; bool m[2] = { false, false }; int fx[2] = { 0, 0 }, ln[2] = { -1, -1 }, kd[2] = { 0, 0 }; bool gr[2] = { false, false }, qk[2] = { false, false };
+    {   float b[2] = { 0, 0 }; bool m[2] = { false, false }; int fx[2] = { 0, 0 }, ln[2] = { -1, -1 }, kd[2] = { 0, 0 }; bool gr[2] = { false, false }, qk[2] = { false, false }, th[2] = { false, false };
         if (g_cyOn) for (int i = 0; i < g_cyN; i++) { const char *id = g_cyInst[i].id; int sd = Cy_ArmSide(id); if (sd < 0) continue;
             bool mech = !strncmp(id, "arm_mech", 8), launch = !strncmp(id, "arm_launch", 10);
             if (!strncmp(id, "arm_quickie", 11)) for (int h = 0; h < 2; h++) if (sd == h) qk[h] = true;
+            if (!strncmp(id, "arm_mechthunder", 15)) for (int h = 0; h < 2; h++) if (sd == h) th[h] = true;
             if (!strncmp(id, "arm_grapple", 11)) { for (int h = 0; h < 2; h++) if (sd == h || sd == 2) gr[h] = true; continue; }
             int e = Cy_ArmFx(id);
             for (int h = 0; h < 2; h++) if (sd == h || sd == 2) {
                 if (mech) m[h] = true;
                 if (launch) ln[h] = Cy_LaunchKind(id);
                 else { if (sd != 2) b[h] += Cy_ArmBonus(id); kd[h] = mech ? 2 : 1; fx[h] = e; } } }   /* (the old pairs raised Unarmed Damage itself) */
-        for (int h = 0; h < 2; h++) { g_cyMechHand[h] = m[h]; g_cyArmDmg[h] = b[h]; g_cyArmKindH[h] = kd[h]; g_cyArmFxH[h] = fx[h]; g_cyLaunchH[h] = ln[h]; g_cyGrapH[h] = gr[h]; g_cyQuickieH[h] = qk[h]; }
+        for (int h = 0; h < 2; h++) { g_cyMechHand[h] = m[h]; g_cyArmDmg[h] = b[h]; g_cyArmKindH[h] = kd[h]; g_cyArmFxH[h] = fx[h]; g_cyLaunchH[h] = ln[h]; g_cyGrapH[h] = gr[h]; g_cyQuickieH[h] = qk[h]; g_cyThunderH[h] = th[h]; }
         g_cyMechArms = m[0] || m[1]; }
     Cy_SkillsTick();
     Cy_FxFlush();
