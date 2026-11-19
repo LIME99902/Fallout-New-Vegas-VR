@@ -156,7 +156,7 @@ static int Ce_Kind(const char *id)
         { "skel_titan", CK_TOUGH | CK_MELEE }, { "skel_spine", CK_TOUGH }, { "skel_lattice", CK_TOUGH },
         { "imm_filter", CK_TOUGH | CK_MIND }, { "imm_rad", CK_TOUGH | CK_MIND }, { "imm_venom", CK_TOUGH | CK_MIND },
         { "arm_kinetic", CK_MELEE }, { "arm_thermal", CK_MELEE }, { "arm_shock", CK_MELEE }, { "arm_toxin", CK_MELEE },
-        { "arm_hydraulic", CK_MELEE }, { "arm_recoil", CK_GUN }, { "hand_knuckle", CK_MELEE }, { "hand_link", CK_GUN },
+        { "arm_hydraulic", CK_MELEE }, { "arm_mech", CK_MELEE }, { "arm_recoil", CK_GUN }, { "hand_knuckle", CK_MELEE }, { "hand_link", CK_GUN },
         { "hand_grip", CK_MELEE }, { "leg_sprint", CK_MELEE | CK_STEALTH } };
     for (unsigned i = 0; i < sizeof t / sizeof t[0]; i++) if (!strcmp(t[i].id, id)) return t[i].k;
     return CK_TOUGH;

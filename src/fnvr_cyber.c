@@ -26,7 +26,7 @@ enum { CY_CORE, CY_CORTEX, CY_OPTICS, CY_CIRC, CY_NERVE, CY_DERMAL, CY_SKEL, CY_
 static const char *const g_cySlotName[CY_NSLOT] = { "NEURAL CORE", "CORTEX", "OPTICS", "CIRCULATORY", "NERVOUS", "DERMAL",
                                                     "SKELETON", "IMMUNE", "ARMS", "HANDS", "LEGS" };
 static const int g_cySlotMax[CY_NSLOT] = { 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };   /* (one Neural Core: the grip squeeze sets off one ability) */
-enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP };
+enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH };
 typedef struct { const char *av; int amt; } CyMod;
 typedef struct {
     const char *id; int slot; const char *name; int price, load, special;
@@ -92,6 +92,8 @@ static const CyImpl g_cyCat[] = {
       "Blades that arc with current. (Arm model and shock effect come in the next update - for now: +12 unarmed damage.)" },
     { "arm_toxin",      CY_ARMS, "Arm Blades: Toxin", 6500, 8, CYS_NONE, { { "UnarmedDamage", 12 }, { "PoisonResist", 10 } },
       "Blades that weep venom. (Arm model and poison effect come in the next update - for now: +12 unarmed damage.)" },
+    { "arm_mech",       CY_ARMS, "Mech Arms", 9000, 9, CYS_MECH, { { "Strength", 4 }, { "UnarmedDamage", 40 } },
+      "Heavy hydraulic arms. +4 Strength, +40 unarmed damage per fist. Grab someone to knock them off their feet and throw them (robots, deathclaws and other giants need Strength 10); grab with both hands and pull to rip a limb off; a punch to the chest sends them flying. (Their own bigger arm model comes in a later update.)" },
     { "arm_hydraulic",  CY_ARMS, "Hydraulic Forearms", 3000, 5, CYS_NONE, { { "MeleeDamage", 10 } },
       "Hydraulic rams along both forearms. Every swing of a melee weapon lands harder (+10 melee damage)." },
     { "arm_recoil",     CY_ARMS, "Recoil Dampers", 2500, 4, CYS_NONE, { { "Guns", 8 } },
@@ -266,7 +268,8 @@ static const char *Cy_Install(const CyImpl *c)
     if (!Cy_CanInstallHere()) return "Only a ripperdoc can do that - see Hunter at the New Vegas Medical Clinic";
     if (Cy_InstIdx(c->id) >= 0) return "Already installed";
     if (g_cyN >= CY_MAXINST) return "No room for more implants";
-    if (strstr(c->name, "Arm Blades")) for (int i = 0; i < g_cyN; i++) { const CyImpl *o = Cy_Find(g_cyInst[i].id); if (o && strstr(o->name, "Arm Blades")) { snprintf(why, sizeof why, "You already have %s - one set of blades per forearm", o->name); return why; } }
+    #define CY_ARMWEAPON(x) (strstr((x)->name, "Arm Blades") || (x)->special == CYS_MECH)
+    if (CY_ARMWEAPON(c)) for (int i = 0; i < g_cyN; i++) { const CyImpl *o = Cy_Find(g_cyInst[i].id); if (o && CY_ARMWEAPON(o)) { snprintf(why, sizeof why, "You already have %s - one arm weapon at a time (blades or Mech Arms)", o->name); return why; } }
     if (Cy_SlotUsed(c->slot) >= g_cySlotMax[c->slot]) { snprintf(why, sizeof why, "Your %s slot is full - remove one first", g_cySlotName[c->slot]); return why; }
     int cap = Cy_Capacity(), used = Cy_LoadUsed();
     bool over = used + c->load > cap;   /* (allowed - but too much chrome risks a Chrome Overload) */
@@ -574,6 +577,7 @@ static void Cy_Tick(void)
         dlgWas = dlg;
     }
     if (!g_inGameplay || !GetPlayer()) return;
+    g_cyMechArms = g_cyOn && Cy_Has(CYS_MECH);
     while (g_cyDeadR != g_cyDeadW) {   /* the dead: a Fiend leaves an ear */
         void *who = g_cyDead[g_cyDeadR & 31]; InterlockedIncrement(&g_cyDeadR);
         static void *dScr = NULL; static bool dBad = false;

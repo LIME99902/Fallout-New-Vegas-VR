@@ -33,9 +33,9 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        234
-#define FNVR_VERSION_STR    "2.13.7 (PS VR2 Sense: the aim angle taken from SteamVR's own description of the controller (its tip); every controller's tip and grip logged; 2.13.6: KRISS Vector: the real charging handle on the left side - cut out of the body model as its own part - swings out and pulls back; 2.13.5: KRISS Vector: its folding charging handle swings out, pulls back and folds away when you work it; Hunter: the footlocker key and the chest made yours by the DLL; 2.13.4: Fiends drop a Fiend Ear, Hunter pays 50 caps each; 50 Legion ears clear your name with the NCR back to Liked; 2.13.3: Hunter buys Legion ears: 400 caps each if the NCR idolizes you, 250 if it likes you, 100 otherwise; 2.13.2: Hunter's \"Everything you need.\" opens the ripperdoc - read off the dialogue screen; the screen stays a ripperdoc while open; 2.13.1: Hunter is the only ripperdoc, at the New Vegas Medical Clinic; chromed characters: the script that finds them is accepted by the game now (2.10-2.13.0 never chromed anyone); 2.13.0: Hunter (FNVVRMC - Hunter.esp), his chrome topic opens the cyberware screen; 2.12.0: dual-wielding characters: Ambidex Coprocessor implant; 2.11.0: chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
-#define FNVR_VERSION_SHORT  "2.13.7"
+#define FNVR_VERSION        235
+#define FNVR_VERSION_STR    "2.14.0 (Mech Arms implant: +4 Strength, +40 unarmed damage, grab people to ragdoll and throw them (robots, deathclaws and giants at Strength 10+), both hands pull a limb off, chest punches send them flying; 2.13.7: PS VR2 Sense: the aim angle taken from SteamVR's own description of the controller (its tip); every controller's tip and grip logged; 2.13.6: KRISS Vector: the real charging handle on the left side - cut out of the body model as its own part - swings out and pulls back; 2.13.5: KRISS Vector: its folding charging handle swings out, pulls back and folds away when you work it; Hunter: the footlocker key and the chest made yours by the DLL; 2.13.4: Fiends drop a Fiend Ear, Hunter pays 50 caps each; 50 Legion ears clear your name with the NCR back to Liked; 2.13.3: Hunter buys Legion ears: 400 caps each if the NCR idolizes you, 250 if it likes you, 100 otherwise; 2.13.2: Hunter's \"Everything you need.\" opens the ripperdoc - read off the dialogue screen; the screen stays a ripperdoc while open; 2.13.1: Hunter is the only ripperdoc, at the New Vegas Medical Clinic; chromed characters: the script that finds them is accepted by the game now (2.10-2.13.0 never chromed anyone); 2.13.0: Hunter (FNVVRMC - Hunter.esp), his chrome topic opens the cyberware screen; 2.12.0: dual-wielding characters: Ambidex Coprocessor implant; 2.11.0: chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_SHORT  "2.14.0"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -399,6 +399,7 @@ static bool  g_ltBullet = true; static int g_bulletKey = 46;   /* INI [Controls]
 static bool  g_momentumOnIni = true;   /* INI [Controls] bJumpMomentum */
 static bool  g_armSwing = true; static float g_armSwingSens = 1.0f; static bool g_armSwingSprint = true;   /* INI [Controls] bArmSwing, fArmSwingSensitivity, bArmSwingSprint */
 static bool  g_grapOn = true, g_grapSafe = true;   /* INI [Grapple] bEnabled, bSafeLanding */
+static bool  g_cyMechArms = false;   /* (Mech Arms installed: grab and throw people, rip limbs off, chest punches send them flying) */
 static bool  g_cyOn = true, g_cyAnywhere = false, g_cyEnemies = true;   /* INI [Cyberware] bEnabled, bRipperdocAnywhere, bChromedEnemies */
 static bool  g_grapHand[2] = { true, false };      /* INI [Grapple] bLeftHand, bRightHand */
 static bool  g_grapRope = true, g_grapRumble = true, g_grapActors = true;   /* INI [Grapple] bShowRope, bRumble, bHookActors */
@@ -11324,6 +11325,10 @@ static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float 
     if (canKnock && kind == HK_HEAD && g_koOn && I >= g_koSpeed) { action = HA_KO; lvl = 1; }
     else if (canKnock && I >= kd && !stab) { action = HA_PUSH; lvl = I >= kd * 1.6f ? 3 : I >= kd * 1.3f ? 2 : 1; }
     else if (canKnock && kind == HK_LEG && I >= kd * 0.6f) { action = HA_PUSH; lvl = 0; }   /* legs taken out: down they go */
+    if (g_cyMechArms && canKnock && !stab && !action && (kind == HK_TORSO || kind == HK_PELVIS) && PlayerWeaponType() <= 0 && I >= kd * 0.35f) {
+        action = HA_PUSH; lvl = 3;   /* (Mech Arms: a fist to the chest sends them flying) */
+        static int ml = 0; if (ml++ < 20) Log("Mech Arms: chest punch - %08X sent flying", A->id);
+    }
     bool stagger = !action && I >= kd * 0.45f;
     int dmg10 = 0;
     void *strikeW = g_hrStrikeW ? g_hrStrikeW : (PlayerWeaponType() >= 0 ? PlayerWeaponForm() : NULL);
@@ -16810,15 +16815,92 @@ static void Drag_Push(char *ref, int force)
         Log("Grab people: knock-down %s", g_dragPushScr ? "ready" : "FAILED"); }
     if (g_dragPushScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_dragPushScr, GetPlayer(), 2, ref, force);
 }
+/* Mech Arms: robots, deathclaws and other giants (creature types abomination 3, robot 6, giant 7) can only be lifted with
+   Strength 10 or more */
+static void *g_mechHeavyScr; static bool g_mechHeavyTried;
+static bool Mech_TooHeavy(char *ref)
+{
+    if (*(BYTE *)(ref + 0x04) != 0x3C) return false;   /* (people are always liftable) */
+    if (!g_mechHeavyTried) { g_mechHeavyTried = true;
+        if (g_scriptIntf && g_scriptIntf->CompileScript) g_mechHeavyScr = g_scriptIntf->CompileScript(
+            "ref rWho\nint iT\nint iS\nBegin Function { rWho }\nset iT to rWho.GetCreatureType\nset iS to player.GetAV Strength\n"
+            "if iS < 10\nif iT == 3 || iT == 6 || iT == 7\nSetFunctionValue 1\nreturn\nendif\nendif\nSetFunctionValue 0\nEnd\n");
+        Log("Mech Arms: weight check %s", g_mechHeavyScr ? "ready" : "FAILED"); }
+    double v = 0; return g_mechHeavyScr && Scr_Num(g_mechHeavyScr, ref, &v) && v > 0.5;
+}
+/* Mech Arms: every loose part of a ragdoll sent off at velocity v (Havok units) - the whole body flies, not one limb */
+static float g_mechHandV[2][3];
+static void Mech_Fling(char *node, const float *v, int depth)
+{
+    if (!node || depth > 40 || IsBadReadPtr(node, 0xB0)) return;
+    char *co = *(char **)(node + 0x1C);
+    if (co && !IsBadReadPtr(co, 0x14)) {
+        char *wo = *(char **)(co + 0x10);
+        if (wo && !IsBadReadPtr(wo, 0x10) && (*(uint32_t *)wo == VTBL_BHKRIGIDBODY || *(uint32_t *)wo == VTBL_BHKRIGIDBODYT)) {
+            char *rb = *(char **)(wo + 0x08);
+            if (rb && !IsBadReadPtr(rb, 0x1D0) && Drag_Dynamic(rb)) { float *lv = (float *)(rb + 0x1B0); for (int i = 0; i < 3; i++) lv[i] = v[i]; lv[3] = 0; ((HkActivate_t2)HK_ACTIVATE_ADDR)(rb); }
+        }
+    }
+    if (!AsNode(node)) return;
+    char **kids = *(char ***)(node + 0xA0); unsigned n = *(uint16_t *)(node + 0xA6);
+    for (unsigned i = 0; kids && i < n && i < 64; i++) Mech_Fling(kids[i], v, depth + 1);
+}
+/* Mech Arms: both hands on the same person, pulled apart hard - the limb nearest the hand that pulled away comes off
+   (KillActor with that body part dismembered) */
+static void *g_mechRipScr; static bool g_mechRipTried;
+static void Mech_Rip(char *ref, const float *pullHand)
+{
+    if (!g_mechRipTried) { g_mechRipTried = true;
+        if (g_scriptIntf && g_scriptIntf->CompileScript) g_mechRipScr = g_scriptIntf->CompileScript("ref rWho\nint iL\nBegin Function { rWho, iL }\nrWho.KillActor player iL 2\nEnd\n");
+        Log("Mech Arms: limb ripping %s", g_mechRipScr ? "ready" : "FAILED"); }
+    if (!g_mechRipScr || !g_scriptIntf->CallFunctionAlt) return;
+    /* the body part nearest the pulling hand: head 1, left arm 3, right arm 5, left leg 7, right leg 10 (the game's body part list) */
+    static const struct { const char *bone; int limb; } L[] = { { "Bip01 Head", 1 }, { "Bip01 L Forearm", 3 }, { "Bip01 L UpperArm", 3 },
+        { "Bip01 R Forearm", 5 }, { "Bip01 R UpperArm", 5 }, { "Bip01 L Calf", 7 }, { "Bip01 L Thigh", 7 }, { "Bip01 R Calf", 10 }, { "Bip01 R Thigh", 10 } };
+    char *root = Drag_Root(ref); int limb = 1; float best = 1e9f;
+    for (unsigned i = 0; root && i < sizeof L / sizeof L[0]; i++) {
+        char *b = FindBone(root, L[i].bone, 0); if (!b || IsBadReadPtr(b, 0xA0)) continue;
+        float d[3]; V3Sub(d, (const float *)(b + NIAV_WORLD_TRANSLATE), pullHand); float l = V3Dot(d, d);
+        if (l < best) { best = l; limb = L[i].limb; }
+    }
+    g_scriptIntf->CallFunctionAlt(g_mechRipScr, GetPlayer(), 2, ref, limb);
+    Log("Mech Arms: ripped limb %d off %08X", limb, *(uint32_t *)(ref + 0x0C));
+}
 static void Drag_Update(char *player, float dt, bool noWeapon)
 {
     static unsigned tick = 0; if ((tick++ % 6) == 0) Drag_Scan(player);
+    {   /* (each hand's velocity, for Mech Arms' throws) */
+        static float prev[2][3]; static double at = 0; double now = QpcMs(); float sec = at > 0 ? (float)((now - at) / 1000.0) : 0; at = now;
+        for (int h = 0; h < 2; h++) { if (sec > 0.001f && sec < 0.2f) for (int i = 0; i < 3; i++) g_mechHandV[h][i] = g_mechHandV[h][i] * 0.5f + 0.5f * (g_handW[h][i] - prev[h][i]) / sec;
+            for (int i = 0; i < 3; i++) prev[h][i] = g_handW[h][i]; }
+    }
+    if (g_cyMechArms && g_drag[0].ref && g_drag[0].ref == g_drag[1].ref && LookupForm(g_drag[0].id) == (void *)g_drag[0].ref) {
+        /* both hands on one person: pulling the hands apart fast tears a limb off */
+        float d[3]; V3Sub(d, g_handW[1], g_handW[0]); float sep = V3Len(d);
+        static float sep0 = -1; static uint32_t who = 0; static double since = 0;
+        if (who != g_drag[0].id) { who = g_drag[0].id; sep0 = sep; since = QpcMs(); }
+        if (sep < sep0) sep0 = sep;
+        if (sep - sep0 > 0.30f * g_unitsPerMeter && QpcMs() - since > 250.0) {
+            int pull = g_handSpeed[1] > g_handSpeed[0] ? 1 : 0;
+            Mech_Rip(g_drag[0].ref, g_handW[pull]);
+            for (int h = 0; h < 2; h++) if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
+            memset(&g_drag[pull], 0, sizeof g_drag[pull]); g_grabBlock[pull] = true; who = 0;
+        }
+    }
     static bool prevWant[2];
     for (int h = 0; h < 2; h++) {
         DragHold *d = &g_drag[h];
         bool edge = g_grabWant[h] && !prevWant[h]; prevWant[h] = g_grabWant[h];
         bool want = g_grabPeople && noWeapon && g_grabWant[h] && g_handWOk[h] && !g_holding[h];
         if (d->ref && (!want || LookupForm(d->id) != (void *)d->ref)) {   /* let go */
+            if (g_cyMechArms && d->rb && !IsBadReadPtr(d->rb, 0x1D0) && Drag_Dynamic(d->rb) && LookupForm(d->id) == (void *)d->ref && g_handSpeed[h] > 1.2f) {
+                /* Mech Arms: thrown - the body flies off the way your hand was moving, far harder than a person could throw */
+                float v[3]; for (int i = 0; i < 3; i++) v[i] = g_mechHandV[h][i] * 2.6f / HK_TO_GAME;
+                float vl = V3Len(v); if (vl > 45.0f) for (int i = 0; i < 3; i++) v[i] *= 45.0f / vl;
+                char *root = Drag_Root(d->ref); Mech_Fling(root, v, 0);
+                Log("Mech Arms: %s hand threw %08X (%.1f m/s)", h ? "right" : "left", d->id, g_handSpeed[h]);
+                memset(d, 0, sizeof *d); continue;
+            }
             if (d->rb && !IsBadReadPtr(d->rb, 0x1D0)) { float *lv = (float *)(d->rb + 0x1B0); float l = V3Len(lv); if (l > 60.0f) for (int i = 0; i < 3; i++) lv[i] *= 60.0f / l; }
             Log("Grab people: %s hand let go of %08X", h ? "right" : "left", d->id); memset(d, 0, sizeof *d); continue;
         }
@@ -16839,6 +16921,16 @@ static void Drag_Update(char *player, float dt, bool noWeapon)
             continue;
         }
         /* holding */
+        if (d->live && g_cyMechArms) {   /* (Mech Arms: grabbed means off their feet - ragdolled, ready to throw) */
+            if (Mech_TooHeavy(d->ref)) {   /* (robots, deathclaws, giants: Strength 10 or more) */
+                static double toldAt = 0; if (QpcMs() - toldAt > 4000.0) { toldAt = QpcMs(); UIMessage("Too heavy to lift - Mech Arms need Strength 10 for that"); }
+                Log("Mech Arms: %08X is too heavy (needs Strength 10)", d->id); memset(d, 0, sizeof *d); g_grabBlock[h] = true; continue;
+            }
+            Drag_Push(d->ref, 2); d->live = false; d->rb = NULL; d->at = QpcMs();
+            if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
+            Log("Mech Arms: %08X lifted off their feet", d->id);
+            continue;
+        }
         if (d->live) {
             if (g_handSpeed[h] > 1.5f) {   /* a yank or a shove: off their feet */
                 int f = (int)fminf(fmaxf(g_handSpeed[h] * 2.0f, 2.0f), 10.0f);
