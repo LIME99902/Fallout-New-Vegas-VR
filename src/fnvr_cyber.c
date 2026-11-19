@@ -26,7 +26,7 @@ enum { CY_CORE, CY_CORTEX, CY_OPTICS, CY_CIRC, CY_NERVE, CY_DERMAL, CY_SKEL, CY_
 static const char *const g_cySlotName[CY_NSLOT] = { "NEURAL CORE", "CORTEX", "OPTICS", "CIRCULATORY", "NERVOUS", "DERMAL",
                                                     "SKELETON", "IMMUNE", "ARMS", "HANDS", "LEGS" };
 static const int g_cySlotMax[CY_NSLOT] = { 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };   /* (one Neural Core: the grip squeeze sets off one ability) */
-enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH, CYS_LAUNCH, CYS_DASH, CYS_RAM, CYS_BLOOD };
+enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH, CYS_LAUNCH, CYS_DASH, CYS_RAM, CYS_BLOOD, CYS_HACK, CYS_EYES };
 typedef struct { const char *av; int amt; } CyMod;
 typedef struct {
     const char *id; int slot; const char *name; int price, load, special;
@@ -38,6 +38,16 @@ static const CyImpl g_cyCat[] = {
       "Squeeze both grips twice: the world slows to a crawl for 8 seconds while you keep moving. Recharges in 60 seconds." },
     { "core_berserk",   CY_CORE, "Berserker Core", 5000, 9, CYS_BERSERK, { { 0 } },
       "Squeeze both grips twice: for 12 seconds you shrug off hits (+25 damage resistance) and hit far harder up close (+25 melee and unarmed damage). Recharges in 60 seconds." },
+    { "core_deck1",     CY_CORE, "Brain Dancer Deck Mk.1", 4000, 6, CYS_HACK, { { 0 } },
+      "A netrunner's cyberdeck: quickhack people and robots (needs Cyber Eyes). 5 RAM, refills 1 RAM every 2 seconds. Scan (left grip + left trigger), point your gun hand, right stick picks, right trigger uploads: Reboot Optics 3, Weapon Glitch 3, Cyberpsychosis 5, Cyberware Malfunction 4 (5 s each), Rogue AI (a full deck: kills outright)." },
+    { "core_deck2",     CY_CORE, "Brain Dancer Deck Mk.2", 6000, 7, CYS_HACK, { { 0 } },
+      "A netrunner's cyberdeck: quickhack people and robots (needs Cyber Eyes). 7 RAM, refills 1 RAM every 2 seconds. Scan (left grip + left trigger), point your gun hand, right stick picks, right trigger uploads: Reboot Optics 3, Weapon Glitch 3, Cyberpsychosis 5, Cyberware Malfunction 4 (5 s each), Rogue AI (a full deck: kills outright)." },
+    { "core_deck3",     CY_CORE, "Brain Dancer Deck Mk.3", 8500, 8, CYS_HACK, { { 0 } },
+      "A netrunner's cyberdeck: quickhack people and robots (needs Cyber Eyes). 10 RAM, refills 1 RAM every 2 seconds. Scan (left grip + left trigger), point your gun hand, right stick picks, right trigger uploads: Reboot Optics 3, Weapon Glitch 3, Cyberpsychosis 5, Cyberware Malfunction 4 (5 s each), Rogue AI (a full deck: kills outright)." },
+    { "core_deck4",     CY_CORE, "Brain Dancer Deck Mk.4", 12000, 9, CYS_HACK, { { 0 } },
+      "A netrunner's cyberdeck: quickhack people and robots (needs Cyber Eyes). 15 RAM, refills 1 RAM every 2 seconds. Scan (left grip + left trigger), point your gun hand, right stick picks, right trigger uploads: Reboot Optics 3, Weapon Glitch 3, Cyberpsychosis 5, Cyberware Malfunction 4 (5 s each), Rogue AI (a full deck: kills outright)." },
+    { "core_deck5",     CY_CORE, "Brain Dancer Deck Mk.5", 16000, 10, CYS_HACK, { { 0 } },
+      "A netrunner's cyberdeck: quickhack people and robots (needs Cyber Eyes). 20 RAM, refills 5 RAM a second. Scan (left grip + left trigger), point your gun hand, right stick picks, right trigger uploads: Reboot Optics 3, Weapon Glitch 3, Cyberpsychosis 5, Cyberware Malfunction 4 (5 s each), Rogue AI (a full deck: kills outright)." },
     { "core_ghost",     CY_CORE, "Ghost Core", 5500, 8, CYS_CAMO, { { 0 } },
       "Squeeze both grips twice: optical camouflage bends light around you for 12 seconds - near invisible, like a Stealth Boy. Recharges in 90 seconds." },
     { "cortex_recall",  CY_CORTEX, "Recall Lattice", 1500, 3, CYS_NONE, { { "Science", 10 }, { "Medicine", 5 } },
@@ -52,6 +62,8 @@ static const CyImpl g_cyCat[] = {
       "Replacement eyes with rangefinding and motion highlighting." },
     { "optics_ballist", CY_OPTICS, "Ballistic Overlay", 3500, 5, CYS_NONE, { { "Guns", 10 }, { "EnergyWeapons", 10 } },
       "Projects bullet drop and lead onto everything you look at." },
+    { "optics_cyber",   CY_OPTICS, "Cyber Eyes", 3000, 3, CYS_EYES, { { "Perception", 1 } },
+      "Full optical replacements with a scanning overlay. Hold the left grip and left trigger: everyone around you is outlined, and whoever you point your gun hand at shows their health. Needed to quickhack with a Brain Dancer Deck." },
     { "optics_threat",  CY_OPTICS, "Threat Scanner", 2200, 3, CYS_NONE, { { "Sneak", 10 }, { "CritChance", 2 } },
       "Tags anyone who's spotted you and where they're looking. Easier to stay hidden, easier to find the weak spot." },
     { "circ_heart",     CY_CIRC, "Synthetic Heart", 2500, 4, CYS_NONE, { { "Health", 50 } },
@@ -184,7 +196,9 @@ static volatile bool g_cyJumpEdge = false;
 static bool g_cyBrainOk = false;   /* (Cyber Brained: Intelligence 10, Endurance 10) */
 static bool g_cyBorg = false, g_cyCO = false; static double g_cyCOEnd = 0, g_cyCOReady = 0;
 static bool g_cyAtDoc = false;                                     /* talking to the ripperdoc right now */
-static volatile bool g_cyActivate = false;                         /* the two-squeeze gesture happened */
+static volatile bool g_cyActivate = false;
+static volatile int g_cyHackStep = 0; static volatile bool g_cyHackFire = false;   /* (scanning: the right stick steps through the quickhacks, the right trigger uploads) */
+static void Cy_HackOpen(void);                         /* the two-squeeze gesture happened */
 static NVSESerializationInterface *g_ser = NULL;
 static int g_cyCapsShown = 0, g_cyCapShown = 36, g_cyEnd = 0, g_cyPlvShown = 1;
 static void Ce_Event(void *attacker, void *victim, bool kill);
@@ -467,6 +481,7 @@ static void Cy_AbilityStart(void)
 {
     const CyImpl *c = Cy_Core(); double now = QpcMs();
     if (!c) return;
+    if (c->special == CYS_HACK) { Cy_HackOpen(); return; }
     if (g_cyAbil) { Cy_Buzz(400); return; }
     if (now < g_cyAbilReady) { char m[96]; snprintf(m, sizeof m, "%s recharging - %d s", c->name, (int)ceil((g_cyAbilReady - now) / 1000.0)); UIMessage(m); Cy_Buzz(400); return; }
     g_cyAbil = c->special;
@@ -489,11 +504,23 @@ static void Cy_AbilityStart(void)
 static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *r, bool okL, bool okR)
 {
     static int phase = 0; static double at = 0;
-    if (!g_cyOn || !okL || !okR || !g_inGameplay || IsMenuMode() || g_pipOpen) { phase = 0; return; }
+    if (!g_cyOn || !okL || !okR || !g_inGameplay || IsMenuMode() || g_pipOpen) { phase = 0; g_cyHackOpen = false; return; }
     {   /* jump (A) pressed: a second jump in the air with Kinetic Calves */
         static bool aPrev = false; bool a = Pressed(r, EVRButtonId_k_EButton_A);
         if (a && !aPrev && !g_cyDashGrip) g_cyJumpEdge = true;   /* (right grip + jump is the dash) */
         aPrev = a;
+    }
+    {   /* Cyber Eyes: left grip + left trigger held - scanning; the right stick (left/right) picks a quickhack, the right trigger uploads it */
+        static bool centred = false, rtWas = false;
+        bool scan = g_cyEyes && l->rAxis[2].x > 0.7f && l->rAxis[1].x > 0.6f;
+        g_cyHackOpen = scan;
+        float x = r->rAxis[0].x; bool rt = r->rAxis[1].x > 0.7f;
+        if (scan) {
+            if (fabsf(x) < 0.3f) centred = true;
+            else if (centred && fabsf(x) > 0.7f) { centred = false; g_cyHackStep = x > 0 ? 1 : -1; }
+            if (rt && !rtWas) g_cyHackFire = true;
+        } else centred = false;
+        rtWas = rt;
     }
     float gl = l->rAxis[2].x, gr = r->rAxis[2].x; double now = QpcMs();
     bool both = gl > 0.85f && gr > 0.85f, none = gl < 0.35f && gr < 0.35f;
@@ -503,6 +530,129 @@ static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *
     else if (phase == 2 && both) { phase = 0; if (Cy_Core()) g_cyActivate = true; }
 }
 #include "fnvr_cyber_enemy.c"
+/* ---- Cyber Eyes and Brain Dancer decks: scanning and quickhacks ----
+   Cyber Eyes: hold the left grip and left trigger - everyone around is outlined (the game's Detect Life glow), and whoever
+   your gun hand points at shows their health. With a Brain Dancer Deck too: the right stick (left / right) picks a
+   quickhack and the right trigger uploads it to them (5 s each): Reboot Optics 3 RAM (they can't see you), Weapon Glitch 3
+   (their weapon keeps failing), Cyberpsychosis 5 (frenzied: they attack whoever is nearest), Cyberware Malfunction 4 (their
+   chrome shuts off), Rogue AI (all your RAM, only when full: a person or a robot dies outright). RAM refills 1 every 2 s
+   (Mk.5: 5 a second). */
+#define CY_HACK_MS 5000.0
+static float g_cyRam = -1; static int g_cyHackSel = 0;
+static struct { char *ref; uint32_t id; int kind, aggr; double until, next; } g_cyHk[16]; static int g_cyHkN = 0;
+static int Cy_DeckTier(void) { const CyImpl *c = Cy_Core(); return c && c->special == CYS_HACK ? c->id[9] - '0' : 0; }
+static int Cy_DeckRam(int t) { static const int r[6] = { 0, 5, 7, 10, 15, 20 }; return t >= 1 && t <= 5 ? r[t] : 0; }
+static void Cy_HackOpen(void) { UIMessage(g_cyEyes ? "Quickhacks: hold the left grip + left trigger to scan, right trigger uploads" : "Quickhacks need Cyber Eyes (optics)"); }
+static char *Cy_HackTarget(void)   /* the living character nearest the line your gun hand points along (within 8 degrees, 45 m) */
+{
+    int h = g_leftHanded ? 0 : 1; if (!g_handWOk[h]) return NULL;
+    float f[3] = { -g_handWR[h][0][2], -g_handWR[h][1][2], -g_handWR[h][2][2] };
+    char *best = NULL, *pl = (char *)GetPlayer(), *r = NULL; float bestA = cosf(8.0f * 3.14159265f / 180.0f); int guard = 0;
+    while ((r = Ce_NextFoe(r)) != NULL && guard++ < 120) {
+        if (r == pl || IsBadReadPtr(r, 0x40)) continue;
+        const float *P = (const float *)(r + 0x30);
+        float d[3] = { P[0] - g_handW[h][0], P[1] - g_handW[h][1], P[2] + 0.9f * g_unitsPerMeter - g_handW[h][2] };
+        float L = V3Len(d); if (L < 1.0f || L > 45.0f * g_unitsPerMeter) continue;
+        float c = (d[0] * f[0] + d[1] * f[1] + d[2] * f[2]) / L;
+        if (c > bestA) { bestA = c; best = r; }
+    }
+    return best;
+}
+static void Cy_Note(const char *m) { if (g_gameOk) QueueUIMessage(m, 0, NULL, NULL, 1.0f, false); }   /* (a short one: the scan overlay keeps them coming) */
+static void Cy_HackTick(void)
+{
+    double now = QpcMs(); static double last = 0;
+    g_cyEyes = g_cyOn && Cy_Has(CYS_EYES);
+    int t = Cy_DeckTier(), cap = Cy_DeckRam(t);
+    if (!t) g_cyRam = -1;
+    else {   /* RAM refills */
+        if (g_cyRam < 0) g_cyRam = (float)cap;
+        float dt = last > 0 ? (float)((now - last) / 1000.0) : 0; if (dt > 0.5f) dt = 0.5f;
+        g_cyRam += dt * (t == 5 ? 5.0f : 0.5f); if (g_cyRam > cap) g_cyRam = (float)cap;
+    }
+    last = now;
+    static void *sBlind, *sSeeAgain, *sStop, *sDisarm, *sKill, *sKind, *sNearest, *sGlow, *sGlowOff; static bool tried = false;
+    if (!tried && (t || g_cyEyes)) { tried = true;
+        sBlind = Cy_Compile("ref rT\nBegin Function { rT }\nrT.ModAV Perception -10\nrT.StopCombat\nEnd\n");
+        sSeeAgain = Cy_Compile("ref rT\nBegin Function { rT }\nrT.ModAV Perception 10\nEnd\n");
+        sStop = Cy_Compile("ref rT\nBegin Function { rT }\nif rT.IsInCombat\nrT.StopCombat\nendif\nEnd\n");
+        sDisarm = Cy_Compile("ref rT\nref rW\nBegin Function { rT }\nset rW to rT.GetEquippedObject 5\nif rW\nrT.UnequipItem rW 0 1\nendif\nEnd\n");
+        sKill = Cy_Compile("ref rT\nBegin Function { rT }\nrT.Kill player\nEnd\n");
+        sKind = Cy_Compile("ref rT\nint iV\nBegin Function { rT }\nset iV to rT.GetCreatureType\nSetFunctionValue iV\nEnd\n");
+        sNearest = Cy_Compile("ref rW\nref rT\nref rBest\nfloat fD\nfloat fBest\nBegin Function { rW }\nset fBest to 3000\nset rT to GetFirstRef 200 1\nwhile rT != 0\nif rT != rW\nif rT != player\nif rT.GetDead == 0\nset fD to rW.GetDistance rT\nif fD < fBest\nset fBest to fD\nset rBest to rT\nendif\nendif\nendif\nendif\nset rT to GetNextRef\nloop\nif rBest\nrW.StartCombat rBest\nendif\nEnd\n");
+        /* (the scan: everyone alive within 45 m glows for a moment - renewed while you hold it) */
+        sGlow = Cy_Compile("ref rT\nBegin Function { }\nset rT to GetFirstRef 200 1\nwhile rT != 0\nif rT != player\nif rT.GetDead == 0\nif player.GetDistance rT < 3150\nrT.PlayMagicShaderVisuals LifeDetected 1.5\nendif\nendif\nendif\nset rT to GetNextRef\nloop\nEnd\n");
+        sGlowOff = Cy_Compile("ref rT\nBegin Function { }\nset rT to GetFirstRef 200 1\nwhile rT != 0\nif rT != player\nrT.StopMagicShaderVisuals LifeDetected\nendif\nset rT to GetNextRef\nloop\nEnd\n");
+        Log("Cyber Eyes / Brain Dancer: scan %s, quickhacks %s", sGlow ? "ready" : "FAILED", sBlind && sDisarm && sKill && sNearest ? "ready" : "partly FAILED");
+    }
+    /* the hacks running on people */
+    for (int i = 0; i < g_cyHkN; ) {
+        char *r = g_cyHk[i].ref; bool live = LookupForm(g_cyHk[i].id) == (void *)r && Ce_Num(2, r) < 0.5;
+        if (!live || now >= g_cyHk[i].until) {
+            if (live) { if (g_cyHk[i].kind == 0) Ce_Call(sSeeAgain, r, 1, 0, NULL); if (g_cyHk[i].kind == 2) { Ce_SetAggr(r, g_cyHk[i].aggr); Ce_Call(sStop, r, 1, 0, NULL); } }
+            g_cyHk[i] = g_cyHk[--g_cyHkN]; continue;
+        }
+        if (now >= g_cyHk[i].next) {
+            if (g_cyHk[i].kind == 0) { Ce_Call(sStop, r, 1, 0, NULL); g_cyHk[i].next = now + 1000.0; }   /* (blind: they keep losing you) */
+            else if (g_cyHk[i].kind == 1) { Ce_Call(sDisarm, r, 1, 0, NULL); g_cyHk[i].next = now + 500.0; }   /* (their weapon keeps glitching out) */
+            else if (g_cyHk[i].kind == 2) { Ce_Call(sNearest, r, 1, 0, NULL); g_cyHk[i].next = now + 2000.0; }   /* (a new victim now and then) */
+            else g_cyHk[i].next = g_cyHk[i].until;
+        }
+        i++;
+    }
+    /* scanning */
+    static bool scanWas = false; static double glowAt = 0, infoAt = 0, tgtAt = 0; static char *tgt = NULL; static uint32_t tgtId = 0, shownId = 0; static int shownSel = -1;
+    bool scan = g_cyHackOpen && g_cyEyes;
+    if (!scan) {
+        if (scanWas && sGlowOff && g_scriptIntf && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(sGlowOff, GetPlayer(), 0);
+        scanWas = false; g_cyHackFire = false; g_cyHackStep = 0; tgt = NULL; shownId = 0; shownSel = -1; return;
+    }
+    if (!scanWas) { scanWas = true; glowAt = 0; Cy_Buzz(800); }
+    if (now >= glowAt && sGlow && g_scriptIntf->CallFunctionAlt) { glowAt = now + 1000.0; g_scriptIntf->CallFunctionAlt(sGlow, GetPlayer(), 0); }
+    if (now >= tgtAt) { tgtAt = now + 400.0; tgt = Cy_HackTarget(); tgtId = tgt ? *(uint32_t *)(tgt + 0x0C) : 0; }
+    if (tgt && LookupForm(tgtId) != (void *)tgt) { tgt = NULL; tgtId = 0; }
+    static const char *const nm[5] = { "Reboot Optics", "Weapon Glitch", "Cyberpsychosis", "Cyberware Malfunction", "Rogue AI" };
+    int cost[5] = { 3, 3, 5, 4, cap };
+    if (g_cyHackStep) { g_cyHackSel = (g_cyHackSel + g_cyHackStep + 5) % 5; g_cyHackStep = 0; }
+    if (tgtId != shownId || g_cyHackSel != shownSel || now >= infoAt) {   /* the overlay text: who, their health, your RAM and the hack picked */
+        infoAt = now + 1000.0; shownId = tgtId; shownSel = g_cyHackSel;
+        char m[200], who[96] = "no target";
+        if (tgt) snprintf(who, sizeof who, "%s  HP %.0f%%", Cy_RefName(tgt), Ce_Num(0, tgt) * 100.0);
+        if (t) snprintf(m, sizeof m, "%s  |  RAM %d/%d  |  < %s (%d) >", who, (int)g_cyRam, cap, nm[g_cyHackSel], cost[g_cyHackSel]);
+        else snprintf(m, sizeof m, "%s", who);
+        Cy_Note(m);
+    }
+    if (!g_cyHackFire) return;
+    g_cyHackFire = false;
+    if (!t) return;   /* (Cyber Eyes alone: just the scan) */
+    int k = g_cyHackSel;
+    if (!tgt) { Cy_Note("Quickhack: no one there - point your gun hand at them"); Cy_Buzz(300); return; }
+    if (k == 4 && g_cyRam < cap - 0.01f) { char m[96]; snprintf(m, sizeof m, "Rogue AI needs a full deck - RAM %d/%d", (int)g_cyRam, cap); Cy_Note(m); Cy_Buzz(300); return; }
+    if (g_cyRam < cost[k] - 0.01f) { char m[96]; snprintf(m, sizeof m, "Not enough RAM for %s (%d) - %d/%d", nm[k], cost[k], (int)g_cyRam, cap); Cy_Note(m); Cy_Buzz(300); return; }
+    char *r = tgt; uint32_t id = tgtId;
+    bool ok = true;
+    if (*(BYTE *)(r + 0x04) == 0x3C) {   /* (creatures: only robots can be hacked) */
+        double kd = -1; Ce_Call(sKind, r, 1, 0, &kd);
+        if ((int)kd != 6) { Cy_Note("Quickhacks only work on people and robots"); Cy_Buzz(300); return; }
+    }
+    if (k == 3) ok = Ce_ChromeOff(r, now + CY_HACK_MS);
+    if (!ok) { Cy_Note("No cyberware in them to shut off"); Cy_Buzz(300); return; }
+    if (k == 4) Ce_Call(sKill, r, 1, 0, NULL);
+    else if (k != 3) {   /* (one hack of each kind per person: a new one starts it over) */
+        int i; for (i = 0; i < g_cyHkN; i++) if (g_cyHk[i].id == id && g_cyHk[i].kind == k) break;
+        if (i == g_cyHkN) {
+            if (g_cyHkN >= 16) { Cy_Note("Quickhack: too many hacks running"); return; }
+            g_cyHk[i].ref = r; g_cyHk[i].id = id; g_cyHk[i].kind = k; g_cyHkN++;
+            if (k == 0) Ce_Call(sBlind, r, 1, 0, NULL);
+            if (k == 2) { int a = (int)Ce_Num(3, r); g_cyHk[i].aggr = a >= 0 && a <= 3 ? a : 1; Ce_SetAggr(r, 3); Ce_Call(sStop, r, 1, 0, NULL); }
+        }
+        g_cyHk[i].until = now + CY_HACK_MS; g_cyHk[i].next = now;
+    }
+    g_cyRam -= (float)cost[k];
+    char m[128]; snprintf(m, sizeof m, "%s uploaded: %s - RAM %d/%d", nm[k], Cy_RefName(r), (int)g_cyRam, cap); UIMessage(m);
+    Cy_Buzz(3999); shownId = 0;
+    Log("Brain Dancer: %s on %s (%08X), %d RAM left of %d", nm[k], Cy_RefName(r), id, (int)g_cyRam, cap);
+}
 /* ---- arm weapons: skills, the effects they put on what they hit, the arm launcher ---- */
 static int g_cySkExpl = 0, g_cySkMelee = 0, g_cySkUnarmed = 0, g_cyCrit = 0; static bool g_cyBarrageOk = false;
 /* ---- Praying Mantis (perk: a mantis blade, Agility 10, Endurance 10) ----
@@ -643,7 +793,7 @@ static void Cy_LaunchTick(void)
             }
     }
     for (int h = 0; h < 2; h++) {
-        if (g_cyLaunchH[h] < 0) { g_cyLn[h].trigWas = false; continue; }
+        if (g_cyLaunchH[h] < 0 || (h == 0 && g_cyEyes)) { g_cyLn[h].trigWas = false; continue; }   /* (Cyber Eyes: the left grip + trigger is the scan) */
         if (g_cyLn[h].refillAt > 0 && now >= g_cyLn[h].refillAt) {
             g_cyLn[h].rounds = cap; g_cyLn[h].refillAt = 0;
             if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 1500);
@@ -910,6 +1060,7 @@ static void Cy_Tick(void)
     Cy_FxFlush();
     Cy_LaunchTick();
     Cy_MantisTick();
+    Cy_HackTick();
     {   /* Blood Driver: 3% of your health back for every melee / unarmed hit that landed */
         int n = g_cyBloodHits; g_cyBloodHits = 0;
         if (n && Cy_Has(CYS_BLOOD)) {
@@ -1016,7 +1167,7 @@ static void Cy_Reset(const char *why)
     if (g_cyAbil == CYS_SLOWMO) Cy_SlowTime(false);
     g_cyAbil = 0; g_cyTempN = 0; g_cyAtDoc = false;
     g_cyCO = false; g_cyCoTempN = 0; g_cyCOReady = 0; g_cyBorg = false;
-    g_cyMantisN = 0; g_cyMantisStacks = 0;
+    g_cyMantisN = 0; g_cyMantisStacks = 0; g_cyHkN = 0; g_cyRam = -1; g_cyHackOpen = false;
     if (g_cyGsHave) { Cy_GsSet(0, 1.0f); Cy_GsSet(1, 1.0f); }
     g_cyN = 0; g_cyRevertN = 0; g_cyAbilReady = g_cyHeartReady = 0;
     Ce_Reset();
@@ -1174,7 +1325,7 @@ static void Cy_Draw(void)
         }
         if (c->special) {
             const char *sp = c->special == CYS_HEART ? "AUTOMATIC: saves you below 15% health" : c->special == CYS_NOFALL ? "ALWAYS ON: no fall damage" :
-                             c->special == CYS_DJUMP ? "ALWAYS ON: jump again in mid-air" : c->special == CYS_DASH ? "HOLD RIGHT GRIP + JUMP: dash (20 AP)" : c->special == CYS_RAM ? "ALWAYS ON: each kill -1 s ability cooldown" : c->special == CYS_BLOOD ? "ALWAYS ON: melee / unarmed hits heal 3%" : "ACTIVE ABILITY: squeeze both grips twice";
+                             c->special == CYS_DJUMP ? "ALWAYS ON: jump again in mid-air" : c->special == CYS_DASH ? "HOLD RIGHT GRIP + JUMP: dash (20 AP)" : c->special == CYS_RAM ? "ALWAYS ON: each kill -1 s ability cooldown" : c->special == CYS_BLOOD ? "ALWAYS ON: melee / unarmed hits heal 3%" : c->special == CYS_HACK ? "QUICKHACKS: scan with Cyber Eyes, right trigger uploads" : c->special == CYS_EYES ? "HOLD LEFT GRIP + LEFT TRIGGER: scan" : "ACTIVE ABILITY: squeeze both grips twice";
             Set_Fill(CY_RX0 + 22, ey + 14, CY_RX0 + 34, ey + 26, CY_RED);
             Set_Text(g_setFontSmall, CY_RED, CY_RX0 + 48, ey, CY_RX1 - 20, ey + 40, sp, DT_LEFT | DT_SINGLELINE | DT_VCENTER);
         }

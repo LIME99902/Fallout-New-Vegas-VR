@@ -38,6 +38,7 @@ typedef struct {
     double seenAt, abilReady, abilEnd; int abilOn;
     CySavedMod temp[4]; int tempN;           /* an ability's boosts, on now */
     bool psycho; double psychoEnd, psychoRetarget; int aggrPrev;
+    bool off; double offUntil;               /* (a Cyberware Malfunction quickhack: its chrome shut off) */
     bool ambi; char *dualModel, *dualParent, *dualProj; void *dualWeap; int dualType; bool dualOn;   /* (dual-wielding: the left-hand copy) */
 } CEnemy;
 typedef struct {                             /* (as kept in the co-save) */
@@ -213,7 +214,7 @@ static void Ce_Decide(char *ref)
     int used[CY_NSLOT] = { 0 }; bool blade = false;
     for (int k = 0; k < CY_NCAT && e->nImp < want; k++) {
         const CyImpl *c = &g_cyCat[order[k]];
-        if (c->special == CYS_DJUMP || c->special == CYS_NOFALL) continue;   /* (nothing for the AI to do with these) */
+        if (c->special == CYS_DJUMP || c->special == CYS_NOFALL || c->special == CYS_HACK || c->special == CYS_DASH || c->special == CYS_RAM) continue;   /* (nothing for the AI to do with these) */
         if (Cy_ArmSide(c->id) == 0 || Cy_ArmSide(c->id) == 1) continue;   /* (enemies carry the paired arm weapons) */
         if (used[c->slot] >= g_cySlotMax[c->slot]) continue;
         bool isBlade = Cy_ArmSide(c->id) == 2; if (isBlade && blade) continue;
@@ -234,6 +235,24 @@ static void Ce_Decide(char *ref)
     if (named && Ce_Num(4, ref) > 0.5) { char m[96]; snprintf(m, sizeof m, "%s is chromed to the limit", Cy_RefName(ref)); UIMessage(m); }
     Log("Chromed: %s (level %d, %s%s%s) - %d implants%s: %s", Cy_RefName(ref), lvl, style, named ? ", MAXED-OUT BOSS" : boss ? ", BOSS" : "", mate ? ", YOUR COMPANION" : "",
         e->nImp, e->over ? ", OVER CAPACITY" : "", list);
+}
+static void Ce_PsychoEnd(CEnemy *e, char *ref);
+/* Cyberware Malfunction: every implant's boost taken away, any ability cut short, no abilities or backup heart - until 'until' */
+static void Ce_ChromeSet(CEnemy *e, char *ref, bool on)
+{
+    for (int k = 0; k < e->nImp; k++) { const CyImpl *c = &g_cyCat[e->imp[k]];
+        for (int m = 0; m < CY_MAXMOD && c->mod[m].av; m++) Ce_ModAV(ref, c->mod[m].av, on ? c->mod[m].amt : -c->mod[m].amt); }
+}
+static bool Ce_ChromeOff(char *ref, double until)
+{
+    CEnemy *e = Ce_Find(*(uint32_t *)(ref + 0x0C)); if (!e || !e->nImp) return false;
+    if (!e->off) {
+        if (e->abilOn) Ce_TempOff(e, ref);
+        if (e->psycho) Ce_PsychoEnd(e, ref);
+        Ce_ChromeSet(e, ref, false); e->off = true;
+    }
+    e->offUntil = until;
+    return true;
 }
 static int Ce_OverPct(const CEnemy *e) { if (e->load <= e->cap || e->cap <= 0) return 0; int p = (e->load - e->cap) * 100 / e->cap; return p > 100 ? 100 : p < 1 ? 1 : p; }
 static void Ce_PsychoStart(CEnemy *e, char *ref)
@@ -401,7 +420,7 @@ static void Ce_Tick(double now)
         CEnemy *e = Ce_Find(*(uint32_t *)(att + 0x0C)); if (!e) continue;
         if (!g_ceEv[k].kill && e->dualOn && e->dualType == 1 && g_ceEv[k].vic && !IsBadReadPtr(g_ceEv[k].vic, 0x80)) Ce_MeleeSecond(att, (char *)g_ceEv[k].vic);
         if (e->psycho) { if (g_ceEv[k].kill) { e->psychoEnd += 3000.0; Ce_Heal(att, 20); } continue; }
-        if (!e->over) continue;
+        if (!e->over || e->off) continue;
         int pct = g_ceEv[k].kill ? Ce_OverPct(e) : 2;
         if (rand() % 100 < pct) Ce_PsychoStart(e, att);
     }
@@ -411,6 +430,12 @@ static void Ce_Tick(double now)
     int nd = 0;
     for (int i = 0; i < g_ceN; i++) {
         CEnemy *e = &g_ce[i];
+        if (e->off) {   /* (a Cyberware Malfunction: back on when it runs out) */
+            char *rr = Ce_Ref(e);
+            if (now < e->offUntil && rr) continue;
+            if (rr && Ce_Num(2, rr) < 0.5) { Ce_ChromeSet(e, rr, true); Log("Chromed enemy: %s's chrome came back online", Cy_RefName(rr)); }
+            e->off = false;
+        }
         bool fighting = now - e->seenAt < 6000.0;
         if (!fighting && !e->abilOn && !e->psycho) { if (e->dualOn || (e->dualModel && e->dualParent)) Ce_DualDetach(e); continue; }
         char *ref = Ce_Ref(e);
