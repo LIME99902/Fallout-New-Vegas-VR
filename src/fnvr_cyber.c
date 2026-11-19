@@ -177,6 +177,7 @@ static CySavedMod g_cyCoTemp[4]; static int g_cyCoTempN = 0;     /* Chrome Overl
 static CySavedMod g_cyRevert[12]; static int g_cyRevertN = 0;     /* boosts that were active when the loaded save was made */
 static volatile LONG g_cyHits = 0, g_cyKills = 0, g_cyKillsL = 0;                  /* (from xNVSE's events: hits and kills by you, not handled yet) */
 static volatile bool g_cyJumpEdge = false;
+static bool g_cyBrainOk = false;   /* (Cyber Brained: Intelligence 10, Endurance 10) */
 static bool g_cyBorg = false, g_cyCO = false; static double g_cyCOEnd = 0, g_cyCOReady = 0;
 static bool g_cyAtDoc = false;                                     /* talking to the ripperdoc right now */
 static volatile bool g_cyActivate = false;                         /* the two-squeeze gesture happened */
@@ -472,6 +473,8 @@ static void Cy_AbilityStart(void)
     case CYS_CAMO: Cy_TempMod("Chameleon", 1); dur = 12000; cool = 90000; break;
     default: g_cyAbil = 0; return;
     }
+    if (g_cyBrainOk) { double c0 = cool; cool -= 4000.0 * g_cyN; if (cool < 6000.0) cool = 6000.0;   /* (Cyber Brained: 4 s less per piece of chrome, 6 s at least) */
+        Log("Cyber Brained: %d pieces of chrome - cooldown %.0f s instead of %.0f s", g_cyN, cool / 1000.0, c0 / 1000.0); }
     g_cyAbilEnd = now + dur; g_cyAbilReady = now + dur + cool;
     Cy_Buzz(3999);
     char m[96]; snprintf(m, sizeof m, "%s engaged", c->name); UIMessage(m);
@@ -567,6 +570,12 @@ static void Cy_SkillsTick(void)
         bool launcher = g_cyLaunchH[0] >= 0 || g_cyLaunchH[1] >= 0;
         if (bo != g_cyBarrageOk && launcher) UIMessage(bo ? "Missile Barrage: active - 5 rockets" : "Missile Barrage needs Luck 10 and Endurance 10");
         g_cyBarrageOk = bo; }
+    static void *si = NULL; static bool ibad = false;   /* (Intelligence: Cyber Brained) */
+    if (!si && !ibad) { si = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetAV Intelligence\nSetFunctionValue iV\nEnd\n"); ibad = !si; }
+    double q = 0; if (si && Cy_CallNum(si, 0, 0, &q)) {
+        bool br = q >= 9.5 && en >= 10;
+        if (br != g_cyBrainOk && g_cyN > 0) UIMessage(br ? "Cyber Brained: active" : "Cyber Brained needs Intelligence 10 and Endurance 10");
+        g_cyBrainOk = br; }
 }
 /* (from the hit code) the extra damage this hand's arm weapon adds to a blow: blades x(1 + Melee Weapons/100), Mech Arms
    x(1 + Unarmed/100) - double at 100 - and its effect queued to go on whoever was hit */
@@ -611,7 +620,7 @@ static void Cy_LaunchTick(void)
     static void *proj[5], *expl[5], *launcherW; static int dmgOff[5]; static bool tried = false, ok = false;
     double now = QpcMs();
     float sk = (float)(g_cySkExpl > 100 ? 100 : g_cySkExpl < 0 ? 0 : g_cySkExpl);
-    double refillMs = (20.0 - 15.0 * sk / 100.0) * 1000.0;
+    double refillMs = g_cyBrainOk ? 3000.0 : (20.0 - 15.0 * sk / 100.0) * 1000.0;   /* (Cyber Brained: 3 s) */
     int cap = g_cyBarrageOk ? 5 : 3;   /* (Missile Barrage: 5 rockets) */
     static bool capWas = false; static int lastH = -1; static double lastShot = 0;
     if (g_cyBarrageOk != capWas) { capWas = g_cyBarrageOk;   /* (perk on: a full launcher tops up to 5; off: down to 3) */
