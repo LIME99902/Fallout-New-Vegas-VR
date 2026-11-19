@@ -117,6 +117,8 @@ static const CyImpl g_cyCat[] = {
     { "arm_shock_l",    CY_ARMS, "Arm Blade: Shock (left)", 3250, 4, CYS_NONE, { { 0 } }, "An arcing blade in the left forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
     { "arm_shock_r",    CY_ARMS, "Arm Blade: Shock (right)", 3250, 4, CYS_NONE, { { 0 } }, "An arcing blade in the right forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
     { "arm_toxin_l",    CY_ARMS, "Arm Blade: Toxin (left)", 3250, 4, CYS_NONE, { { "PoisonResist", 5 } }, "A venom blade in the left forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
+    { "arm_quickie_l",  CY_ARMS, "Quickie (left) - LEGENDARY", 6000, 5, CYS_NONE, { { "EnergyResist", 5 } }, "A legendary mantis blade with a netrunner's daemon in the edge: +20 damage to that hand's blows, and a 30% chance on every hit to upload Cyberware Malfunction - their chrome shuts off for 5 s, a jolt shocks them and stuns them for a second. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
+    { "arm_quickie_r",  CY_ARMS, "Quickie (right) - LEGENDARY", 6000, 5, CYS_NONE, { { "EnergyResist", 5 } }, "A legendary mantis blade with a netrunner's daemon in the edge: +20 damage to that hand's blows, and a 30% chance on every hit to upload Cyberware Malfunction - their chrome shuts off for 5 s, a jolt shocks them and stuns them for a second. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
     { "arm_toxin_r",    CY_ARMS, "Arm Blade: Toxin (right)", 3250, 4, CYS_NONE, { { "PoisonResist", 5 } }, "A venom blade in the right forearm: +12 damage to that hand's blows. Praying Mantis (AGI 10, END 10): every hit stacks a bleed that heals you and bleeds them harder." },
     { "arm_mech_l",     CY_ARMS, "Mech Arm (left)", 4500, 5, CYS_MECH, { { "Strength", 2 } },
       "A heavy hydraulic left arm: +2 Strength, +40 damage to that fist (twice that at Unarmed 100). Cyber Gorilla (STR 10, END 10): up to +100% from fast swings and moving fast. It grabs people off their feet and throws them, a punch with it to the chest sends them flying, and with both hands on someone it rips a limb off. Robots, deathclaws and giants need Strength 10." },
@@ -207,7 +209,7 @@ static void Cyber_Open(bool atDoc);
 
 /* the arm weapons: blades and Mech Arms. Those with _l / _r go on one arm; the old pairs (arm_kinetic, arm_mech...) are
    no longer sold but still work in saves that have them (and enemies carry them) */
-static bool Cy_ArmWeapon(const char *id) { return !strncmp(id, "arm_kinetic", 11) || !strncmp(id, "arm_thermal", 11) || !strncmp(id, "arm_shock", 9) || !strncmp(id, "arm_toxin", 9) || !strncmp(id, "arm_mech", 8) || !strncmp(id, "arm_launch", 10) || !strncmp(id, "arm_grapple", 11); }
+static bool Cy_ArmWeapon(const char *id) { return !strncmp(id, "arm_kinetic", 11) || !strncmp(id, "arm_thermal", 11) || !strncmp(id, "arm_shock", 9) || !strncmp(id, "arm_toxin", 9) || !strncmp(id, "arm_mech", 8) || !strncmp(id, "arm_launch", 10) || !strncmp(id, "arm_grapple", 11) || !strncmp(id, "arm_quickie", 11); }
 static int Cy_ArmSide(const char *id)   /* 0 left, 1 right, 2 both (the old pairs), -1 not an arm weapon */
 {
     if (!Cy_ArmWeapon(id)) return -1;
@@ -215,7 +217,7 @@ static int Cy_ArmSide(const char *id)   /* 0 left, 1 right, 2 both (the old pair
 }
 static float Cy_ArmBonus(const char *id)   /* (a one-arm weapon's damage to that hand's blows) */
 {
-    return !strncmp(id, "arm_mech", 8) ? 40.0f : !strncmp(id, "arm_kinetic", 11) ? 15.0f : 12.0f;
+    return !strncmp(id, "arm_mech", 8) ? 40.0f : !strncmp(id, "arm_quickie", 11) ? 20.0f : !strncmp(id, "arm_kinetic", 11) ? 15.0f : 12.0f;
 }
 static int Cy_ArmFx(const char *id)   /* an arm weapon's effect on what it hits: 0 none, 1 burning, 2 shock, 3 poison, 4 bleeding */
 {
@@ -538,7 +540,7 @@ static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *
    chrome shuts off), Rogue AI (all your RAM, only when full: a person or a robot dies outright). RAM refills 1 every 2 s
    (Mk.5: 5 a second). */
 #define CY_HACK_MS 5000.0
-static float g_cyRam = -1; static int g_cyHackSel = 0;
+static float g_cyRam = -1; static int g_cyHackSel = 0; static void *g_cyStunScr = NULL;
 static struct { char *ref; uint32_t id; int kind, aggr; double until, next; } g_cyHk[16]; static int g_cyHkN = 0;
 static int Cy_DeckTier(void) { const CyImpl *c = Cy_Core(); return c && c->special == CYS_HACK ? c->id[9] - '0' : 0; }
 static int Cy_DeckRam(int t) { static const int r[6] = { 0, 5, 7, 10, 15, 20 }; return t >= 1 && t <= 5 ? r[t] : 0; }
@@ -589,13 +591,14 @@ static void Cy_HackTick(void)
     for (int i = 0; i < g_cyHkN; ) {
         char *r = g_cyHk[i].ref; bool live = LookupForm(g_cyHk[i].id) == (void *)r && Ce_Num(2, r) < 0.5;
         if (!live || now >= g_cyHk[i].until) {
-            if (live) { if (g_cyHk[i].kind == 0) Ce_Call(sSeeAgain, r, 1, 0, NULL); if (g_cyHk[i].kind == 2) { Ce_SetAggr(r, g_cyHk[i].aggr); Ce_Call(sStop, r, 1, 0, NULL); } }
+            if (live) { if (g_cyHk[i].kind == 5) Ce_Call(g_cyStunScr, r, 2, 0, NULL); if (g_cyHk[i].kind == 0) Ce_Call(sSeeAgain, r, 1, 0, NULL); if (g_cyHk[i].kind == 2) { Ce_SetAggr(r, g_cyHk[i].aggr); Ce_Call(sStop, r, 1, 0, NULL); } }
             g_cyHk[i] = g_cyHk[--g_cyHkN]; continue;
         }
         if (now >= g_cyHk[i].next) {
             if (g_cyHk[i].kind == 0) { Ce_Call(sStop, r, 1, 0, NULL); g_cyHk[i].next = now + 1000.0; }   /* (blind: they keep losing you) */
             else if (g_cyHk[i].kind == 1) { Ce_Call(sDisarm, r, 1, 0, NULL); g_cyHk[i].next = now + 500.0; }   /* (their weapon keeps glitching out) */
             else if (g_cyHk[i].kind == 2) { Ce_Call(sNearest, r, 1, 0, NULL); g_cyHk[i].next = now + 2000.0; }   /* (a new victim now and then) */
+            else if (g_cyHk[i].kind == 5) { Ce_Call(g_cyStunScr, r, 2, 1, NULL); g_cyHk[i].next = g_cyHk[i].until; }   /* (Quickie: stunned) */
             else g_cyHk[i].next = g_cyHk[i].until;
         }
         i++;
@@ -652,6 +655,18 @@ static void Cy_HackTick(void)
     char m[128]; snprintf(m, sizeof m, "%s uploaded: %s - RAM %d/%d", nm[k], Cy_RefName(r), (int)g_cyRam, cap); UIMessage(m);
     Cy_Buzz(3999); shownId = 0;
     Log("Brain Dancer: %s on %s (%08X), %d RAM left of %d", nm[k], Cy_RefName(r), id, (int)g_cyRam, cap);
+}
+/* Quickie (legendary mantis blade): its 30% proc - Cyberware Malfunction for 5 s (chromed or not, the jolt lands), shocked, stunned 1 s */
+static void Cy_QuickieProc(char *ref, uint32_t id)
+{
+    double now = QpcMs();
+    if (!g_cyStunScr) g_cyStunScr = Cy_Compile("ref rT\nint iOn\nBegin Function { rT, iOn }\nrT.SetRestrained iOn\nEnd\n");
+    bool chrome = Ce_ChromeOff(ref, now + CY_HACK_MS);
+    int i; for (i = 0; i < g_cyHkN; i++) if (g_cyHk[i].id == id && g_cyHk[i].kind == 5) break;
+    if (i == g_cyHkN && g_cyHkN < 16) { g_cyHk[i].ref = ref; g_cyHk[i].id = id; g_cyHk[i].kind = 5; g_cyHkN++; }
+    if (i < 16) { g_cyHk[i].until = now + 1000.0; g_cyHk[i].next = now; }
+    char m[96]; snprintf(m, sizeof m, "Quickie: %s %s", Cy_RefName(ref), chrome ? "- cyberware offline" : "jolted"); UIMessage(m);
+    Log("Quickie: %08X - %s, shocked, stunned 1 s", id, chrome ? "Cyberware Malfunction" : "no chrome to shut off");
 }
 /* ---- arm weapons: skills, the effects they put on what they hit, the arm launcher ---- */
 static int g_cySkExpl = 0, g_cySkMelee = 0, g_cySkUnarmed = 0, g_cyCrit = 0; static bool g_cyBarrageOk = false;
@@ -739,6 +754,7 @@ static float Cy_ArmBlow(int h, char *ref, uint32_t id)
     if (h < 0 || h > 1 || g_cyArmDmg[h] <= 0) return 0;
     float sk = g_cyArmKindH[h] == 2 ? (float)g_cySkUnarmed : (float)g_cySkMelee; if (sk > 100) sk = 100; if (sk < 0) sk = 0;
     if (g_cyArmKindH[h] == 1 && g_cyMantisOk && ref) Cy_MantisHit(ref, id);   /* (Praying Mantis: a blade hit is a bleed stack) */
+    if (g_cyQuickieH[h] && ref && rand() % 100 < 30 && g_cyFxN < 16) { g_cyFxQ[g_cyFxN].ref = ref; g_cyFxQ[g_cyFxN].id = id; g_cyFxQ[g_cyFxN].fx = 5; g_cyFxN++; }   /* (Quickie: the daemon goes in) */
     if (g_cyArmFxH[h] && ref && g_cyFxN < 16) { g_cyFxQ[g_cyFxN].ref = ref; g_cyFxQ[g_cyFxN].id = id; g_cyFxQ[g_cyFxN].fx = g_cyArmFxH[h]; g_cyFxN++; }
     return g_cyArmDmg[h] * (1.0f + sk / 100.0f);
 }
@@ -752,6 +768,7 @@ static void Cy_FxFlush(void)
     }
     for (int i = 0; i < g_cyFxN; i++)
         if (scr && LookupForm(g_cyFxQ[i].id) == (void *)g_cyFxQ[i].ref && g_scriptIntf->CallFunctionAlt) {
+            if (g_cyFxQ[i].fx == 5) { Cy_QuickieProc(g_cyFxQ[i].ref, g_cyFxQ[i].id); g_scriptIntf->CallFunctionAlt(scr, GetPlayer(), 2, g_cyFxQ[i].ref, 2); continue; }
             g_scriptIntf->CallFunctionAlt(scr, GetPlayer(), 2, g_cyFxQ[i].ref, g_cyFxQ[i].fx);
             static int l = 0; static const char *const nm[] = { "", "burning", "shocked", "poisoned", "bleeding" };
             if (l++ < 20) Log("Cyberware: %08X %s (arm weapon)", g_cyFxQ[i].id, nm[g_cyFxQ[i].fx]);
@@ -1045,16 +1062,17 @@ static void Cy_Tick(void)
         dlgWas = dlg;
     }
     if (!g_inGameplay || !GetPlayer()) return;
-    {   float b[2] = { 0, 0 }; bool m[2] = { false, false }; int fx[2] = { 0, 0 }, ln[2] = { -1, -1 }, kd[2] = { 0, 0 }; bool gr[2] = { false, false };
+    {   float b[2] = { 0, 0 }; bool m[2] = { false, false }; int fx[2] = { 0, 0 }, ln[2] = { -1, -1 }, kd[2] = { 0, 0 }; bool gr[2] = { false, false }, qk[2] = { false, false };
         if (g_cyOn) for (int i = 0; i < g_cyN; i++) { const char *id = g_cyInst[i].id; int sd = Cy_ArmSide(id); if (sd < 0) continue;
             bool mech = !strncmp(id, "arm_mech", 8), launch = !strncmp(id, "arm_launch", 10);
+            if (!strncmp(id, "arm_quickie", 11)) for (int h = 0; h < 2; h++) if (sd == h) qk[h] = true;
             if (!strncmp(id, "arm_grapple", 11)) { for (int h = 0; h < 2; h++) if (sd == h || sd == 2) gr[h] = true; continue; }
             int e = Cy_ArmFx(id);
             for (int h = 0; h < 2; h++) if (sd == h || sd == 2) {
                 if (mech) m[h] = true;
                 if (launch) ln[h] = Cy_LaunchKind(id);
                 else { if (sd != 2) b[h] += Cy_ArmBonus(id); kd[h] = mech ? 2 : 1; fx[h] = e; } } }   /* (the old pairs raised Unarmed Damage itself) */
-        for (int h = 0; h < 2; h++) { g_cyMechHand[h] = m[h]; g_cyArmDmg[h] = b[h]; g_cyArmKindH[h] = kd[h]; g_cyArmFxH[h] = fx[h]; g_cyLaunchH[h] = ln[h]; g_cyGrapH[h] = gr[h]; }
+        for (int h = 0; h < 2; h++) { g_cyMechHand[h] = m[h]; g_cyArmDmg[h] = b[h]; g_cyArmKindH[h] = kd[h]; g_cyArmFxH[h] = fx[h]; g_cyLaunchH[h] = ln[h]; g_cyGrapH[h] = gr[h]; g_cyQuickieH[h] = qk[h]; }
         g_cyMechArms = m[0] || m[1]; }
     Cy_SkillsTick();
     Cy_FxFlush();
