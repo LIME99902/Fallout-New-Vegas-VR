@@ -33,9 +33,9 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        236
-#define FNVR_VERSION_STR    "2.14.1 (arm weapons one arm at a time - a mantis blade on one arm, a Mech Arm on the other - half price each, each hand's blows get its own arm's damage; 2.14.0: Mech Arms implant: +4 Strength, +40 unarmed damage, grab people to ragdoll and throw them (robots, deathclaws and giants at Strength 10+), both hands pull a limb off, chest punches send them flying; 2.13.7: PS VR2 Sense: the aim angle taken from SteamVR's own description of the controller (its tip); every controller's tip and grip logged; 2.13.6: KRISS Vector: the real charging handle on the left side - cut out of the body model as its own part - swings out and pulls back; 2.13.5: KRISS Vector: its folding charging handle swings out, pulls back and folds away when you work it; Hunter: the footlocker key and the chest made yours by the DLL; 2.13.4: Fiends drop a Fiend Ear, Hunter pays 50 caps each; 50 Legion ears clear your name with the NCR back to Liked; 2.13.3: Hunter buys Legion ears: 400 caps each if the NCR idolizes you, 250 if it likes you, 100 otherwise; 2.13.2: Hunter's \"Everything you need.\" opens the ripperdoc - read off the dialogue screen; the screen stays a ripperdoc while open; 2.13.1: Hunter is the only ripperdoc, at the New Vegas Medical Clinic; chromed characters: the script that finds them is accepted by the game now (2.10-2.13.0 never chromed anyone); 2.13.0: Hunter (FNVVRMC - Hunter.esp), his chrome topic opens the cyberware screen; 2.12.0: dual-wielding characters: Ambidex Coprocessor implant; 2.11.0: chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
-#define FNVR_VERSION_SHORT  "2.14.1"
+#define FNVR_VERSION        237
+#define FNVR_VERSION_STR    "2.15.0 (Grapple Arm cyberware (1000 caps an arm, hooked people arrive hurt and bleeding), arm rocket launcher (frag, thermal, electric, toxic, shrapnel), Mech Arm kinds (bladed, thermal, electric, toxic), blades and Mech Arms scale with Melee Weapons / Unarmed, the launcher with Explosives - FNVVRMC - Cyberware.esp; 2.14.1: arm weapons one arm at a time - a mantis blade on one arm, a Mech Arm on the other - half price each, each hand's blows get its own arm's damage; 2.14.0: Mech Arms implant: +4 Strength, +40 unarmed damage, grab people to ragdoll and throw them (robots, deathclaws and giants at Strength 10+), both hands pull a limb off, chest punches send them flying; 2.13.7: PS VR2 Sense: the aim angle taken from SteamVR's own description of the controller (its tip); every controller's tip and grip logged; 2.13.6: KRISS Vector: the real charging handle on the left side - cut out of the body model as its own part - swings out and pulls back; 2.13.5: KRISS Vector: its folding charging handle swings out, pulls back and folds away when you work it; Hunter: the footlocker key and the chest made yours by the DLL; 2.13.4: Fiends drop a Fiend Ear, Hunter pays 50 caps each; 50 Legion ears clear your name with the NCR back to Liked; 2.13.3: Hunter buys Legion ears: 400 caps each if the NCR idolizes you, 250 if it likes you, 100 otherwise; 2.13.2: Hunter's \"Everything you need.\" opens the ripperdoc - read off the dialogue screen; the screen stays a ripperdoc while open; 2.13.1: Hunter is the only ripperdoc, at the New Vegas Medical Clinic; chromed characters: the script that finds them is accepted by the game now (2.10-2.13.0 never chromed anyone); 2.13.0: Hunter (FNVVRMC - Hunter.esp), his chrome topic opens the cyberware screen; 2.12.0: dual-wielding characters: Ambidex Coprocessor implant; 2.11.0: chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_SHORT  "2.15.0"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -399,7 +399,10 @@ static bool  g_ltBullet = true; static int g_bulletKey = 46;   /* INI [Controls]
 static bool  g_momentumOnIni = true;   /* INI [Controls] bJumpMomentum */
 static bool  g_armSwing = true; static float g_armSwingSens = 1.0f; static bool g_armSwingSprint = true;   /* INI [Controls] bArmSwing, fArmSwingSensitivity, bArmSwingSprint */
 static bool  g_grapOn = true, g_grapSafe = true;   /* INI [Grapple] bEnabled, bSafeLanding */
-static bool  g_cyMechArms = false, g_cyMechHand[2] = { false, false }; static float g_cyArmDmg[2] = { 0, 0 };   /* (each arm's weapon: Mech Arm, and the extra damage that hand's blows do) */   /* (Mech Arms installed: grab and throw people, rip limbs off, chest punches send them flying) */
+static bool  g_cyMechArms = false, g_cyMechHand[2] = { false, false }; static float g_cyArmDmg[2] = { 0, 0 }; static int g_cyArmKindH[2], g_cyArmFxH[2], g_cyLaunchH[2] = { -1, -1 }; static bool g_cyGrapH[2];
+static bool Grap_HandOn(int h);
+static struct { char *ref; uint32_t id; int fx; } g_cyFxQ[16]; static int g_cyFxN = 0;
+static float Cy_ArmBlow(int h, char *ref, uint32_t id);   /* (each arm's weapon: Mech Arm, and the extra damage that hand's blows do) */   /* (Mech Arms installed: grab and throw people, rip limbs off, chest punches send them flying) */
 static bool  g_cyOn = true, g_cyAnywhere = false, g_cyEnemies = true;   /* INI [Cyberware] bEnabled, bRipperdocAnywhere, bChromedEnemies */
 static bool  g_grapHand[2] = { true, false };      /* INI [Grapple] bLeftHand, bRightHand */
 static bool  g_grapRope = true, g_grapRumble = true, g_grapActors = true;   /* INI [Grapple] bShowRope, bRumble, bHookActors */
@@ -2220,7 +2223,7 @@ static void Controllers_Poll(bool menu)
     if (g_swingFrames > 0) p->bRightTrigger = 255;                               /* swing = attack */
     if (!menu && QpcMs() < g_weaponSettleUntil - 600.0) p->bRightTrigger = 0;     /* the new gun is still being drawn */
     {   int ah = g_leftHanded ? 0 : 1;   /* weapon hand making the grapple fist (no gun out): the trigger fires the line, not an attack */
-        if (!menu && g_grapOn && g_grapHand[ah] && g_gripHeld[ah] && (!g_weaponOutThisFrame || PlayerWeaponType() <= 2)) p->bRightTrigger = 0; }
+        if (!menu && g_grapOn && Grap_HandOn(ah) && g_gripHeld[ah] && (!g_weaponOutThisFrame || PlayerWeaponType() <= 2)) p->bRightTrigger = 0; }
 
     /* Button layout (Touch -> game action). The Xbox button for each action is read from the game's
        own control bindings (FalloutPrefs.ini), so it follows whatever the game is set to.
@@ -11337,7 +11340,7 @@ static void Hit_Strike(HrActor *A, int b, const float *C, const float *v, float 
         int wt = PlayerWeaponType();
         float base = g_hrStrikeW ? Hit_BaseDamageOf(g_hrStrikeW, *(BYTE *)((char *)g_hrStrikeW + 0xF4), 1) : Hit_BaseDamage(wt), spdF = fminf(fmaxf(I / 3.0f, 0.35f), 1.6f);
         float pm = part == 1 ? 1.6f : part == 0 ? 1.0f : 0.7f;
-        if (h >= 0 && h < 2 && g_cyArmDmg[h] > 0 && PlayerWeaponType() <= 0) base += g_cyArmDmg[h];   /* (that arm's blade or Mech Arm) */
+        if (h >= 0 && h < 2 && g_cyArmDmg[h] > 0 && PlayerWeaponType() <= 0) base += Cy_ArmBlow(h, A->ref, A->id);   /* (that arm's blade or Mech Arm - and its effect) */
         dmg10 = (int)(base * spdF * pm * (stab ? 1.4f : 1.0f) * g_dmgMult * 10.0f + 0.5f);
         if (dmg10 < 1) dmg10 = 1;
     }
@@ -16492,9 +16495,11 @@ static void Grap_End(char *player, char *ctrl, bool launch, const char *why)
     g_grap.coolUntil = QpcMs() + 250.0;
     Log("Grapple: %s - flying on at %.1f m/s (up %.1f m/s)", why, V3Len(v) / g_unitsPerMeter, v[2] / g_unitsPerMeter);
 }
+static bool Grap_HandOn(int h) { return g_cyOn ? g_cyGrapH[h] : g_grapHand[h]; }   /* (with cyberware on, the grapple is a Grapple Arm you buy, one per arm)*/
 static bool Grap_HandFree(int h)
 {
-    if (!g_grapHand[h] || !g_handWOk[h] || g_holding[h] || g_climb[h]) return false;
+    if (!Grap_HandOn(h) || !g_handWOk[h] || g_holding[h] || g_climb[h]) return false;
+    if (g_cyLaunchH[h] >= 0) return false;   /* (that arm has a rocket launcher: the same squeeze fires it) */
     int ah = g_leftHanded ? 0 : 1;
     if (h == ah && g_weaponOutThisFrame && PlayerWeaponType() > 2) return false;   /* the gun hand: only without a gun out */
     return true;
@@ -16546,7 +16551,7 @@ static void Grapple_Update(char *player, char *cam, float dt)
     if (g_yank.on) {   /* pulling a person to you */
         int yh = g_yank.hand;
         bool alive = g_yank.ref && LookupForm(g_yank.id) == (void *)g_yank.ref;
-        if (!ok || !alive || !combo[yh] || !g_grapHand[yh]) { g_yank.on = false; Log("Grapple: let them go"); return; }
+        if (!ok || !alive || !combo[yh] || !Grap_HandOn(yh)) { g_yank.on = false; Log("Grapple: let them go"); return; }
         g_yank.t += dt;
         const float *A = (const float *)(g_yank.ref + 0x30);
         float hd = *PlayerRotZ(player);
@@ -16558,7 +16563,12 @@ static void Grapple_Update(char *player, char *cam, float dt)
         float step = g_yank.speed * dt;
         if (dist < fmaxf(0.4f * g_unitsPerMeter, step) || g_yank.t > 6.0f) {
             g_yank.on = false;
-            if (dist < 1.0f * g_unitsPerMeter) { g_actPushRef = g_yank.ref; g_actPushID = g_yank.id; }
+            if (dist < 1.0f * g_unitsPerMeter) { g_actPushRef = g_yank.ref; g_actPushID = g_yank.id;
+                if (g_cyOn && g_cyGrapH[yh]) {   /* the Grapple Arm: they arrive hurt (50) and bleeding */
+                    if (g_hrDmgScr && g_scriptIntf->CallFunctionAlt) g_scriptIntf->CallFunctionAlt(g_hrDmgScr, player, 3, g_yank.ref, 500, 0);
+                    if (g_cyFxN < 16) { g_cyFxQ[g_cyFxN].ref = g_yank.ref; g_cyFxQ[g_cyFxN].id = g_yank.id; g_cyFxQ[g_cyFxN].fx = 4; g_cyFxN++; }
+                    Log("Grapple Arm: pulled in %08X - 50 damage, bleeding", g_yank.id);
+                } }
             Grap_Buzz(yh, 3999);
             Log("Grapple: %s (%.1f s)", dist < 1.0f * g_unitsPerMeter ? "pulled them to you" : "took too long", g_yank.t);
             return;
@@ -16571,7 +16581,7 @@ static void Grapple_Update(char *player, char *cam, float dt)
     }
 
     if (g_grap.pull && fireH < 0) {
-        if (!ok || !g_grapHand[h]) { Grap_End(player, ctrl, false, "stopped"); return; }
+        if (!ok || !Grap_HandOn(h)) { Grap_End(player, ctrl, false, "stopped"); return; }
         if (!combo[h]) { Grap_End(player, ctrl, true, "let go early"); return; }
         g_grap.t += dt;
         float chest[3] = { P[0], P[1], P[2] + (g_gameEyeUnits > 50.0f ? g_gameEyeUnits : 118.0f) * 0.72f };
@@ -20031,7 +20041,7 @@ static const SetOpt g_setOpts[] = {
     { SP_MOVE, ST_BOOL, "Hard arm swings sprint", "Controls", "bArmSwingSprint", &g_armSwingSprint, 0, 0, 0, 0, 0, 0, "Swinging your arms hard makes you sprint." },
     { SP_MOVE, ST_BOOL, "No fall damage in power armor", "Controls", "bPowerArmorNoFallDamage", &g_paNoFall, 0, 0, 0, 0, 0, 0, "While you wear power armor, falling from any height doesn't hurt you." },
     { SP_MOVE, ST_BOOL, "Grappling hook", "Grapple", "bEnabled", &g_grapOn, 0, 0, 0, 0, 0, 0, "Fist (grip) + trigger: shoot a line where your hand points and get pulled there. Let go early to launch." },
-    { SP_MOVE, ST_BOOL, "Grapple: left hand", "Grapple", "bLeftHand", &g_grapHand[0], 0, 0, 0, 0, 0, 0, "Left grip + left trigger fires the grapple." },
+    { SP_MOVE, ST_BOOL, "Grapple: left hand", "Grapple", "bLeftHand", &g_grapHand[0], 0, 0, 0, 0, 0, 0, "Left grip + left trigger fires the grapple. (With cyberware on, the grapple comes from a Grapple Arm installed at the ripperdoc instead.)" },
     { SP_MOVE, ST_BOOL, "Grapple: right hand", "Grapple", "bRightHand", &g_grapHand[1], 0, 0, 0, 0, 0, 0, "Right grip + right trigger fires the grapple - only while no gun is out (with a gun the trigger shoots). Fire from the other hand mid-pull to swing on." },
     { SP_MOVE, ST_FLOAT, "Grapple range", "Grapple", "fRange", &g_grapRange, 5.0f, 150.0f, 5.0f, "%.0f m", 0, 0, "How far the line reaches." },
     { SP_MOVE, ST_FLOAT, "Grapple top speed", "Grapple", "fTopSpeed", &g_grapSpeed, 5.0f, 80.0f, 1.0f, "%.0f m/s", 0, 0, "How fast the line pulls you once it's up to speed (it starts slower and speeds up)." },

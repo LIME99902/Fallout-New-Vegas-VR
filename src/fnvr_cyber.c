@@ -26,7 +26,7 @@ enum { CY_CORE, CY_CORTEX, CY_OPTICS, CY_CIRC, CY_NERVE, CY_DERMAL, CY_SKEL, CY_
 static const char *const g_cySlotName[CY_NSLOT] = { "NEURAL CORE", "CORTEX", "OPTICS", "CIRCULATORY", "NERVOUS", "DERMAL",
                                                     "SKELETON", "IMMUNE", "ARMS", "HANDS", "LEGS" };
 static const int g_cySlotMax[CY_NSLOT] = { 1, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3 };   /* (one Neural Core: the grip squeeze sets off one ability) */
-enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH };
+enum { CYS_NONE, CYS_HEART, CYS_SLOWMO, CYS_BERSERK, CYS_CAMO, CYS_NOFALL, CYS_DJUMP, CYS_MECH, CYS_LAUNCH };
 typedef struct { const char *av; int amt; } CyMod;
 typedef struct {
     const char *id; int slot; const char *name; int price, load, special;
@@ -110,6 +110,46 @@ static const CyImpl g_cyCat[] = {
       "A heavy hydraulic left arm: +2 Strength, +40 damage to that fist. It grabs people off their feet and throws them, a punch with it to the chest sends them flying, and with both hands on someone it rips a limb off. Robots, deathclaws and giants need Strength 10." },
     { "arm_mech_r",     CY_ARMS, "Mech Arm (right)", 4500, 5, CYS_MECH, { { "Strength", 2 } },
       "A heavy hydraulic right arm: +2 Strength, +40 damage to that fist. It grabs people off their feet and throws them, a punch with it to the chest sends them flying, and with both hands on someone it rips a limb off. Robots, deathclaws and giants need Strength 10." },
+    { "arm_mechblade_l", CY_ARMS, "Mech Arm: Bladed (left)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic left arm with razor edges along the knuckles: hits leave them bleeding. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands." },
+    { "arm_mechblade_r", CY_ARMS, "Mech Arm: Bladed (right)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic right arm with razor edges along the knuckles: hits leave them bleeding. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands." },
+    { "arm_mechthermal_l", CY_ARMS, "Mech Arm: Thermal (left)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic left arm with heated knuckle plates: hits set them burning. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands." },
+    { "arm_mechthermal_r", CY_ARMS, "Mech Arm: Thermal (right)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic right arm with heated knuckle plates: hits set them burning. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands." },
+    { "arm_mechshock_l", CY_ARMS, "Mech Arm: Electric (left)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic left arm with arcing knuckle plates: hits shock them. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands." },
+    { "arm_mechshock_r", CY_ARMS, "Mech Arm: Electric (right)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic right arm with arcing knuckle plates: hits shock them. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands." },
+    { "arm_mechtoxic_l", CY_ARMS, "Mech Arm: Toxic (left)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic left arm with venom-fed knuckle spikes: hits poison them. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands." },
+    { "arm_mechtoxic_r", CY_ARMS, "Mech Arm: Toxic (right)", 5000, 5, CYS_MECH, { { "Strength", 2 } },
+      "A heavy hydraulic right arm with venom-fed knuckle spikes: hits poison them. +2 Strength, +40 damage to that fist (twice that at Unarmed 100), and all a Mech Arm does: grab and throw people, chest punches that send them flying, ripping limbs off with both hands." },
+    { "arm_launchfrag_l", CY_ARMS, "Launcher: Frag (left)", 4000, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the left forearm: explosive mini-rockets. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_launchfrag_r", CY_ARMS, "Launcher: Frag (right)", 4000, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the right forearm: explosive mini-rockets. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_launchthermal_l", CY_ARMS, "Launcher: Thermal (left)", 4500, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the left forearm: incendiary mini-rockets: the blast sets everyone in it burning. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_launchthermal_r", CY_ARMS, "Launcher: Thermal (right)", 4500, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the right forearm: incendiary mini-rockets: the blast sets everyone in it burning. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_launchshock_l", CY_ARMS, "Launcher: Electric (left)", 4500, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the left forearm: shock mini-rockets: the blast shocks everyone in it and stuns robots. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_launchshock_r", CY_ARMS, "Launcher: Electric (right)", 4500, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the right forearm: shock mini-rockets: the blast shocks everyone in it and stuns robots. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_launchtoxic_l", CY_ARMS, "Launcher: Toxic (left)", 4500, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the left forearm: gas mini-rockets: the blast poisons everyone in it. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_launchtoxic_r", CY_ARMS, "Launcher: Toxic (right)", 4500, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the right forearm: gas mini-rockets: the blast poisons everyone in it. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_launchshrapnel_l", CY_ARMS, "Launcher: Shrapnel (left)", 4500, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the left forearm: shrapnel mini-rockets: everyone in the blast bleeds. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_launchshrapnel_r", CY_ARMS, "Launcher: Shrapnel (right)", 4500, 5, CYS_LAUNCH, { { 0 } },
+      "A rocket launcher that folds out of the right forearm: shrapnel mini-rockets: everyone in the blast bleeds. Make a fist (grip), then pull the trigger: 3 rockets, one per pull, 70 explosive damage each (twice that at Explosives 100); it refills itself in 20 seconds (5 at Explosives 100)." },
+    { "arm_grapple_l", CY_ARMS, "Grapple Arm (left)", 1000, 2, CYS_NONE, { { 0 } },
+      "A grappling line that fires out of the left wrist. Make a fist (grip), then pull the trigger: it pulls you to where your hand points, or hooks a person and drags them to you - they arrive taking 50 damage and bleeding." },
+    { "arm_grapple_r", CY_ARMS, "Grapple Arm (right)", 1000, 2, CYS_NONE, { { 0 } },
+      "A grappling line that fires out of the right wrist. Make a fist (grip), then pull the trigger: it pulls you to where your hand points, or hooks a person and drags them to you - they arrive taking 50 damage and bleeding." },
     { "arm_recoil",     CY_ARMS, "Recoil Dampers", 2500, 4, CYS_NONE, { { "Guns", 8 } },
       "Shock absorbers in the elbow and shoulder joints soak up every kick." },
     { "hand_knuckle",   CY_HANDS, "Ripper Knuckles", 1500, 2, CYS_NONE, { { "UnarmedDamage", 8 } },
@@ -146,7 +186,7 @@ static void Cyber_Open(bool atDoc);
 
 /* the arm weapons: blades and Mech Arms. Those with _l / _r go on one arm; the old pairs (arm_kinetic, arm_mech...) are
    no longer sold but still work in saves that have them (and enemies carry them) */
-static bool Cy_ArmWeapon(const char *id) { return !strncmp(id, "arm_kinetic", 11) || !strncmp(id, "arm_thermal", 11) || !strncmp(id, "arm_shock", 9) || !strncmp(id, "arm_toxin", 9) || !strncmp(id, "arm_mech", 8); }
+static bool Cy_ArmWeapon(const char *id) { return !strncmp(id, "arm_kinetic", 11) || !strncmp(id, "arm_thermal", 11) || !strncmp(id, "arm_shock", 9) || !strncmp(id, "arm_toxin", 9) || !strncmp(id, "arm_mech", 8) || !strncmp(id, "arm_launch", 10) || !strncmp(id, "arm_grapple", 11); }
 static int Cy_ArmSide(const char *id)   /* 0 left, 1 right, 2 both (the old pairs), -1 not an arm weapon */
 {
     if (!Cy_ArmWeapon(id)) return -1;
@@ -155,6 +195,18 @@ static int Cy_ArmSide(const char *id)   /* 0 left, 1 right, 2 both (the old pair
 static float Cy_ArmBonus(const char *id)   /* (a one-arm weapon's damage to that hand's blows) */
 {
     return !strncmp(id, "arm_mech", 8) ? 40.0f : !strncmp(id, "arm_kinetic", 11) ? 15.0f : 12.0f;
+}
+static int Cy_ArmFx(const char *id)   /* an arm weapon's effect on what it hits: 0 none, 1 burning, 2 shock, 3 poison, 4 bleeding */
+{
+    if (strstr(id, "thermal")) return 1;
+    if (strstr(id, "shock")) return 2;
+    if (strstr(id, "toxi")) return 3;   /* (toxin blades, toxic fists) */
+    if (!strncmp(id, "arm_mechblade", 13)) return 4;
+    return 0;
+}
+static int Cy_LaunchKind(const char *id)   /* 0 frag, 1 thermal, 2 electric, 3 toxic, 4 shrapnel */
+{
+    return strstr(id, "thermal") ? 1 : strstr(id, "shock") ? 2 : strstr(id, "toxic") ? 3 : strstr(id, "shrapnel") ? 4 : 0;
 }
 static const CyImpl *Cy_Find(const char *id) { for (int i = 0; i < CY_NCAT; i++) if (!strcmp(g_cyCat[i].id, id)) return &g_cyCat[i]; return NULL; }
 static int Cy_InstIdx(const char *id) { for (int i = 0; i < g_cyN; i++) if (!strcmp(g_cyInst[i].id, id)) return i; return -1; }
@@ -440,6 +492,111 @@ static void Cy_Gesture(const VRControllerState_t *l, const VRControllerState_t *
     else if (phase == 2 && both) { phase = 0; if (Cy_Core()) g_cyActivate = true; }
 }
 #include "fnvr_cyber_enemy.c"
+/* ---- arm weapons: skills, the effects they put on what they hit, the arm launcher ---- */
+static int g_cySkExpl = 0, g_cySkMelee = 0, g_cySkUnarmed = 0;
+static void Cy_SkillsTick(void)
+{
+    static double at = 0; if (QpcMs() < at) return; at = QpcMs() + 2000.0;
+    static void *scr = NULL; static bool bad = false;
+    if (!scr && !bad) { scr = Cy_Compile("int iV\nBegin Function { }\nset iV to player.GetAV Explosives * 1000000 + player.GetAV MeleeWeapons * 1000 + player.GetAV Unarmed\nSetFunctionValue iV\nEnd\n"); bad = !scr; }
+    double v = 0; if (!scr || !Cy_CallNum(scr, 0, 0, &v) || v < 0) return;
+    long long n = (long long)(v + 0.5); g_cySkExpl = (int)(n / 1000000); g_cySkMelee = (int)(n / 1000 % 1000); g_cySkUnarmed = (int)(n % 1000);
+}
+/* (from the hit code) the extra damage this hand's arm weapon adds to a blow: blades x(1 + Melee Weapons/100), Mech Arms
+   x(1 + Unarmed/100) - double at 100 - and its effect queued to go on whoever was hit */
+static float Cy_ArmBlow(int h, char *ref, uint32_t id)
+{
+    if (h < 0 || h > 1 || g_cyArmDmg[h] <= 0) return 0;
+    float sk = g_cyArmKindH[h] == 2 ? (float)g_cySkUnarmed : (float)g_cySkMelee; if (sk > 100) sk = 100; if (sk < 0) sk = 0;
+    if (g_cyArmFxH[h] && ref && g_cyFxN < 16) { g_cyFxQ[g_cyFxN].ref = ref; g_cyFxQ[g_cyFxN].id = id; g_cyFxQ[g_cyFxN].fx = g_cyArmFxH[h]; g_cyFxN++; }
+    return g_cyArmDmg[h] * (1.0f + sk / 100.0f);
+}
+static void Cy_FxFlush(void)
+{
+    static void *scr = NULL; static bool bad = false;
+    if (g_cyFxN && !scr && !bad) {
+        scr = Cy_Compile("ref rWho\nint iK\nBegin Function { rWho, iK }\nif iK == 1\nrWho.CastImmediateOnSelf FNVVRMCEnchThermal\nelseif iK == 2\nrWho.CastImmediateOnSelf FNVVRMCEnchElectric\n"
+                         "elseif iK == 3\nrWho.CastImmediateOnSelf FNVVRMCEnchToxic\nelseif iK == 4\nrWho.CastImmediateOnSelf FNVVRMCEnchBleed\nendif\nEnd\n");
+        bad = !scr; if (bad) Log("Cyberware: arm weapon effects need FNVVRMC - Cyberware.esp");
+    }
+    for (int i = 0; i < g_cyFxN; i++)
+        if (scr && LookupForm(g_cyFxQ[i].id) == (void *)g_cyFxQ[i].ref && g_scriptIntf->CallFunctionAlt) {
+            g_scriptIntf->CallFunctionAlt(scr, GetPlayer(), 2, g_cyFxQ[i].ref, g_cyFxQ[i].fx);
+            static int l = 0; static const char *const nm[] = { "", "burning", "shocked", "poisoned", "bleeding" };
+            if (l++ < 20) Log("Cyberware: %08X %s (arm weapon)", g_cyFxQ[i].id, nm[g_cyFxQ[i].fx]);
+        }
+    g_cyFxN = 0;
+}
+/* the arm launcher: make a fist with that hand (grip) and pull the trigger - a mini-rocket out of the forearm. 3 rockets;
+   empty, it refills itself in 20 s (5 s at Explosives 100, in between in step); 70 explosive damage x(1 + Explosives/100). */
+static struct { int rounds; double refillAt; bool trigWas, gripWas, gripFirst; } g_cyLn[2] = { { 3, 0, false, false, false }, { 3, 0, false, false, false } };
+static void *Cy_Form(void *scr)
+{
+    typedef bool (*CallFn_t)(void *, void *, void *, void *, uint8_t, ...);
+    if (!scr || !g_scriptIntf || !g_scriptIntf->CallFunction || !GetPlayer()) return NULL;
+    struct { union { double num; void *form; } v; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
+    if (!((CallFn_t)g_scriptIntf->CallFunction)(scr, GetPlayer(), NULL, &res, 0) || res.type != 2) return NULL;
+    return res.v.form;
+}
+static void Cy_LaunchTick(void)
+{
+    static const char *const kn[5] = { "Frag", "Thermal", "Electric", "Toxic", "Shrapnel" };
+    static void *proj[5], *expl[5], *launcherW; static int dmgOff[5]; static bool tried = false, ok = false;
+    double now = QpcMs();
+    float sk = (float)(g_cySkExpl > 100 ? 100 : g_cySkExpl < 0 ? 0 : g_cySkExpl);
+    double refillMs = (20.0 - 15.0 * sk / 100.0) * 1000.0;
+    for (int h = 0; h < 2; h++) {
+        if (g_cyLaunchH[h] < 0) { g_cyLn[h].trigWas = false; continue; }
+        if (g_cyLn[h].rounds <= 0 && g_cyLn[h].refillAt > 0 && now >= g_cyLn[h].refillAt) {
+            g_cyLn[h].rounds = 3; g_cyLn[h].refillAt = 0;
+            if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 1500);
+            Log("Cyberware: %s arm launcher refilled - 3 rockets", h ? "right" : "left");
+        }
+        if (g_gripHeld[h] && !g_cyLn[h].gripWas) g_cyLn[h].gripFirst = g_grapTrigH[h] < 0.35f;   /* (fist first, then trigger - a trigger pulled first stays bullet time) */
+        if (!g_gripHeld[h]) g_cyLn[h].gripFirst = false;
+        g_cyLn[h].gripWas = g_gripHeld[h];
+        bool pull = g_gripHeld[h] && g_cyLn[h].gripFirst && g_grapTrigH[h] > 0.7f && g_handWOk[h] && !g_holding[h] && !g_pipOpen;
+        int ah = g_leftHanded ? 0 : 1;
+        if (h == ah && g_weaponOutThisFrame && PlayerWeaponType() > 2) pull = false;   /* (the gun hand with a gun out: its trigger fires the gun) */
+        bool edge = pull && !g_cyLn[h].trigWas; g_cyLn[h].trigWas = pull;
+        if (!edge) continue;
+        if (g_cyLn[h].rounds <= 0) {
+            if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 300);
+            char m[80]; snprintf(m, sizeof m, "Arm launcher refilling (%.0f s)", g_cyLn[h].refillAt > now ? (g_cyLn[h].refillAt - now) / 1000.0 : 0.0); UIMessage(m);
+            continue;
+        }
+        if (!tried) {
+            tried = true; char src[160]; ok = true;
+            for (int k = 0; k < 5; k++) {
+                snprintf(src, sizeof src, "ref r\nBegin Function { }\nset r to FNVVRMCArmRocket%s\nSetFunctionValue r\nEnd\n", kn[k]); void *s1 = Cy_Compile(src);
+                snprintf(src, sizeof src, "ref r\nBegin Function { }\nset r to FNVVRMCArmRocketExplosion%s\nSetFunctionValue r\nEnd\n", kn[k]); void *s2 = Cy_Compile(src);
+                proj[k] = Cy_Form(s1); expl[k] = Cy_Form(s2); dmgOff[k] = -1;
+                if (expl[k]) for (int o = 0x18; o < 0x100; o += 4) if (!IsBadReadPtr((char *)expl[k] + o, 4) && *(float *)((char *)expl[k] + o) == 70.0f) { dmgOff[k] = o; break; }
+                if (!proj[k] || !expl[k]) ok = false;
+                Log("Cyberware: arm launcher %s rocket %s, explosion damage %s", kn[k], proj[k] ? "found" : "MISSING", dmgOff[k] >= 0 ? "found" : "not found (fixed 70)");
+            }
+            launcherW = LookupForm(0x00004340);   /* (WeapMissileLauncher: the rockets count as an explosive weapon of yours) */
+            if (!ok) UIMessage("The arm launcher needs FNVVRMC - Cyberware.esp");
+        }
+        int k = g_cyLaunchH[h];
+        if (!ok || !proj[k] || !o_ProjSpawn) continue;
+        float dmg = 70.0f * (1.0f + sk / 100.0f);
+        if (dmgOff[k] >= 0) *(float *)((char *)expl[k] + dmgOff[k]) = dmg;
+        float d[3]; bool fd = now - g_foreDirAt[h] < 150.0 && V3Len(g_foreDirW[h]) > 0.5f;
+        for (int i = 0; i < 3; i++) d[i] = fd ? g_foreDirW[h][i] : -g_handWR[h][i][2];
+        float dl = V3Len(d); if (dl < 0.5f) continue; for (int i = 0; i < 3; i++) d[i] /= dl;
+        float pos[3]; for (int i = 0; i < 3; i++) pos[i] = g_handW[h][i] + d[i] * 12.0f + g_handWR[h][i][1] * 2.0f;
+        char *player = (char *)GetPlayer(); void *cell = *(void **)(player + 0x40);
+        float hh = atan2f(d[0], d[1]), pp = -asinf(fminf(fmaxf(d[2], -1.0f), 1.0f));
+        void *r = o_ProjSpawn(proj[k], player, NULL, launcherW, pos[0], pos[1], pos[2], hh, pp, NULL, NULL, 0, 0, 0.0f, 0.0f, (uint32_t)(uintptr_t)cell);
+        if (r) { int fo[4]; int nfo = BT_DirOffsets((char *)r, hh, pp, fo); BT_Add((char *)r, hh, pp, fo, nfo); }
+        g_cyLn[h].rounds--;
+        if (g_cyLn[h].rounds <= 0) g_cyLn[h].refillAt = now + refillMs;
+        if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
+        Log("Cyberware: %s arm launcher - %s rocket (%.0f damage), %d left%s", h ? "right" : "left", kn[k], dmg, g_cyLn[h].rounds,
+            g_cyLn[h].rounds <= 0 ? " - refilling" : "");
+    }
+}
 static bool g_cyTalkHunter = false;
 static bool g_cyFromDoc;
 /* does any text in this piece of the interface (or below it) contain needle */
@@ -604,12 +761,20 @@ static void Cy_Tick(void)
         dlgWas = dlg;
     }
     if (!g_inGameplay || !GetPlayer()) return;
-    {   float b[2] = { 0, 0 }; bool m[2] = { false, false };
-        if (g_cyOn) for (int i = 0; i < g_cyN; i++) { int sd = Cy_ArmSide(g_cyInst[i].id); if (sd < 0) continue;
-            bool mech = !strncmp(g_cyInst[i].id, "arm_mech", 8);
-            for (int h = 0; h < 2; h++) if (sd == h || sd == 2) { if (mech) m[h] = true; if (sd != 2) b[h] += Cy_ArmBonus(g_cyInst[i].id); } }   /* (the old pairs raised Unarmed Damage itself) */
-        g_cyMechHand[0] = m[0]; g_cyMechHand[1] = m[1]; g_cyArmDmg[0] = b[0]; g_cyArmDmg[1] = b[1];
+    {   float b[2] = { 0, 0 }; bool m[2] = { false, false }; int fx[2] = { 0, 0 }, ln[2] = { -1, -1 }, kd[2] = { 0, 0 }; bool gr[2] = { false, false };
+        if (g_cyOn) for (int i = 0; i < g_cyN; i++) { const char *id = g_cyInst[i].id; int sd = Cy_ArmSide(id); if (sd < 0) continue;
+            bool mech = !strncmp(id, "arm_mech", 8), launch = !strncmp(id, "arm_launch", 10);
+            if (!strncmp(id, "arm_grapple", 11)) { for (int h = 0; h < 2; h++) if (sd == h || sd == 2) gr[h] = true; continue; }
+            int e = Cy_ArmFx(id);
+            for (int h = 0; h < 2; h++) if (sd == h || sd == 2) {
+                if (mech) m[h] = true;
+                if (launch) ln[h] = Cy_LaunchKind(id);
+                else { if (sd != 2) b[h] += Cy_ArmBonus(id); kd[h] = mech ? 2 : 1; fx[h] = e; } } }   /* (the old pairs raised Unarmed Damage itself) */
+        for (int h = 0; h < 2; h++) { g_cyMechHand[h] = m[h]; g_cyArmDmg[h] = b[h]; g_cyArmKindH[h] = kd[h]; g_cyArmFxH[h] = fx[h]; g_cyLaunchH[h] = ln[h]; g_cyGrapH[h] = gr[h]; }
         g_cyMechArms = m[0] || m[1]; }
+    Cy_SkillsTick();
+    Cy_FxFlush();
+    Cy_LaunchTick();
     while (g_cyDeadR != g_cyDeadW) {   /* the dead: a Fiend leaves an ear */
         void *who = g_cyDead[g_cyDeadR & 31]; InterlockedIncrement(&g_cyDeadR);
         static void *dScr = NULL; static bool dBad = false;
