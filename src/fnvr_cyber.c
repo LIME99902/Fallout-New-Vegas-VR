@@ -568,6 +568,19 @@ static char *Cy_HackTarget(void)   /* the living character nearest the line your
     }
     return best;
 }
+/* Rogue AI landing: a red shock runs over them, they lock up for a second - then it takes all their health (the kill is yours) */
+static void Cy_RogueStart(char *ref)
+{
+    static void *sFx = NULL;
+    if (!g_cyStunScr) g_cyStunScr = Cy_Compile("ref rT\nint iOn\nBegin Function { rT, iOn }\nrT.SetRestrained iOn\nEnd\n");
+    if (!sFx) sFx = Cy_Compile("ref rT\nBegin Function { rT }\nrT.PlayMagicShaderVisuals LaserCritGlowFXShader 1.2\nrT.PlayMagicShaderVisuals DLC03TeslaFXShader 1.2\nEnd\n");
+    uint32_t id = *(uint32_t *)(ref + 0x0C); double now = QpcMs();
+    int i; for (i = 0; i < g_cyHkN; i++) if (g_cyHk[i].id == id && g_cyHk[i].kind == 6) return;   /* (already on its way) */
+    if (g_cyHkN >= 16) { g_cyHkN--; }   /* (the list full: the oldest goes - this one matters more) */
+    i = g_cyHkN++; g_cyHk[i].ref = ref; g_cyHk[i].id = id; g_cyHk[i].kind = 6; g_cyHk[i].until = now + 1000.0; g_cyHk[i].next = g_cyHk[i].until;
+    Ce_Call(sFx, ref, 1, 0, NULL);
+    Ce_Call(g_cyStunScr, ref, 2, 1, NULL);
+}
 static void Cy_Note(const char *m) { if (g_gameOk) QueueUIMessage(m, 0, NULL, NULL, 1.0f, false); }   /* (a short one: the scan overlay keeps them coming) */
 static void Cy_HackTick(void)
 {
@@ -582,7 +595,7 @@ static void Cy_HackTick(void)
     }
     last = now;
     static void *sBlind, *sSeeAgain, *sStop, *sDisarm, *sKill, *sKind, *sNearest, *sGlow, *sGlowOff; static bool tried = false;
-    if (!tried && (t || g_cyEyes)) { tried = true;
+    if (!tried && (t || g_cyEyes || g_cyHkN)) { tried = true;
         sBlind = Cy_Compile("ref rT\nBegin Function { rT }\nrT.ModAV Perception -10\nrT.StopCombat\nEnd\n");
         sSeeAgain = Cy_Compile("ref rT\nBegin Function { rT }\nrT.ModAV Perception 10\nEnd\n");
         sStop = Cy_Compile("ref rT\nBegin Function { rT }\nif rT.IsInCombat\nrT.StopCombat\nendif\nEnd\n");
@@ -599,6 +612,7 @@ static void Cy_HackTick(void)
     for (int i = 0; i < g_cyHkN; ) {
         char *r = g_cyHk[i].ref; bool live = LookupForm(g_cyHk[i].id) == (void *)r && Ce_Num(2, r) < 0.5;
         if (!live || now >= g_cyHk[i].until) {
+            if (live && g_cyHk[i].kind == 6) { Ce_Call(g_cyStunScr, r, 2, 0, NULL); Ce_Call(sKill, r, 1, 0, NULL); Log("Rogue AI: %s (%08X) - all their health gone", Cy_RefName(r), g_cyHk[i].id); }
             if (live) { if (g_cyHk[i].kind == 5) Ce_Call(g_cyStunScr, r, 2, 0, NULL); if (g_cyHk[i].kind == 0) Ce_Call(sSeeAgain, r, 1, 0, NULL); if (g_cyHk[i].kind == 2) { Ce_SetAggr(r, g_cyHk[i].aggr); Ce_Call(sStop, r, 1, 0, NULL); } }
             g_cyHk[i] = g_cyHk[--g_cyHkN]; continue;
         }
@@ -648,7 +662,7 @@ static void Cy_HackTick(void)
     }
     if (k == 3) ok = Ce_ChromeOff(r, now + CY_HACK_MS);
     if (!ok) { Cy_Note("No cyberware in them to shut off"); Cy_Buzz(300); return; }
-    if (k == 4) Ce_Call(sKill, r, 1, 0, NULL);
+    if (k == 4) Cy_RogueStart(r);
     else if (k != 3) {   /* (one hack of each kind per person: a new one starts it over) */
         int i; for (i = 0; i < g_cyHkN; i++) if (g_cyHk[i].id == id && g_cyHk[i].kind == k) break;
         if (i == g_cyHkN) {
@@ -822,7 +836,7 @@ static void Cy_JackRogue(const float *o, const float *f)
     if (!sK) sK = Cy_Compile("ref rT\nBegin Function { rT }\nrT.Kill player\nEnd\n");
     if (!sKind) sKind = Cy_Compile("ref rT\nint iV\nBegin Function { rT }\nset iV to rT.GetCreatureType\nSetFunctionValue iV\nEnd\n");
     if (*(BYTE *)(best + 0x04) == 0x3C) { double kd = -1; Ce_Call(sKind, best, 1, 0, &kd); if ((int)kd != 6) return; }   /* (people and robots only) */
-    Ce_Call(sK, best, 1, 0, NULL);
+    (void)sK; Cy_RogueStart(best);
     char m[96]; snprintf(m, sizeof m, "Jack's Favorite: ROGUE AI uploaded - %s", Cy_RefName(best)); UIMessage(m); Cy_Buzz(3999);
     Log("Jack's Favorite: Rogue AI on %s (%08X)", Cy_RefName(best), *(uint32_t *)(best + 0x0C));
 }
