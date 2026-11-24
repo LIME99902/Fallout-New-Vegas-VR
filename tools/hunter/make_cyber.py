@@ -16,8 +16,10 @@ FIRE, SHOCK, POISON, DMGHP, PULSE, FLAMERVIS = 0x14B, 0x14D, 0x31851, 0x33595, 0
 
 def ench(edid, name, effects):
     r = Rec('ENCH', new(), subs=[['EDID', z(edid)], ['FULL', z(name)], ['ENIT', struct.pack('<IIIB3s', 2, 0, 0, 0, b'\0\0\0')]])
-    for mg, mag, dur in effects:   # (magnitude, area 0, duration, on target, actor value from the effect itself)
-        r.subs += [['EFID', fid(mg)], ['EFIT', struct.pack('<IIIIi', mag, 0, dur, 2, -1)]]
+    for mg, mag, dur in effects:   # (magnitude, area 0, duration, touch - as the game's own weapon enchantments - and Health
+        # for the damage effects: an effect with no actor value set does nothing)
+        av = 16 if mg in (FIRE, SHOCK, POISON, DMGHP) else -1
+        r.subs += [['EFID', fid(mg)], ['EFIT', struct.pack('<IIIIi', mag, 0, dur, 1, av)]]
     return r
 
 # what blades and Mech Arm fists put on whoever they hit (cast on them by FNVR)
@@ -53,7 +55,7 @@ for name, base, en in kinds:
     projs.append(p)
 
 # Jack's Favorite (legendary launcher arm): a laser beam - the RCW's auto beam, each bolt bursting into a small burn on what it hits
-jx = R[0x60C2E].copy(); jx.fid = new(); jx.subs = [x for x in jx.subs if x[0] != 'EITM']
+jx = R[0x60C2E].copy(); jx.fid = new(); jx.subs = [x for x in jx.subs if x[0] not in ('EITM', 'MODT')]
 jx.set('EDID', z('FNVVRMCArmRocketExplosionJack'))
 d = bytearray(jx.get('DATA')); struct.pack_into('<3f', d, 0, 2.0, 5.0, 40.0); jx.set('DATA', bytes(d))
 i = [k for k, x in enumerate(jx.subs) if x[0] == 'MODL']

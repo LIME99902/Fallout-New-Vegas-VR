@@ -1336,7 +1336,7 @@ static void Cyber_Init(NVSEInterface *nvse, PluginHandle h)
 #define CY_PANEL RGB(12, 22, 28)
 #define CY_TXT RGB(206, 236, 232)
 #define CY_DIM RGB(92, 130, 128)
-static int g_cySlot = 0, g_cyItem = 0, g_cyCol = 0, g_cyBtn = 0;   /* column 0 slots, 1 implants, 2 buttons */
+static int g_cySlot = 0, g_cyItem = 0, g_cyCol = 0, g_cyBtn = 0, g_cyTop = 0;   /* column 0 slots, 1 implants, 2 buttons */
 static int g_cyHoverKind = 0, g_cyHoverIdx = -1;
 static char g_cyMsg[200]; static double g_cyMsgUntil = 0;
 static bool g_cyFromDoc = false;
@@ -1365,6 +1365,10 @@ static void Cyber_Open(bool atDoc)
 #define CY_DY0 590
 #define CY_BTNY0 1090
 #define CY_BTNY1 1160
+#define CY_ROWS 5        /* implants shown at once - the arms have dozens: the list scrolls */
+#define CY_LISTMAX 64
+#define CY_MOREY0 (CY_Y0 + CY_ROWS * CY_ITH)
+#define CY_MOREY1 (CY_MOREY0 + 56)
 static void Cy_Btn(int x0, int y0, int x1, int y1, const char *s, bool sel, bool enabled, COLORREF c)
 {
     if (sel) Set_Fill(x0, y0, x1, y1, enabled ? c : CY_DIM);
@@ -1381,7 +1385,7 @@ static void Cy_Draw(void)
     Set_Fill(0, 0, 4, SET_H, CY_TEAL); Set_Fill(SET_W - 4, 0, SET_W, SET_H, CY_TEAL);
     Set_Fill(24, 26, 34, 104, CY_RED);
     Set_Text(g_setFontBig, CY_TEAL, 48, 18, SET_W - 40, 82, doc ? "RIPPERDOC" : "CYBERWARE", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-    Set_Text(g_setFontSmall, CY_DIM, 50, 76, SET_W - 40, 112, g_cyAtDoc ? "DOC USANAGI  //  NEW VEGAS MEDICAL CLINIC" : g_cyAnywhere ? "RIPPERDOC ANYWHERE (TESTING) IS ON" : "VIEW ONLY  //  INSTALL AT DOC USANAGI, NEW VEGAS MEDICAL CLINIC", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    Set_Text(g_setFontSmall, CY_DIM, 50, 76, SET_W - 40, 112, g_cyAtDoc ? "HUNTER  //  NEW VEGAS MEDICAL CLINIC" : g_cyAnywhere ? "RIPPERDOC ANYWHERE (TESTING) IS ON" : "VIEW ONLY  //  INSTALL AT A RIPPERDOC (OR TURN ON RIPPERDOC ANYWHERE)", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
     int caps = g_cyCapsShown; snprintf(t, sizeof t, "%d CAPS", caps);
     Set_Text(g_setFont, CY_TXT, 40, 22, SET_W - 40, 80, t, DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
     /* capacity */
@@ -1404,10 +1408,22 @@ static void Cy_Draw(void)
         Set_Text(g_setFontSmall, foc ? CY_BG : CY_DIM, CY_LX1 - 80, y0, CY_LX1 - 10, y1, t, DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
     }
     /* implants for the slot */
-    const CyImpl *it[8]; int ni = Cy_SlotItems(g_cySlot, it, 8);
+    const CyImpl *it[CY_LISTMAX]; int ni = Cy_SlotItems(g_cySlot, it, CY_LISTMAX);
     if (g_cyItem >= ni) g_cyItem = ni - 1; if (g_cyItem < 0) g_cyItem = 0;
-    for (int i = 0; i < ni; i++) {
-        int y0 = CY_Y0 + i * CY_ITH, y1 = y0 + CY_ITH - 8;
+    if (g_cyItem < g_cyTop) g_cyTop = g_cyItem;   /* (the list scrolls to keep the picked one in view) */
+    if (g_cyItem >= g_cyTop + CY_ROWS) g_cyTop = g_cyItem - CY_ROWS + 1;
+    if (g_cyTop > ni - CY_ROWS) g_cyTop = ni - CY_ROWS; if (g_cyTop < 0) g_cyTop = 0;
+    if (ni > CY_ROWS) {   /* more than fit: where you are in the list, and PREV / NEXT to page through it */
+        int my0 = CY_MOREY0, my1 = CY_MOREY1 - 8, mid = (CY_RX0 + CY_RX1) / 2;
+        bool hp = g_cyHoverKind == 4 && g_cyHoverIdx == 0, hn = g_cyHoverKind == 4 && g_cyHoverIdx == 1;
+        Set_Fill(CY_RX0, my0, mid - 4, my1, hp ? RGB(18, 50, 54) : CY_PANEL); Set_Fill(mid + 4, my0, CY_RX1, my1, hn ? RGB(18, 50, 54) : CY_PANEL);
+        Set_Text(g_setFontSmall, g_cyTop > 0 ? CY_TEAL : CY_DIM, CY_RX0 + 20, my0, mid - 20, my1, "<  PREVIOUS", DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+        Set_Text(g_setFontSmall, g_cyTop + CY_ROWS < ni ? CY_TEAL : CY_DIM, mid + 20, my0, CY_RX1 - 20, my1, "NEXT  >", DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
+        snprintf(t, sizeof t, "%d-%d OF %d", g_cyTop + 1, g_cyTop + CY_ROWS, ni);
+        Set_Text(g_setFontSmall, CY_DIM, CY_RX0, my0, CY_RX1, my1, t, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+    }
+    for (int i = g_cyTop; i < ni && i < g_cyTop + CY_ROWS; i++) {
+        int y0 = CY_Y0 + (i - g_cyTop) * CY_ITH, y1 = y0 + CY_ITH - 8;
         bool sel = i == g_cyItem, foc = sel && g_cyCol == 1, hov = g_cyHoverKind == 2 && g_cyHoverIdx == i, inst = Cy_InstIdx(it[i]->id) >= 0;
         Set_Fill(CY_RX0, y0, CY_RX1, y1, foc ? CY_TEAL : sel ? RGB(18, 50, 54) : hov ? RGB(14, 34, 38) : CY_PANEL);
         Set_Text(g_setFont, foc ? CY_BG : CY_TXT, CY_RX0 + 20, y0, CY_RX1 - 170, y1, it[i]->name, DT_LEFT | DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS);
@@ -1462,7 +1478,7 @@ static void Cy_Draw(void)
 static void Cy_Say(const char *m) { snprintf(g_cyMsg, sizeof g_cyMsg, "%s", m); g_cyMsgUntil = QpcMs() + 5000.0; g_setDirty = true; }
 static void Cy_Press(int btn)
 {
-    const CyImpl *it[8]; int ni = Cy_SlotItems(g_cySlot, it, 8);
+    const CyImpl *it[CY_LISTMAX]; int ni = Cy_SlotItems(g_cySlot, it, CY_LISTMAX);
     if (!ni) return;
     const CyImpl *c = it[g_cyItem < ni ? g_cyItem : 0];
     Cy_Say(btn == 0 ? Cy_Install(c) : Cy_Remove(c));
@@ -1499,18 +1515,23 @@ static bool Cy_Pointer(float *px, float *py)
 static void Cy_Update(const VRControllerState_t *mv, const VRControllerState_t *am, bool okMv, bool okAm, bool trigEdge, bool aEdge, bool bEdge)
 {
     static double navAt = 0; static int navDir = 0, sideDir = 0;
-    const CyImpl *it[8]; int ni = Cy_SlotItems(g_cySlot, it, 8);
+    const CyImpl *it[CY_LISTMAX]; int ni = Cy_SlotItems(g_cySlot, it, CY_LISTMAX);
     float px = 0, py = 0; int hk = 0, hi = -1;
     if (Cy_Pointer(&px, &py)) {
         if (px >= CY_LX0 && px <= CY_LX1 && py >= CY_Y0 && py < CY_Y0 + CY_NSLOT * CY_SLH) { hk = 1; hi = (int)((py - CY_Y0) / CY_SLH); }
-        else if (px >= CY_RX0 && px <= CY_RX1 && py >= CY_Y0 && py < CY_Y0 + ni * CY_ITH) { hk = 2; hi = (int)((py - CY_Y0) / CY_ITH); }
+        else if (px >= CY_RX0 && px <= CY_RX1 && py >= CY_Y0 && py < CY_Y0 + (ni - g_cyTop < CY_ROWS ? ni - g_cyTop : CY_ROWS) * CY_ITH) { hk = 2; hi = g_cyTop + (int)((py - CY_Y0) / CY_ITH); }
+        else if (ni > CY_ROWS && px >= CY_RX0 && px <= CY_RX1 && py >= CY_MOREY0 && py < CY_MOREY1) { hk = 4; hi = px < (CY_RX0 + CY_RX1) / 2 ? 0 : 1; }
         else if (py >= CY_BTNY0 && py <= CY_BTNY1 && px >= CY_RX0 && px <= CY_RX1) { hk = 3; hi = px < (CY_RX0 + CY_RX1) / 2 ? 0 : 1; }
     }
     if (hk != g_cyHoverKind || hi != g_cyHoverIdx) { g_cyHoverKind = hk; g_cyHoverIdx = hi; g_setDirty = true; if (hk) Set_Buzz(250); }
     if (trigEdge && hk) {
-        if (hk == 1) { g_cySlot = hi; g_cyItem = 0; g_cyCol = 0; Set_Buzz(700); }
+        if (hk == 1) { g_cySlot = hi; g_cyItem = 0; g_cyTop = 0; g_cyCol = 0; Set_Buzz(700); }
         else if (hk == 2) { g_cyItem = hi; g_cyCol = 1; Set_Buzz(700); }
         else if (hk == 3) { g_cyCol = 2; g_cyBtn = hi; Cy_Press(hi); }
+        else if (hk == 4) {   /* a page back or on */
+            int to = hi ? g_cyTop + CY_ROWS : g_cyTop - CY_ROWS; if (to > ni - CY_ROWS) to = ni - CY_ROWS; if (to < 0) to = 0;
+            g_cyTop = to; g_cyItem = to; g_cyCol = 1; Set_Buzz(500);
+        }
         g_setDirty = true;
     } else if (aEdge || (trigEdge && !hk)) {
         if (g_cyCol == 0) { g_cyCol = 1; g_cyItem = 0; }
@@ -1529,7 +1550,7 @@ static void Cy_Update(const VRControllerState_t *mv, const VRControllerState_t *
     if (nd != navDir) { navDir = nd; navAt = now; step = nd != 0; }
     else if (nd && now - navAt > 380.0) { navAt = now - 290.0; step = true; }
     if (step) {
-        if (g_cyCol == 0) { g_cySlot = (g_cySlot + nd + CY_NSLOT) % CY_NSLOT; g_cyItem = 0; }
+        if (g_cyCol == 0) { g_cySlot = (g_cySlot + nd + CY_NSLOT) % CY_NSLOT; g_cyItem = 0; g_cyTop = 0; }
         else if (g_cyCol == 1 && ni) g_cyItem = (g_cyItem + nd + ni) % ni;
         g_setDirty = true; Set_Buzz(300);
     }
