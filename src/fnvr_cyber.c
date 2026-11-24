@@ -793,8 +793,8 @@ static void Cy_FxFlush(void)
         if (scr && LookupForm(g_cyFxQ[i].id) == (void *)g_cyFxQ[i].ref && g_scriptIntf->CallFunctionAlt) {
             if (g_cyFxQ[i].fx == 6) {   /* Thunder Cannon: 100 electric damage to them and every enemy within 6 m (not your companions) */
                 static void *th = NULL; static bool thBad = false;
-                if (!th && !thBad) { th = Cy_Compile("ref rT\nref rW\nfloat fH\nint iN\nBegin Function { rT }\nset iN to 0\nset rW to GetFirstRef 200 1\nLabel 1\nif rW\nif rW != player\nif rW.GetDead == 0\nif rW.GetDistance rT < 420\n"
-                    "if rW == rT || rW.GetPlayerTeammate == 0\nset fH to rW.GetAV Health\nif fH <= 100\nrW.Kill player\nelse\nrW.DamageAV Health 100\nendif\nrW.CastImmediateOnSelf FNVVRMCEnchElectric\nrW.PlayMagicShaderVisuals PulseDisableFXShader 1\nset iN to iN + 1\nendif\nendif\nendif\nendif\nset rW to GetNextRef\nGoTo 1\nendif\nSetFunctionValue iN\nEnd\n");
+                if (!th && !thBad) { th = Cy_Compile("ref rT\nref rW\nfloat fH\nint iN\nBegin Function { rT }\nset iN to 0\nset rW to GetFirstRef 200 1\nwhile rW != 0\nif rW != player\nif rW.GetDead == 0\nif rW.GetDistance rT < 420\n"
+                    "if rW == rT || rW.GetPlayerTeammate == 0\nset fH to rW.GetAV Health\nif fH <= 100\nrW.Kill player\nelse\nrW.DamageAV Health 100\nendif\nrW.CastImmediateOnSelf FNVVRMCEnchElectric\nrW.PlayMagicShaderVisuals PulseDisableFXShader 1\nset iN to iN + 1\nendif\nendif\nendif\nendif\nset rW to GetNextRef\nloop\nSetFunctionValue iN\nEnd\n");   /* (a while loop, like the other scripts here - a GoTo out of an if block can upset the game's if-tracking) */
                     thBad = !th; if (thBad) Log("Thunder Cannon: couldn't set up its discharge"); }
                 double n = 0; if (th) Ce_Call(th, g_cyFxQ[i].ref, 1, 0, &n);
                 char m[80]; snprintf(m, sizeof m, "THUNDER CANNON - %d hit", (int)n); UIMessage(m); Cy_Buzz(3999);
