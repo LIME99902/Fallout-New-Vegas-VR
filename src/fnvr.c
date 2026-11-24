@@ -33,9 +33,9 @@
 #define VRIN_IMPL
 #include "../stereo/vrinput.h"
 
-#define FNVR_VERSION        251
-#define FNVR_VERSION_STR    "2.16.4 (Rogue AI: a red shock, frozen for a second, then all their health gone; 2.16.3: Jack's Favorite legendary launcher arm: a 1200-rpm burning laser beam, 6 s of fire, 6 s recharge, 0.05% Rogue AI per bolt; 2.16.2: Thunder Cannon legendary Mech Arm: 20% per hit - 100 electric damage to them and every enemy within 6 m; 2.16.1: Quickie legendary mantis blade: 30% per hit - Cyberware Malfunction, shock, 1 s stun; 2.16.0: Cyber Eyes (scan: outlines and health) and Brain Dancer Decks Mk.1-5: quickhacks - Reboot Optics, Weapon Glitch, Cyberpsychosis, Cyberware Malfunction, Rogue AI - on RAM; 2.15.9: Blood Driver arm implant: melee and unarmed hits heal 3%; 2.15.8: More RAM, Please arm implant: each kill takes 1 s off the ability cooldown; 2.15.7: Cyber Brained: Neural Core abilities last 4 s longer; 2.15.6: Cyber Brained perk: -4 s Neural Core cooldown per piece of chrome (6 s min), 3 s launcher refill, INT 10 + END 10; 2.15.5: Missile Barrage perk: 5 rockets, rocket kills refund rockets on your crit chance, LCK 10 + END 10; 2.15.4: Praying Mantis perk: blade hits stack bleeds - 5%/s healing and 1%/s enemy bleed per stack, AGI 10 + END 10; 2.15.3: Cyber Gorilla needs Strength 10 and Endurance 10; 2.15.2: Cyber Gorilla perk: Mech Arm blows up to +50% for swing speed and +50% for moving fast; 2.15.1: Dash Actuators leg implant: right grip + jump dashes 5 ft the way the left stick points, 20 AP; 2.15.0: Grapple Arm cyberware (1000 caps an arm, hooked people arrive hurt and bleeding), arm rocket launcher (frag, thermal, electric, toxic, shrapnel), Mech Arm kinds (bladed, thermal, electric, toxic), blades and Mech Arms scale with Melee Weapons / Unarmed, the launcher with Explosives - FNVVRMC - Cyberware.esp; 2.14.1: arm weapons one arm at a time - a mantis blade on one arm, a Mech Arm on the other - half price each, each hand's blows get its own arm's damage; 2.14.0: Mech Arms implant: +4 Strength, +40 unarmed damage, grab people to ragdoll and throw them (robots, deathclaws and giants at Strength 10+), both hands pull a limb off, chest punches send them flying; 2.13.7: PS VR2 Sense: the aim angle taken from SteamVR's own description of the controller (its tip); every controller's tip and grip logged; 2.13.6: KRISS Vector: the real charging handle on the left side - cut out of the body model as its own part - swings out and pulls back; 2.13.5: KRISS Vector: its folding charging handle swings out, pulls back and folds away when you work it; Hunter: the footlocker key and the chest made yours by the DLL; 2.13.4: Fiends drop a Fiend Ear, Hunter pays 50 caps each; 50 Legion ears clear your name with the NCR back to Liked; 2.13.3: Hunter buys Legion ears: 400 caps each if the NCR idolizes you, 250 if it likes you, 100 otherwise; 2.13.2: Hunter's \"Everything you need.\" opens the ripperdoc - read off the dialogue screen; the screen stays a ripperdoc while open; 2.13.1: Hunter is the only ripperdoc, at the New Vegas Medical Clinic; chromed characters: the script that finds them is accepted by the game now (2.10-2.13.0 never chromed anyone); 2.13.0: Hunter (FNVVRMC - Hunter.esp), his chrome topic opens the cyberware screen; 2.12.0: dual-wielding characters: Ambidex Coprocessor implant; 2.11.0: chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
-#define FNVR_VERSION_SHORT  "2.16.4"
+#define FNVR_VERSION        252
+#define FNVR_VERSION_STR    "2.16.5 (controllers that lose tracking (PS VR2 Bluetooth drop-outs, frozen poses) are let go instead of hanging in the air, no phantom speed when they come back; controllers on SteamVR device numbers past 15 work; FNVR.log goes to Documents\\My Games\\FalloutNV when the game is in Program Files; 2.16.4: Rogue AI: a red shock, frozen for a second, then all their health gone; 2.16.3: Jack's Favorite legendary launcher arm: a 1200-rpm burning laser beam, 6 s of fire, 6 s recharge, 0.05% Rogue AI per bolt; 2.16.2: Thunder Cannon legendary Mech Arm: 20% per hit - 100 electric damage to them and every enemy within 6 m; 2.16.1: Quickie legendary mantis blade: 30% per hit - Cyberware Malfunction, shock, 1 s stun; 2.16.0: Cyber Eyes (scan: outlines and health) and Brain Dancer Decks Mk.1-5: quickhacks - Reboot Optics, Weapon Glitch, Cyberpsychosis, Cyberware Malfunction, Rogue AI - on RAM; 2.15.9: Blood Driver arm implant: melee and unarmed hits heal 3%; 2.15.8: More RAM, Please arm implant: each kill takes 1 s off the ability cooldown; 2.15.7: Cyber Brained: Neural Core abilities last 4 s longer; 2.15.6: Cyber Brained perk: -4 s Neural Core cooldown per piece of chrome (6 s min), 3 s launcher refill, INT 10 + END 10; 2.15.5: Missile Barrage perk: 5 rockets, rocket kills refund rockets on your crit chance, LCK 10 + END 10; 2.15.4: Praying Mantis perk: blade hits stack bleeds - 5%/s healing and 1%/s enemy bleed per stack, AGI 10 + END 10; 2.15.3: Cyber Gorilla needs Strength 10 and Endurance 10; 2.15.2: Cyber Gorilla perk: Mech Arm blows up to +50% for swing speed and +50% for moving fast; 2.15.1: Dash Actuators leg implant: right grip + jump dashes 5 ft the way the left stick points, 20 AP; 2.15.0: Grapple Arm cyberware (1000 caps an arm, hooked people arrive hurt and bleeding), arm rocket launcher (frag, thermal, electric, toxic, shrapnel), Mech Arm kinds (bladed, thermal, electric, toxic), blades and Mech Arms scale with Melee Weapons / Unarmed, the launcher with Explosives - FNVVRMC - Cyberware.esp; 2.14.1: arm weapons one arm at a time - a mantis blade on one arm, a Mech Arm on the other - half price each, each hand's blows get its own arm's damage; 2.14.0: Mech Arms implant: +4 Strength, +40 unarmed damage, grab people to ragdoll and throw them (robots, deathclaws and giants at Strength 10+), both hands pull a limb off, chest punches send them flying; 2.13.7: PS VR2 Sense: the aim angle taken from SteamVR's own description of the controller (its tip); every controller's tip and grip logged; 2.13.6: KRISS Vector: the real charging handle on the left side - cut out of the body model as its own part - swings out and pulls back; 2.13.5: KRISS Vector: its folding charging handle swings out, pulls back and folds away when you work it; Hunter: the footlocker key and the chest made yours by the DLL; 2.13.4: Fiends drop a Fiend Ear, Hunter pays 50 caps each; 50 Legion ears clear your name with the NCR back to Liked; 2.13.3: Hunter buys Legion ears: 400 caps each if the NCR idolizes you, 250 if it likes you, 100 otherwise; 2.13.2: Hunter's \"Everything you need.\" opens the ripperdoc - read off the dialogue screen; the screen stays a ripperdoc while open; 2.13.1: Hunter is the only ripperdoc, at the New Vegas Medical Clinic; chromed characters: the script that finds them is accepted by the game now (2.10-2.13.0 never chromed anyone); 2.13.0: Hunter (FNVVRMC - Hunter.esp), his chrome topic opens the cyberware screen; 2.12.0: dual-wielding characters: Ambidex Coprocessor implant; 2.11.0: chrome on everyone, built to suit how each character fights; companions always chromed; 2.10.2: Joshua Graham maxed out too; 2.10.1: story bosses - Caesar, Motor-Runner, Lanius, Benny... - maxed-out chrome; 2.10.0: chromed enemies: implants scaled by your level, chromed-up bosses, speed bursts, berserk, camo, backup hearts, frenzied cyberpsychos; 2.9.3: Chrome Overload: +50% movement speed too; kills set it off as often as you are over capacity - 20% over = 20% per kill; 2.9.2: 3 implants per body slot, 8 new implants, one set of arm blades; 2.9.1: chrome perks Full Borg and Chrome Overload (Endurance 10), double jump legs, hydraulic forearms, over-capacity chrome; 2.9.0: cyberware: ripperdoc at Doc Usanagi, implant slots, implants and abilities, kept with each save; 2.8.5: PS VR2 Sense controllers go through SteamVR Input with FNVR's bindings automatically; 2.8.4: full 3D: the left eye's open drawing target is ended with the game's own routine before the right eye draws - 2.8.3 overwrote the renderer's state and froze the game; checked three times; if it still can't, one smooth picture instead of alternating eyes; SteamVR Input manifest path fixed; 2.8.2: alternating eyes: camera back on the head right after each eye is drawn - fixes the brown void / falling camera; 2.8.1: headset names fit on the startup screen; 2.8.0: full 3D: both eyes drawn every frame - the game's culling threads go off so the right eye really draws; the HUD laid over both eyes; left Sequoia's cylinder opens with hole 1 on top; magazines slide the whole depth of their well; 2.7.9: raising your wrist no longer switches full 3D to one picture; full 3D: the camera really moves to each eye; the other hand's power fist wears the gun hand's gauntlet model; Sequoia holes numbered clockwise on both guns; magazines slide all the way into their well and lock; ejected ones slide down out of the gun first, then fly with the gun's motion and fall to the ground; full 3D: the HUD is drawn into its own picture and laid over both eyes; the Pip-Boy shows as one picture while open; menu Sequoias without the speedloader; revolver cases back as before; the freeze watchdog no longer logs while the game is paused - it could freeze the game for good; menu revolvers in both hands - either one points and fires to click; the stand-in menu revolver remade as a matte-black big-frame revolver; World model in your hand (this gun): the gun hand can show a gun's world model, so a mod that only changed that model shows in both hands)"
+#define FNVR_VERSION_SHORT  "2.16.5"
 
 #define PI_F 3.14159265f
 #define RAD2DEG 57.2957795f
@@ -188,15 +188,35 @@ static void DirOf(char *path)
     if (slash) slash[1] = 0; else path[0] = 0;
 }
 
-static void LogOpen(void)
+/* FNVR.log goes next to FalloutNV.exe. A game installed under Program Files is the exception: Windows quietly sends an old
+   32-bit game's writes there to a hidden copy of the folder (VirtualStore), so the log could never be found - it goes to
+   Documents\My Games\FalloutNV instead, next to the game's own Fallout.ini. If neither can be written, %TEMP%. */
+static char g_logPath[MAX_PATH];
+static bool LogOpenAt(const char *dir)
 {
-    char path[MAX_PATH];
-    GetModuleFileNameA(NULL, path, MAX_PATH);
-    DirOf(path);
-    char prev[MAX_PATH]; snprintf(prev, sizeof prev, "%sFNVR_previous.log", path);
-    strcat(path, "FNVR.log");
+    char path[MAX_PATH], prev[MAX_PATH];
+    snprintf(path, sizeof path, "%sFNVR.log", dir); snprintf(prev, sizeof prev, "%sFNVR_previous.log", dir);
     MoveFileExA(path, prev, MOVEFILE_REPLACE_EXISTING);   /* (the last session's log is kept - e.g. after a crash) */
     g_log = fopen(path, "w");
+    if (g_log) snprintf(g_logPath, sizeof g_logPath, "%s", path);
+    return g_log != NULL;
+}
+static void LogOpen(void)
+{
+    char exe[MAX_PATH], docs[MAX_PATH];
+    GetModuleFileNameA(NULL, exe, MAX_PATH); DirOf(exe);
+    bool progFiles = false; for (const char *q = exe; *q && !progFiles; q++) progFiles = !_strnicmp(q, "\\Program Files", 14);
+    docs[0] = 0;
+    {   /* Documents (wherever Windows keeps it - OneDrive too) */
+        typedef HRESULT (WINAPI *GetFolderPathA_t)(HWND, int, HANDLE, DWORD, LPSTR);
+        HMODULE sh = LoadLibraryA("shell32.dll"); GetFolderPathA_t gf = sh ? (GetFolderPathA_t)GetProcAddress(sh, "SHGetFolderPathA") : NULL;
+        if (gf && SUCCEEDED(gf(NULL, 0x0005 /* CSIDL_PERSONAL */, NULL, 0, docs))) strcat(docs, "\\My Games\\FalloutNV\\");
+        else docs[0] = 0;
+    }
+    if (!progFiles && LogOpenAt(exe)) return;
+    if (docs[0]) { CreateDirectoryA(docs, NULL); if (LogOpenAt(docs)) return; }
+    if (progFiles && LogOpenAt(exe)) return;
+    char tmp[MAX_PATH]; DWORD n = GetTempPathA(MAX_PATH, tmp); if (n && n < MAX_PATH) LogOpenAt(tmp);
 }
 
 static void UIMessage(const char *text)
@@ -1253,6 +1273,7 @@ static bool  g_padActive = false;        /* controllers connected and feeding th
 static bool  g_bothSticksClicked = false;
 static DWORD g_padPacket = 0;
 static unsigned g_xinputCalls = 0;
+#define FNVR_MAXDEV 64   /* (SteamVR's device count: a controller that reconnects can come back on a high number) */
 static TrackedDeviceIndex_t g_handIdx[2] = { 0xFFFFFFFF, 0xFFFFFFFF };   /* 0 = left, 1 = right */
 /* SteamVR Input (stereo/vrinput.h): every controller read through SteamVR's action system, with a default binding for each
    kind (FNVR\input) - an Index's thumbstick, grip squeeze and finger tracking land where they should, and players can change
@@ -1881,7 +1902,7 @@ static void Holster_Save(int slot, void *w)
 static void Holster_Buzz(unsigned short us)
 {
     int h = g_leftHanded ? 0 : 1;
-    if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us);
+    if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us);
 }
 /* the gun hand squeezed its grip at a holster */
 static int Thr_Count(void *w);
@@ -1987,7 +2008,7 @@ static void Key_RealTick(void)
    right stick = turn). The character's movement and looking are switched off for that time (the game's own
    DisablePlayerControls), and switched back on when it closes. */
 /* mode: 0 = nothing held, 1 = looking held, 2 = movement + looking held (live menus), 3 = movement held only */
-static TrackedDevicePose_t g_waitPoses[16]; static bool g_haveWaitPose;
+static TrackedDevicePose_t g_waitPoses[FNVR_MAXDEV]; static bool g_haveWaitPose;
 static void PipControls_Hold(int want)
 {
     static int on = 0; static void *dis[4], *en[4]; static bool failed = false;
@@ -2044,7 +2065,7 @@ static bool g_adjOn = false, g_pickRebuild = false, g_ppSaveReq = false, g_ppNex
 static float g_adjIn[4]; static float g_adjDt = 0;   /* lx, ly, ry (toward you), rx (size) */
 static int   g_adjMode = 0;                  /* Pip-Boy screen adjusting: 0 = move & size, 1 = tilt & stretch */
 static bool  g_scrResetReq = false, g_scrTurnReq = false, g_adjStartReq = false;
-static void Adj_Buzz(int h, unsigned short us) { if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
+static void Adj_Buzz(int h, unsigned short us) { if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
 static void PP_Load(void)
 {
     g_ppN = 0;
@@ -2118,6 +2139,41 @@ static bool PipAdjust_Update(const VRControllerState_t *mv, const VRControllerSt
 }
 
 static void Throw_Input(bool menu, bool *rGrip, bool rGripRaw, bool *lGrip, bool lGripRaw, XPad *p, float lTrig, float rTrig);
+/* A controller that has lost its tracking - the PS VR2 Sense when its Bluetooth link drops, any controller while it is
+   still calibrating - is left out (its hand goes back to the game's own arm pose) instead of hanging frozen in the air.
+   A frozen hand is caught too: its pose repeated exactly, frame after frame, for a quarter second while the headset
+   moves - a real controller never holds that still. When it comes back its first moments' speed is ignored (no
+   phantom punches or throws from the jump back), and the log says how long it was gone. */
+static double g_handBackAt[2];
+static bool Hand_TrackOk(int h, const TrackedDevicePose_t *hp, const TrackedDevicePose_t *head)
+{
+    static float lastM[2][12], lastHead[2][12]; static double sameSince[2]; static bool lost[2]; static double lostAt[2];
+    double now = QpcMs();
+    int bad = !hp->bPoseIsValid ? 1 : !hp->bDeviceIsConnected ? 2 : hp->eTrackingResult < ETrackingResult_TrackingResult_Running_OK ? 3 : 0;
+    const float *m = &hp->mDeviceToAbsoluteTracking.m[0][0], *hm = &head->mDeviceToAbsoluteTracking.m[0][0];
+    if (!bad) {
+        bool same = !memcmp(m, lastM[h], sizeof lastM[h]), headMoved = memcmp(hm, lastHead[h], sizeof lastHead[h]) != 0;
+        if (!same) sameSince[h] = 0;
+        else if (headMoved) { if (!sameSince[h]) sameSince[h] = now; if (now - sameSince[h] > 250.0) bad = 4; }
+    }
+    float jump = 0; if (lost[h] && !bad) { float d[3] = { m[3] - lastM[h][3], m[7] - lastM[h][7], m[11] - lastM[h][11] }; jump = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]); }
+    if (!(bad == 4)) memcpy(lastM[h], m, sizeof lastM[h]);
+    memcpy(lastHead[h], hm, sizeof lastHead[h]);
+    if (bad) {
+        if (!lost[h]) {
+            static const char *const wn[5] = { "", "pose not valid", "disconnected", "not tracking", "frozen (no new data)" };
+            lost[h] = true; lostAt[h] = now;
+            Log("Tracking: %s controller lost - %s (result %d, device %u)", h ? "right" : "left", wn[bad], (int)hp->eTrackingResult, g_handIdx[h]);
+            UIMessage(h ? "Right controller lost tracking" : "Left controller lost tracking");
+        }
+        return false;
+    }
+    if (lost[h]) {
+        lost[h] = false; g_handBackAt[h] = now; sameSince[h] = 0;
+        Log("Tracking: %s controller back after %.1f s (device %u, %.2f m from where it was lost)", h ? "right" : "left", (now - lostAt[h]) / 1000.0, g_handIdx[h], jump);
+    }
+    return true;
+}
 static bool Thr_ExplosiveOut(void);
 static WORD g_throwPress; static double g_throwPressUntil;
 static void Controllers_Poll(bool menu)
@@ -2288,7 +2344,7 @@ static void Controllers_Poll(bool menu)
                     if (!gripNow[amH]) { eqHold = false; if (tnow - eqAt < 300.0) { g_throwPress = g_bindMask[BIND_ACTIVATE]; g_throwPressUntil = tnow + 120.0; } }
                     else if (tnow - eqAt >= 300.0) {
                         eqHold = false; g_gun.base = PlayerWeaponForm(); g_gun.since = tnow; g_gun.drawAt = 0; g_gun.two = false; g_gun.on = true; g_gun.holding = true;
-                        if (g_vrSystem && g_handIdx[amH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[amH], 0, 1500);
+                        if (g_vrSystem && g_handIdx[amH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[amH], 0, 1500);
                     }
                 }
             }
@@ -2342,8 +2398,8 @@ static void Controllers_Poll(bool menu)
             hPrev = rGripRaw;
         }
         if (g_chestPause && g_vrSystem) {   /* grab at your chest: pause menu (again: close it) */
-            TrackedDevicePose_t ps_[16];
-            g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, ps_, 16);
+            TrackedDevicePose_t ps_[FNVR_MAXDEV];
+            g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, ps_, FNVR_MAXDEV);
             static bool cPrev[2] = { false, false }; static bool inPrev[2] = { false, false };
             if (ps_[0].bPoseIsValid) {
                 float yaw_ = 0, pit_ = 0; ExtractYawPitch(&ps_[0].mDeviceToAbsoluteTracking, &yaw_, &pit_);
@@ -2353,7 +2409,7 @@ static void Controllers_Poll(bool menu)
                 for (int hh = 0; hh < 2; hh++) {
                     bool grip = hh == amH ? rGripRaw : lGripRaw;
                     bool in = false;
-                    if (g_handIdx[hh] < 16 && ps_[g_handIdx[hh]].bPoseIsValid) {
+                    if (g_handIdx[hh] < FNVR_MAXDEV && ps_[g_handIdx[hh]].bPoseIsValid) {
                         float d_[3]; for (int i = 0; i < 3; i++) d_[i] = ps_[g_handIdx[hh]].mDeviceToAbsoluteTracking.m[i][3] - ch[i];
                         in = sqrtf(d_[0] * d_[0] + d_[1] * d_[1] + d_[2] * d_[2]) < g_chestR;
                     }
@@ -2657,7 +2713,7 @@ static uintptr_t g_renderCallsOther = 0;
 
 /* Pose handed to us by WaitGetPoses at the end of the previous frame (predicted for this frame). */
 static TrackedDevicePose_t g_waitPose;
-static TrackedDevicePose_t g_waitPoses[16];   /* all devices (controllers too) */
+static TrackedDevicePose_t g_waitPoses[FNVR_MAXDEV];   /* all devices (controllers too) */
 static bool g_haveWaitPose;
 
 /* What we pointed the camera at this frame - used to tell SteamVR how the frame was rendered. */
@@ -2908,11 +2964,11 @@ static void VR_Tick(void)
     int aimHand = g_leftHanded ? 0 : 1;
     TrackedDevicePose_t handPose;
     bool handOk = false;
-    if (g_handAim && g_motionControls && g_padActive && HeadsetDisplayActive() && g_handIdx[aimHand] < 16) {
+    if (g_handAim && g_motionControls && g_padActive && HeadsetDisplayActive() && g_handIdx[aimHand] < FNVR_MAXDEV) {
         if (g_haveWaitPose) handPose = g_waitPoses[g_handIdx[aimHand]];
         else {
-            TrackedDevicePose_t all[16];
-            g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, all, 16);
+            TrackedDevicePose_t all[FNVR_MAXDEV];
+            g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, all, FNVR_MAXDEV);
             handPose = all[g_handIdx[aimHand]];
         }
         handOk = handPose.bPoseIsValid;
@@ -2970,9 +3026,9 @@ static void VR_Tick(void)
         g_vrYawOffset = *rotZ + yaw;
         for (int hnd = 0; hnd < 2; hnd++) {
             g_vrHandOk[hnd] = false;
-            if (!g_padActive || g_handIdx[hnd] >= 16 || !g_haveWaitPose) continue;
+            if (!g_padActive || g_handIdx[hnd] >= FNVR_MAXDEV || !g_haveWaitPose) continue;
             TrackedDevicePose_t *hp = &g_waitPoses[g_handIdx[hnd]];
-            if (!hp->bPoseIsValid) continue;
+            if (!Hand_TrackOk(hnd, hp, &pose)) continue;
             const float (*m)[4] = hp->mDeviceToAbsoluteTracking.m;
             float o = g_aimPitchOffsetDeg / RAD2DEG, f[3];
             for (int k = 0; k < 3; k++) { g_vrHandPos[hnd][k] = m[k][3]; f[k] = -m[k][2] * cosf(o) + m[k][1] * sinf(o); }
@@ -2986,8 +3042,8 @@ static void VR_Tick(void)
             float cp = asinf(f[1] < -1.f ? -1.f : f[1] > 1.f ? 1.f : f[1]);
             g_handHeading[hnd] = g_vrYawOffset - cy;
             g_handPitch[hnd] = -cp;
-            for (int k = 0; k < 3; k++) g_vrHandVel[hnd][k] = hp->vVelocity.v[k];
-            g_handSpeed[hnd] = sqrtf(hp->vVelocity.v[0] * hp->vVelocity.v[0] + hp->vVelocity.v[1] * hp->vVelocity.v[1] +
+            for (int k = 0; k < 3; k++) g_vrHandVel[hnd][k] = QpcMs() - g_handBackAt[hnd] < 300.0 ? 0.0f : hp->vVelocity.v[k];   /* (just back from losing tracking: no speed yet) */
+            g_handSpeed[hnd] = QpcMs() - g_handBackAt[hnd] < 300.0 ? 0.0f : sqrtf(hp->vVelocity.v[0] * hp->vVelocity.v[0] + hp->vVelocity.v[1] * hp->vVelocity.v[1] +
                                      hp->vVelocity.v[2] * hp->vVelocity.v[2]);
             g_vrHandOk[hnd] = true;
         }
@@ -5774,9 +5830,9 @@ mmHave:
 
     /* 2. poses: head and the hands holding a revolver (predicted for this frame) - the gun hand's, and the other hand's too
        unless "Menu revolver in both hands" is off. Either one points at the menu and fires to click. */
-    TrackedDevicePose_t poses[16];
+    TrackedDevicePose_t poses[FNVR_MAXDEV];
     if (g_haveWaitPose) memcpy(poses, g_waitPoses, sizeof poses);
-    else g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.02f, poses, 16);
+    else g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.02f, poses, FNVR_MAXDEV);
     if (!poses[0].bPoseIsValid) return true;
     int mainH = g_leftHanded ? 0 : 1;   /* (hands: 0 left, 1 right) */
     TrackedDeviceIndex_t di[2];
@@ -5786,7 +5842,7 @@ mmHave:
     double now = QpcMs();
     for (int h = 0; h < 2; h++) {
         di[h] = g_vrSystem->GetTrackedDeviceIndexForControllerRole(h ? ETrackedControllerRole_TrackedControllerRole_RightHand : ETrackedControllerRole_TrackedControllerRole_LeftHand);
-        haveGun[h] = g_mmPointer && (h == mainH || g_mmBothHands) && di[h] < 16 && poses[di[h]].bPoseIsValid;
+        haveGun[h] = g_mmPointer && (h == mainH || g_mmBothHands) && di[h] < FNVR_MAXDEV && poses[di[h]].bPoseIsValid;
         if (!haveGun[h]) continue;
         const float (*m)[4] = poses[di[h]].mDeviceToAbsoluteTracking.m;
         float o = g_aimPitchOffsetDeg / RAD2DEG, X[3], Y[3], Z[3], P[3];
@@ -6523,7 +6579,7 @@ static void Pace_Limit(void)
 static void Display_WaitForNextFrame(void)
 {
     if (!HeadsetDisplayActive()) return;
-    TrackedDevicePose_t poses[16];
+    TrackedDevicePose_t poses[FNVR_MAXDEV];
     static double lastEnd = 0;
     int drew = g_aerDrewEye; g_aerDrewEye = -1;
     bool freeRun = g_fpsOf[g_fpsMode] >= 0 && g_inGameplay && !g_farActive2;   /* (not the menu room: it sends its own pictures every frame) */
@@ -6538,13 +6594,13 @@ static void Display_WaitForNextFrame(void)
         if (!g_vrSystem->GetTimeSinceLastVsync || !g_vrSystem->GetTimeSinceLastVsync(&since, &fc)) since = 0;
         float predict = (frame - since) + (freeRun ? 0.0f : frame) + v2p;   /* (shown at the next refresh - for an alternating pair, the one after the right eye) */
         if (predict < 0) predict = 0; if (predict > 0.1f) predict = 0.1f;
-        g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, predict, poses, 16);
+        g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, predict, poses, FNVR_MAXDEV);
         memcpy(g_waitPoses, poses, sizeof poses); g_waitPose = poses[0]; g_haveWaitPose = poses[0].bPoseIsValid;
         Pace_Limit();
         return;
     }
     double w0 = QpcMs();
-    EVRCompositorError ce = g_vrCompositor->WaitGetPoses(poses, 16, NULL, 0);
+    EVRCompositorError ce = g_vrCompositor->WaitGetPoses(poses, FNVR_MAXDEV, NULL, 0);
     double w1 = QpcMs();
     g_lastSyncAt = w1;
     {   /* how long each frame takes vs. how long it waits for the headset */
@@ -11303,7 +11359,7 @@ static void Hit_Scan(void)
 }
 static void Hit_Buzz(int h, float I)
 {
-    if (!g_vrSystem || g_handIdx[h] >= 16) return;
+    if (!g_vrSystem || g_handIdx[h] >= FNVR_MAXDEV) return;
     float us = fminf(1200.0f + I * 500.0f, 3999.0f);
     g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, (unsigned short)us);
 }
@@ -11478,7 +11534,7 @@ static void Hit_Update(float dt, bool weaponOut)
                 } else {
                     memcpy(g_hrPush[h], d, 12);
                     double gap = pull > g_stabPull * g_unitsPerMeter * 0.6f ? 60 : 160;
-                    if (now - Lg->lastBuzz > gap) { Lg->lastBuzz = now; if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, (unsigned short)fminf(400.0f + pull * 40.0f, 3000.0f)); }
+                    if (now - Lg->lastBuzz > gap) { Lg->lastBuzz = now; if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, (unsigned short)fminf(400.0f + pull * 40.0f, 3000.0f)); }
                 }
             }
             if (!keep) Lg->on = false;
@@ -11661,7 +11717,7 @@ static int Thr_Class(void)
     if (g_thr.cls) Log("Throwing: '%s' - %s", nm, g_thr.cls == TH_MELEE ? "hold the trigger, let go mid-throw" : g_thr.cls == TH_FUSE ? "grip to hold, light the fuse with the other hand's trigger, let go mid-throw" : "grip to hold, pull the pin with the other hand's trigger, let go mid-throw");
     return g_thr.cls;
 }
-static void Thr_Buzz(int h, unsigned short us) { if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
+static void Thr_Buzz(int h, unsigned short us) { if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
 /* (controller polling) - the grips and triggers while a throwing weapon is out */
 static void Throw_Input(bool menu, bool *rGrip, bool rGripRaw, bool *lGrip, bool lGripRaw, XPad *p, float lTrig, float rTrig)
 {
@@ -11997,7 +12053,7 @@ static void Gun_Update(bool noWeapon)
         }
         g_gunCand = cand;
         static char *lastCand = NULL;
-        if (cand != lastCand) { lastCand = cand; if (cand && g_vrSystem && g_handIdx[amH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[amH], 0, 700); }   /* (your hand is on a grip) */
+        if (cand != lastCand) { lastCand = cand; if (cand && g_vrSystem && g_handIdx[amH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[amH], 0, 700); }   /* (your hand is on a grip) */
     }
     /* a weapon you just let go of: find it in the world, put it in your hand and let it fly */
     if (g_gun.finding) {
@@ -12082,7 +12138,7 @@ static void Gun_Tick(void)
         g_gun.on = true; g_gun.since = now; g_gun.drawAt = now + 500.0; g_gun.two = g_gun.offHeld;
         const char *nm = *(const char **)((char *)g_gun.base + 0x34);
         Log("Weapons: picked up %s by the grip%s", nm && !IsBadStringPtrA(nm, 64) ? nm : "a weapon", g_gun.two ? " (other hand on it too)" : "");
-        if (g_vrSystem) { int amH = g_leftHanded ? 0 : 1; if (g_handIdx[amH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[amH], 0, 2500); }
+        if (g_vrSystem) { int amH = g_leftHanded ? 0 : 1; if (g_handIdx[amH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[amH], 0, 2500); }
     }
     if (g_gun.on && g_gun.drawAt > 0 && now > g_gun.drawAt) {   /* ready it */
         g_gun.drawAt = 0;
@@ -13195,7 +13251,7 @@ static struct {
     bool hookOk;
     int hints[16];
 } g_mr;
-static void MR_Buzz(int h, unsigned short us) { if (g_vrSystem && h >= 0 && h < 2 && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
+static void MR_Buzz(int h, unsigned short us) { if (g_vrSystem && h >= 0 && h < 2 && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
 static void MR_Hint(int k, const char *msg) { if (k >= 0 && k < 16 && g_mr.hints[k] < 2) { g_mr.hints[k]++; UIMessage(msg); } Log("Reload: %s", msg); }
 static int MR_GunHand(int g) { int amH = g_leftHanded ? 0 : 1; return g == 0 ? amH : 1 - amH; }
 
@@ -14699,7 +14755,7 @@ static void LG_Update(void)
     }
     if (g_lg.on && !Holster_OffZone()) g_lgLeftZone = true;
     {   static int zPrev = 0; int z = Holster_OffZone();
-        if (z && z != zPrev && (g_lg.on || g_holster[z] || (g_holsterId[z] && LookupForm(g_holsterId[z]))) && g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 600);
+        if (z && z != zPrev && (g_lg.on || g_holster[z] || (g_holsterId[z] && LookupForm(g_holsterId[z]))) && g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 600);
         zPrev = z; }
     if (g_lg.pickReq) {
         char *r = g_lg.pickRef; g_lg.pickReq = false;
@@ -14727,7 +14783,7 @@ static void LG_Update(void)
                 }
                 const char *nm = *(const char **)((char *)g_lg.base + 0x34);
                 Log("Dual wield: other hand took %s by the grip%s", nm && !IsBadStringPtrA(nm, 64) ? nm : "a gun", g_lg.automatic ? " (automatic)" : "");
-                if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2500);
+                if (g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2500);
             } else if (g_holding[mvH]) Log("Dual wield: couldn't line the gun up by its grip - held as an object");
         }
     }
@@ -14741,7 +14797,7 @@ static void LG_Update(void)
         float L = V3Len(d); if (L < best) { best = L; g_lgCand = ref; }
     }
     static char *last = NULL;
-    if (g_lgCand != last) { last = g_lgCand; if (g_lgCand && g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 700); }
+    if (g_lgCand != last) { last = g_lgCand; if (g_lgCand && g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 700); }
 }
 /* (controller polling) the other hand's grip and trigger */
 static void LG_Input(bool menu, bool gripNow, bool gripEdge, float trig, bool *lGrip)
@@ -14849,8 +14905,8 @@ static void LG_Tick(void)
             double hv = -1; bool noAmmo = have && Scr_Num(have, g_lg.base, &hv) && hv < 1;
             if (noAmmo && g_lg.on && !g_lg.melee) { static double nl = 0; if (now > nl) { nl = now + 3000.0; UIMessage("No ammo for your other hand's gun"); } }
             else if (g_lg.on && !g_lg.melee && !g_lg.reloadAt) {
-                if (g_lg.rounds >= g_lg.clip) { if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 500); }
-                else { g_lg.reloadAt = now + LG_RELOAD_MS; if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2500); Log("Dual wield: reloading the other hand's gun");
+                if (g_lg.rounds >= g_lg.clip) { if (g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 500); }
+                else { g_lg.reloadAt = now + LG_RELOAD_MS; if (g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2500); Log("Dual wield: reloading the other hand's gun");
                     static void *ps = NULL; if (!ps) ps = g_scriptIntf->CompileScript("ref rSnd\nBegin Function { rSnd }\nPlaySound rSnd\nEnd\n");
                     void *rs = LG_ReloadSound(g_lg.base); if (rs && ps) g_scriptIntf->CallFunctionAlt(ps, GetPlayer(), 1, rs); }
             }
@@ -14862,7 +14918,7 @@ static void LG_Tick(void)
                 struct { double num; uint8_t type; uint8_t pad[23]; } res; memset(&res, 0, sizeof res);
                 int need = g_lg.clip - g_lg.rounds, got = 0;
                 if (need > 0 && ((CallFn_t)g_scriptIntf->CallFunction)(load, GetPlayer(), NULL, &res, 2, g_lg.base, need) && res.type == 1) got = (int)res.num;
-                if (got > 0) { g_lg.rounds += got; if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 3999); Log("Dual wield: reloaded (%d rounds in it)", g_lg.rounds); }
+                if (got > 0) { g_lg.rounds += got; if (g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 3999); Log("Dual wield: reloaded (%d rounds in it)", g_lg.rounds); }
                 else { UIMessage("No ammo for your other hand's gun"); Log("Dual wield: no ammo to reload with"); }
             }
         }
@@ -14888,7 +14944,7 @@ static void LG_Tick(void)
         if (take && LookupForm(g_lgHol.id) == (void *)g_lgHol.ref) {
             g_scriptIntf->CallFunctionAlt(take, GetPlayer(), 1, g_lgHol.ref);
             int z = g_lgHol.zone; g_holRounds[z] = g_lgHol.rounds; Holster_Save(z, g_lgHol.base);
-            if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 3000);
+            if (g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 3000);
             Log("Holsters: other hand's gun put away on your other %s (%d rounds in it)", z == 3 ? "hip" : "shoulder", g_lgHol.rounds);
         }
     }
@@ -14896,7 +14952,7 @@ static void LG_Tick(void)
         int z = g_lgHol.drawReq; g_lgHol.drawReq = 0;
         void *w = g_holster[z] ? g_holster[z] : (g_holsterId[z] ? LookupForm(g_holsterId[z]) : NULL);
         int have = w ? Thr_Count(w) : 0;
-        if (!w || have <= 0) { if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 800); Log("Holsters: nothing kept on your other %s", z == 3 ? "hip" : "shoulder"); Holster_Save(z, NULL); }
+        if (!w || have <= 0) { if (g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 800); Log("Holsters: nothing kept on your other %s", z == 3 ? "hip" : "shoulder"); Holster_Save(z, NULL); }
         else if (w == PlayerWeaponForm() && have <= 1) Log("Holsters: that gun is in your gun hand");
         else {
             static void *drop = NULL; if (!drop) drop = g_scriptIntf->CompileScript("ref rB\nBegin Function { rB }\nplayer.Drop rB 1\nEnd\n");
@@ -14920,7 +14976,7 @@ static void LG_Tick(void)
     if (g_lg.automatic && g_lg.trig && now - g_lg.lastShot > 1000.0 / 9.0) fire = true;
     if (!fire || now - g_lg.lastShot < 60.0 || g_lg.reloadAt) return;
     if (g_lg.rounds <= 0) {
-        if (now - g_lg.lastShot > 250.0) { g_lg.lastShot = now; if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 400); Log("Dual wield: click - empty"); }
+        if (now - g_lg.lastShot > 250.0) { g_lg.lastShot = now; if (g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 400); Log("Dual wield: click - empty"); }
         return;
     }
     if (!o_FireWeapon) return;
@@ -14963,7 +15019,7 @@ static void LG_Tick(void)
         if (g_lg.snd2 && p2) g_scriptIntf->CallFunctionAlt(p2, player, 1, g_lg.snd2);
         else if (g_lg.snd3 && p3) g_scriptIntf->CallFunctionAlt(p3, player, 1, g_lg.snd3);
     }
-    if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 3999);
+    if (g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 3999);
     {   static int sl = 0;
         float hf[3] = { -g_handWR[mvH][0][2], -g_handWR[mvH][1][2], -g_handWR[mvH][2][2] }; float c = V3Dot(hf, dir) / fmaxf(V3Len(hf), 1e-3f);
         if (sl++ < 12) Log("Dual wield: other hand fired (%s; %d rounds left; %.0f deg from where the controller points, heading %.0f, %+.0f up)", g_launch.spawned ? "shot created" : "NO shot created", g_lg.rounds,
@@ -15034,7 +15090,7 @@ static void LHud_Tick(void)
         if (t >= 0 && t <= 9) {
             g_lgAssign = w;
             char m[128]; snprintf(m, sizeof m, "Other hand: %s (close the Pip-Boy to draw it)", nm); UIMessage(m);
-            if (g_vrSystem && g_handIdx[mvH] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2000);
+            if (g_vrSystem && g_handIdx[mvH] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[mvH], 0, 2000);
             Log("Other hand's weapon: %s chosen in the Pip-Boy", nm);
         } else if (w) { UIMessage("Only guns and melee weapons can go in your other hand"); }
     }
@@ -16488,7 +16544,7 @@ static struct {
 } g_grap;
 static struct { bool on; char *ref; uint32_t id; int hand; float speed, t; } g_yank;   /* a person on the line, being pulled to you */
 static bool Grapple_Busy(void) { return g_grap.pull || g_grap.fling; }
-static void Grap_Buzz(int h, unsigned short us) { if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
+static void Grap_Buzz(int h, unsigned short us) { if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
 static void Grap_SetVel(char *ctrl, const float *v, bool withZ)
 {
     char *proxy = *(char **)(ctrl + 0x08);
@@ -16785,7 +16841,7 @@ static void Stim_Update(float dt, bool noWeapon)
     if (!in && now - g_stimAt > 250.0) armed = true;   /* it has to leave your chest and arm before a stab counts */
     if (in && !wasIn && armed && g_handSpeed[h] > 0.45f) {
         Log("Stimpak: stabbed into your %s (%.1f m/s)", inArm ? "arm" : "chest", g_handSpeed[h]);
-        if (g_vrSystem) { g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999); if (inArm && g_handIdx[o] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[o], 0, 3999); }
+        if (g_vrSystem) { g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999); if (inArm && g_handIdx[o] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[o], 0, 3999); }
         Stim_Release(h, 1);
         wasIn = false; return;
     }
@@ -16919,7 +16975,7 @@ static void Drag_Update(char *player, float dt, bool noWeapon)
         if (sep - sep0 > 0.30f * g_unitsPerMeter && QpcMs() - since > 250.0) {
             int pull = g_handSpeed[1] > g_handSpeed[0] ? 1 : 0;
             Mech_Rip(g_drag[0].ref, g_handW[pull]);
-            for (int h = 0; h < 2; h++) if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
+            for (int h = 0; h < 2; h++) if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
             memset(&g_drag[pull], 0, sizeof g_drag[pull]); g_grabBlock[pull] = true; who = 0;
         }
     }
@@ -16952,7 +17008,7 @@ static void Drag_Update(char *player, float dt, bool noWeapon)
             }
             if (!bestRb) continue;
             d->ref = bestRef; d->id = *(uint32_t *)(bestRef + 0x0C); d->rb = bestRb; d->live = !Drag_Dynamic(bestRb); d->at = QpcMs();
-            if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 2500);
+            if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 2500);
             Log("Grab people: %s hand took hold of %08X (%s, %.0f units from the palm)", h ? "right" : "left", d->id, d->live ? "standing - yank to knock them down" : "a body - drag it", best);
             continue;
         }
@@ -16963,7 +17019,7 @@ static void Drag_Update(char *player, float dt, bool noWeapon)
                 Log("Mech Arms: %08X is too heavy (needs Strength 10)", d->id); memset(d, 0, sizeof *d); g_grabBlock[h] = true; continue;
             }
             Drag_Push(d->ref, 2); d->live = false; d->rb = NULL; d->at = QpcMs();
-            if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
+            if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
             Log("Mech Arms: %08X lifted off their feet", d->id);
             continue;
         }
@@ -16971,7 +17027,7 @@ static void Drag_Update(char *player, float dt, bool noWeapon)
             if (g_handSpeed[h] > 1.5f) {   /* a yank or a shove: off their feet */
                 int f = (int)fminf(fmaxf(g_handSpeed[h] * 2.0f, 2.0f), 10.0f);
                 Drag_Push(d->ref, f); d->live = false; d->rb = NULL; d->at = QpcMs();
-                if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
+                if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
                 Log("Grab people: %08X knocked down (%.1f m/s, force %d)", d->id, g_handSpeed[h], f);
             }
             continue;
@@ -19195,7 +19251,7 @@ static void HudEl_Sticky(HudEl *e, const RECT *m, double now)
 /* (by a hand) turned to face your eyes: its axes in the controller's own frame */
 static bool HudEl_Face(int hand, const float *Pc, HmdMatrix34_t *m)
 {
-    if (!g_haveWaitPose || g_handIdx[hand] >= 16) return false;
+    if (!g_haveWaitPose || g_handIdx[hand] >= FNVR_MAXDEV) return false;
     const TrackedDevicePose_t *hp = &g_waitPoses[0], *cp = &g_waitPoses[g_handIdx[hand]];
     if (!hp->bPoseIsValid || !cp->bPoseIsValid) return false;
     const float (*H)[4] = hp->mDeviceToAbsoluteTracking.m, (*C)[4] = cp->mDeviceToAbsoluteTracking.m;
@@ -19226,7 +19282,7 @@ static bool HudEl_Place(HudEl *e, UINT wPx, float uC, float vC, float mppNat)
         for (int k = 0; k < 3; k++) { P[k] += X[k] * ox + Y[k] * oy - Z[k] * oz; m.m[k][0] = X[k]; m.m[k][1] = Y[k]; m.m[k][2] = Z[k]; m.m[k][3] = P[k]; }
     } else {
         int hand = (pl == HP_LWRIST || pl == HP_LHAND) ? 0 : 1;
-        dev = g_handIdx[hand]; if (dev >= 16) return false;
+        dev = g_handIdx[hand]; if (dev >= FNVR_MAXDEV) return false;
         float o = g_aimPitchOffsetDeg / RAD2DEG, co = cosf(o), so = sinf(o);
         float Xl[3] = { 1, 0, 0 }, Yt[3] = { 0, co, so }, Zt[3] = { 0, -so, co };   /* (right; up and back along your forearm, tilted like the aim) */
         if (pl == HP_LWRIST || pl == HP_RWRIST) {
@@ -20115,7 +20171,7 @@ static int Set_PageRows(int page, int *idx, int max)
     return n;
 }
 static void Set_Toast(const char *msg) { snprintf(g_setToast, sizeof g_setToast, "%s", msg); g_setToastUntil = QpcMs() + 3500.0; g_setDirty = true; }
-static void Set_Buzz(unsigned short us) { int h = g_leftHanded ? 0 : 1; if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
+static void Set_Buzz(unsigned short us) { int h = g_leftHanded ? 0 : 1; if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, us); }
 
 
 /* ---- Headset sharpness: the game's resolution for your headset and PC -----------------------------------------------
@@ -20698,8 +20754,8 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
         }
         if (g_setCal == 2 && (!g_inGameplay || g_menuCached)) {   /* main menu: measured from the headset and controllers */
             if (bothTrigEdge) {
-                TrackedDevicePose_t ps[16];
-                g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, ps, 16);
+                TrackedDevicePose_t ps[FNVR_MAXDEV];
+                g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, ps, FNVR_MAXDEV);
                 if (ps[0].bPoseIsValid) {
                     float yaw = 0, pitch = 0; ExtractYawPitch(&ps[0].mDeviceToAbsoluteTracking, &yaw, &pitch);
                     float H[3] = { ps[0].mDeviceToAbsoluteTracking.m[0][3], ps[0].mDeviceToAbsoluteTracking.m[1][3], ps[0].mDeviceToAbsoluteTracking.m[2][3] };
@@ -20709,7 +20765,7 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
                     int got = 0;
                     for (int sd = 0; sd < 2; sd++) {
                         uint32_t di = g_handIdx[sd];
-                        if (di >= 16 || !ps[di].bPoseIsValid) continue;
+                        if (di >= FNVR_MAXDEV || !ps[di].bPoseIsValid) continue;
                         float S[3], d[3];
                         for (int i = 0; i < 3; i++) S[i] = H[i] + rt[i] * (sd ? 1.0f : -1.0f) * 0.116f * E - fw[i] * 0.087f * E;
                         S[1] -= 0.204f * E;
@@ -20762,10 +20818,10 @@ static bool Settings_Update(const VRControllerState_t *mv, const VRControllerSta
     /* pointing with the aiming hand */
     g_setHover = -1; g_setHoverPart = 0;
     {
-        TrackedDevicePose_t ps[16]; int h = g_leftHanded ? 0 : 1;
-        g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, ps, 16);
+        TrackedDevicePose_t ps[FNVR_MAXDEV]; int h = g_leftHanded ? 0 : 1;
+        g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, ps, FNVR_MAXDEV);
         bool hit = false;
-        if (g_handIdx[h] < 16 && ps[g_handIdx[h]].bPoseIsValid) {
+        if (g_handIdx[h] < FNVR_MAXDEV && ps[g_handIdx[h]].bPoseIsValid) {
             const float (*m)[4] = ps[g_handIdx[h]].mDeviceToAbsoluteTracking.m;
             float o = g_aimPitchOffsetDeg / RAD2DEG, org[3], dir[3];
             for (int k = 0; k < 3; k++) { org[k] = m[k][3]; dir[k] = -m[k][2] * cosf(o) + m[k][1] * sinf(o); }
@@ -21484,6 +21540,7 @@ __declspec(dllexport) bool NVSEPlugin_Query(const NVSEInterface *nvse, PluginInf
 
     LogOpen();
     Log("FNVR %s", FNVR_VERSION_STR);
+    Log("This log: %s", g_logPath);
     Log("NVSE version: %08X  runtime: %08X", nvse->nvseVersion, nvse->runtimeVersion);
 
     if (nvse->runtimeVersion != RUNTIME_VERSION_1_4_0_525) {

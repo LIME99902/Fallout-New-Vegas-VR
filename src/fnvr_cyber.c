@@ -370,7 +370,7 @@ static void Cy_HealPct(int pct)
 }
 
 /* ---- installing and removing ---- */
-static void Cy_Buzz(int us) { for (int h = 0; h < 2; h++) if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, (unsigned short)us); }
+static void Cy_Buzz(int us) { for (int h = 0; h < 2; h++) if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, (unsigned short)us); }
 static bool Cy_CanInstallHere(void) { return g_cyAtDoc || g_cyAnywhere; }
 static const char *Cy_Install(const CyImpl *c)
 {
@@ -884,7 +884,7 @@ static void Cy_LaunchTick(void)
         if (g_cyLaunchH[h] < 0 || (h == 0 && g_cyEyes)) { g_cyLn[h].trigWas = false; jk[h].init = false; continue; }   /* (Cyber Eyes: the left grip + trigger is the scan) */
         if (g_cyLn[h].refillAt > 0 && now >= g_cyLn[h].refillAt) {
             g_cyLn[h].rounds = cap; g_cyLn[h].refillAt = 0;
-            if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 1500);
+            if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 1500);
             Log("Cyberware: %s arm launcher refilled - %d rockets", h ? "right" : "left", cap);
         }
         if (g_gripHeld[h] && !g_cyLn[h].gripWas) g_cyLn[h].gripFirst = g_grapTrigH[h] < 0.35f;   /* (fist first, then trigger - a trigger pulled first stays bullet time) */
@@ -897,7 +897,7 @@ static void Cy_LaunchTick(void)
         if (g_cyLaunchH[h] == 5) {   /* Jack's Favorite: a held beam - 20 bolts a second, 6 s of fire, then a 6 s recharge (Cyber Brained: 3 s) */
             if (!jk[h].init) { jk[h].init = true; jk[h].fireLeft = 6000.0; jk[h].reloadAt = 0; jk[h].last = now; }
             double dt = now - jk[h].last; jk[h].last = now; if (dt > 100.0) dt = 100.0;
-            if (jk[h].reloadAt > 0 && now >= jk[h].reloadAt) { jk[h].reloadAt = 0; jk[h].fireLeft = 6000.0; if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 1500); Log("Jack's Favorite: recharged"); }
+            if (jk[h].reloadAt > 0 && now >= jk[h].reloadAt) { jk[h].reloadAt = 0; jk[h].fireLeft = 6000.0; if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 1500); Log("Jack's Favorite: recharged"); }
             if (!pull) { jk[h].nextShot = 0; continue; }
             if (jk[h].reloadAt > 0) { if (edge) { char m[80]; snprintf(m, sizeof m, "Jack's Favorite recharging (%.0f s)", (jk[h].reloadAt - now) / 1000.0); UIMessage(m); } continue; }
             if (!ok || !proj[5] || !expl[5] || !o_ProjSpawn || !laserW) { if (edge) UIMessage("Jack's Favorite needs the newest FNVVRMC - Cyberware.esp"); continue; }
@@ -916,7 +916,7 @@ static void Cy_LaunchTick(void)
                 if (r) { int fo[4]; int nfo = BT_DirOffsets((char *)r, hh, pp, fo); BT_Add((char *)r, hh, pp, fo, nfo); }
                 if (rand() % 10000 < 5) Cy_JackRogue(pos, d);   /* (0.05%: Rogue AI) */
             }
-            if (shots && g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 900);
+            if (shots && g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 900);
             if (jk[h].fireLeft <= 0) {
                 jk[h].reloadAt = now + (g_cyBrainOk ? 3000.0 : 6000.0); jk[h].nextShot = 0;
                 UIMessage("Jack's Favorite overheated - recharging"); Log("Jack's Favorite: 6 s of fire spent - recharging");
@@ -925,7 +925,7 @@ static void Cy_LaunchTick(void)
         }
         if (!edge) continue;
         if (g_cyLn[h].rounds <= 0) {
-            if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 300);
+            if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 300);
             char m[80]; snprintf(m, sizeof m, "Arm launcher refilling (%.0f s)", g_cyLn[h].refillAt > now ? (g_cyLn[h].refillAt - now) / 1000.0 : 0.0); UIMessage(m);
             continue;
         }
@@ -943,7 +943,7 @@ static void Cy_LaunchTick(void)
         if (r) { int fo[4]; int nfo = BT_DirOffsets((char *)r, hh, pp, fo); BT_Add((char *)r, hh, pp, fo, nfo); }
         g_cyLn[h].rounds--; lastH = h; lastShot = now;
         if (g_cyLn[h].rounds <= 0 && !g_cyLn[h].refillAt) g_cyLn[h].refillAt = now + refillMs;
-        if (g_vrSystem && g_handIdx[h] < 16) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
+        if (g_vrSystem && g_handIdx[h] < FNVR_MAXDEV) g_vrSystem->TriggerHapticPulse(g_handIdx[h], 0, 3999);
         Log("Cyberware: %s arm launcher - %s rocket (%.0f damage), %d left%s", h ? "right" : "left", kn[k], dmg, g_cyLn[h].rounds,
             g_cyLn[h].rounds <= 0 ? " - refilling" : "");
     }
@@ -1471,9 +1471,9 @@ static void Cy_Press(int btn)
 /* where the aiming hand points on the panel (pixels); false off the panel. Also places the cursor. */
 static bool Cy_Pointer(float *px, float *py)
 {
-    TrackedDevicePose_t ps[16]; int h = g_leftHanded ? 0 : 1; bool hit = false;
-    g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, ps, 16);
-    if (g_handIdx[h] < 16 && ps[g_handIdx[h]].bPoseIsValid) {
+    TrackedDevicePose_t ps[FNVR_MAXDEV]; int h = g_leftHanded ? 0 : 1; bool hit = false;
+    g_vrSystem->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding, 0.0f, ps, FNVR_MAXDEV);
+    if (g_handIdx[h] < FNVR_MAXDEV && ps[g_handIdx[h]].bPoseIsValid) {
         const float (*m)[4] = ps[g_handIdx[h]].mDeviceToAbsoluteTracking.m;
         float o = g_aimPitchOffsetDeg / RAD2DEG, org[3], dir[3], C[3], X[3], Y[3], Z[3];
         for (int k = 0; k < 3; k++) { org[k] = m[k][3]; dir[k] = -m[k][2] * cosf(o) + m[k][1] * sinf(o); }

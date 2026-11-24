@@ -41,7 +41,7 @@ Prefer a mod manager? Use the **FNVVRMC - VR Essentials** Nexus Collection: clic
    2. Run **Body & profiles → Calibrate my body**.
    3. Point your right controller at the centre of your view and **click both thumbsticks** to set your aim.
 
-FNVR writes a log to `Fallout New Vegas\FNVR.log`. That's the first thing to look at if something doesn't work.
+FNVR writes a log to `Fallout New Vegas\FNVR.log` (next to `FalloutNV.exe`). If the game is installed under `Program Files`, it goes to `Documents\My Games\FalloutNV\FNVR.log` instead (Windows hides writes to Program Files from old games). The previous session's log is kept as `FNVR_previous.log`. That's the first thing to look at if something doesn't work.
 
 ---
 
