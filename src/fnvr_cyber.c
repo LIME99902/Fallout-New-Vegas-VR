@@ -374,7 +374,7 @@ static void Cy_Buzz(int us) { for (int h = 0; h < 2; h++) if (g_vrSystem && g_ha
 static bool Cy_CanInstallHere(void) { return g_cyAtDoc || g_cyAnywhere; }
 static const char *Cy_Install(const CyImpl *c)
 {
-    static char why[160];
+    static char why[320];
     if (!Cy_CanInstallHere()) return "Only a ripperdoc can do that - see Hunter at the New Vegas Medical Clinic";
     if (Cy_InstIdx(c->id) >= 0) return "Already installed";
     if (g_cyN >= CY_MAXINST) return "No room for more implants";
@@ -398,6 +398,13 @@ static const char *Cy_Install(const CyImpl *c)
     Log("Cyberware: installed %s for %d caps (%d stat changes)", c->name, c->price, in->n);
     if (over) snprintf(why, sizeof why, "%s installed - OVER CAPACITY (%d / %d): your hits can now set off a Chrome Overload", c->name, used + c->load, cap);
     else snprintf(why, sizeof why, "%s installed", c->name);
+    {   /* Cyber Eyes take the left grip + trigger for the scan: a left-arm launcher or grapple can't fire with them */
+        bool eyes = false, leftUse = false;
+        for (int i = 0; i < g_cyN; i++) { const char *id = g_cyInst[i].id; const CyImpl *o = Cy_Find(id);
+            if (o && o->special == CYS_EYES) eyes = true;
+            if ((!strncmp(id, "arm_launch", 10) || !strncmp(id, "arm_grapple", 11)) && Cy_ArmSide(id) == 0) leftUse = true; }
+        if (eyes && leftUse) { size_t l = strlen(why); snprintf(why + l, sizeof why - l, ". With Cyber Eyes a left-arm launcher or grapple can't fire - use the right arm"); }
+    }
     return why;
 }
 static const char *Cy_Remove(const CyImpl *c)
@@ -1339,7 +1346,7 @@ static void Cyber_Init(NVSEInterface *nvse, PluginHandle h)
 #define CY_DIM RGB(92, 130, 128)
 static int g_cySlot = 0, g_cyItem = 0, g_cyCol = 0, g_cyBtn = 0, g_cyTop = 0;   /* column 0 slots, 1 implants, 2 buttons */
 static int g_cyHoverKind = 0, g_cyHoverIdx = -1;
-static char g_cyMsg[200]; static double g_cyMsgUntil = 0;
+static char g_cyMsg[320]; static double g_cyMsgUntil = 0;
 static bool g_cyFromDoc = false;
 static int Cy_SlotItems(int slot, const CyImpl **out, int max)
 {
