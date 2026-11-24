@@ -98,6 +98,11 @@ static bool Tex_Share(void *handle, int type, int cs, IpcTex *o)
         memset(e, 0, sizeof *e); e->src = t;
     }
     e->used = ++g_shTick;
+    if (e->h && !e->copy) {   /* (a picture that is shared itself: if it was remade at the same address, its handle is new) */
+        HANDLE nh = NULL; IDXGIResource *r = NULL;
+        if (SUCCEEDED(ID3D11Texture2D_QueryInterface(t, &IID_IDXGIResource, (void **)&r)) && r) { IDXGIResource_GetSharedHandle(r, &nh); IDXGIResource_Release(r); }
+        if (nh && nh != e->h) e->h = nh;
+    }
     if (!e->h) {
         e->w = d.Width; e->hgt = d.Height; e->f = d.Format;
         ID3D11Texture2D *src = t;
