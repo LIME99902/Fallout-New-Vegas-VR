@@ -454,10 +454,15 @@ static void Cy_CoEnd(bool undo)
     if (undo) { UIMessage("Chrome Overload wore off"); Log("Cyberware: Chrome Overload over"); }
 }
 /* xNVSE's events: a hit you land, a kill you make (counted here, handled on the next tick) */
+static void *Cy_Form(void *scr);
+static void *volatile g_cyShot[32]; static volatile LONG g_cyShotW = 0, g_cyShotR = 0;
 static void Cy_OnHit(void *thisObj, void *params)
 {
     (void)thisObj; void **p = (void **)params; void *pl = GetPlayer();
-    if (p && pl && p[1] == pl && p[0] && p[0] != pl) InterlockedIncrement(&g_cyHits);
+    if (p && pl && p[1] == pl && p[0] && p[0] != pl) {
+        InterlockedIncrement(&g_cyHits);
+        if (g_cyShotW - g_cyShotR < 32) { g_cyShot[g_cyShotW & 31] = p[0]; InterlockedIncrement(&g_cyShotW); }   /* (who you hit - for Hunter's Vector) */
+    }
     else if (p && pl && p[1] && p[0] && p[1] != pl) Ce_Event(p[1], p[0], false);   /* (someone else's hit: a chromed enemy's?) */
 }
 /* everyone who dies is noted (handled on the next tick: a Fiend gets a Fiend Ear to loot - FNVVRMC - Hunter.esp) */
@@ -614,6 +619,50 @@ static void Cy_HackTick(void)
         sGlow = Cy_Compile("ref rT\nBegin Function { }\nset rT to GetFirstRef 200 1\nwhile rT != 0\nif rT != player\nif rT.GetDead == 0\nif player.GetDistance rT < 3150\nrT.PlayMagicShaderVisuals LifeDetected 1.5\nendif\nendif\nendif\nset rT to GetNextRef\nloop\nEnd\n");
         sGlowOff = Cy_Compile("ref rT\nBegin Function { }\nset rT to GetFirstRef 200 1\nwhile rT != 0\nif rT != player\nrT.StopMagicShaderVisuals LifeDetected\nendif\nset rT to GetNextRef\nloop\nEnd\n");
         Log("Cyber Eyes / Brain Dancer: scan %s, quickhacks %s", sGlow ? "ready" : "FAILED", sBlind && sDisarm && sKill && sNearest ? "ready" : "partly FAILED");
+    }
+    /* Hunter's Vector (FNVVRMC - Hunter.esp): every hit on a person or robot has a 2% chance to upload a quickhack picked at
+       random - Reboot Optics, Weapon Glitch, Cyberpsychosis, Cyberware Malfunction or Rogue AI. No RAM, no deck needed. */
+    while (g_cyShotR != g_cyShotW) {
+        char *r = (char *)g_cyShot[g_cyShotR & 31]; InterlockedIncrement(&g_cyShotR);
+        static void *vec = NULL; static bool vTried = false;
+        if (!vTried) { vTried = true; vec = Cy_Form(Cy_Compile("ref r\nBegin Function { }\nset r to FNVVRMCHunterVector\nSetFunctionValue r\nEnd\n"));
+            Log("Hunter's Vector: %s", vec ? "found - its hits can upload quickhacks" : "not loaded (FNVVRMC - Hunter.esp)"); }
+        if (!vec || !(PlayerWeaponForm() == vec || (g_lg.on && g_lg.base == vec)) || !r || IsBadReadPtr(r, 0x40)) continue;   /* (in either hand) */
+        if (rand() % 100 >= 2) continue;
+        uint32_t id = *(uint32_t *)(r + 0x0C);
+        if (LookupForm(id) != (void *)r || Ce_Num(2, r) > 0.5) continue;
+        if (*(BYTE *)(r + 0x04) == 0x3C) {   /* (creatures: robots only) */
+            static void *sK = NULL; if (!sK) sK = Cy_Compile("ref rT\nint iV\nBegin Function { rT }\nset iV to rT.GetCreatureType\nSetFunctionValue iV\nEnd\n");
+            double kd = -1; Ce_Call(sK, r, 1, 0, &kd); if ((int)kd != 6) continue;
+        }
+        static const char *const vn[5] = { "Reboot Optics", "Weapon Glitch", "Cyberpsychosis", "Cyberware Malfunction", "Rogue AI" };
+        int k = rand() % 5;
+        if (k == 3 && !Ce_ChromeOff(r, now + CY_HACK_MS)) k = rand() % 3;   /* (no chrome in them to shut off: one of the others) */
+        if (!tried) {   /* (the quickhack scripts, if nothing else has needed them yet) */
+            tried = true;
+            sBlind = Cy_Compile("ref rT\nBegin Function { rT }\nrT.ModAV Perception -10\nrT.StopCombat\nEnd\n");
+            sSeeAgain = Cy_Compile("ref rT\nBegin Function { rT }\nrT.ModAV Perception 10\nEnd\n");
+            sStop = Cy_Compile("ref rT\nBegin Function { rT }\nif rT.IsInCombat\nrT.StopCombat\nendif\nEnd\n");
+            sDisarm = Cy_Compile("ref rT\nref rW\nBegin Function { rT }\nset rW to rT.GetEquippedObject 5\nif rW\nrT.UnequipItem rW 0 1\nendif\nEnd\n");
+            sKill = Cy_Compile("ref rT\nBegin Function { rT }\nrT.Kill player\nEnd\n");
+            sKind = Cy_Compile("ref rT\nint iV\nBegin Function { rT }\nset iV to rT.GetCreatureType\nSetFunctionValue iV\nEnd\n");
+            sNearest = Cy_Compile("ref rW\nref rT\nref rBest\nfloat fD\nfloat fBest\nBegin Function { rW }\nset fBest to 3000\nset rT to GetFirstRef 200 1\nwhile rT != 0\nif rT != rW\nif rT != player\nif rT.GetDead == 0\nset fD to rW.GetDistance rT\nif fD < fBest\nset fBest to fD\nset rBest to rT\nendif\nendif\nendif\nendif\nset rT to GetNextRef\nloop\nif rBest\nrW.StartCombat rBest\nendif\nEnd\n");
+            sGlow = Cy_Compile("ref rT\nBegin Function { }\nset rT to GetFirstRef 200 1\nwhile rT != 0\nif rT != player\nif rT.GetDead == 0\nif player.GetDistance rT < 3150\nrT.PlayMagicShaderVisuals LifeDetected 1.5\nendif\nendif\nendif\nset rT to GetNextRef\nloop\nEnd\n");
+            sGlowOff = Cy_Compile("ref rT\nBegin Function { }\nset rT to GetFirstRef 200 1\nwhile rT != 0\nif rT != player\nrT.StopMagicShaderVisuals LifeDetected\nendif\nset rT to GetNextRef\nloop\nEnd\n");
+        }
+        if (k == 4) Cy_RogueStart(r);
+        else if (k != 3) {
+            int i; for (i = 0; i < g_cyHkN; i++) if (g_cyHk[i].id == id && g_cyHk[i].kind == k) break;
+            if (i == g_cyHkN) {
+                if (g_cyHkN >= 16) continue;
+                g_cyHk[i].ref = r; g_cyHk[i].id = id; g_cyHk[i].kind = k; g_cyHkN++;
+                if (k == 0) Ce_Call(sBlind, r, 1, 0, NULL);
+                if (k == 2) { int a = (int)Ce_Num(3, r); g_cyHk[i].aggr = a >= 0 && a <= 3 ? a : 1; Ce_SetAggr(r, 3); Ce_Call(sStop, r, 1, 0, NULL); }
+            }
+            g_cyHk[i].until = now + CY_HACK_MS; g_cyHk[i].next = now;
+        }
+        char m[128]; snprintf(m, sizeof m, "Hunter's Vector: %s uploaded - %s", vn[k], Cy_RefName(r)); UIMessage(m);
+        Log("Hunter's Vector: %s on %s (%08X)", vn[k], Cy_RefName(r), id);
     }
     /* the hacks running on people */
     for (int i = 0; i < g_cyHkN; ) {
