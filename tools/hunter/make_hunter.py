@@ -76,7 +76,7 @@ for s, d in npc.subs:
     if s in ('CNTO', 'COED', 'PKID'): continue
     subs.append([s, d])
     if s == 'EAMT' or (s == 'RNAM' and not any(x[0] == 'EAMT' for x in npc.subs)):
-        for item, n in ((ARM_ID, 1), (HLM_ID, 1), (VEC_ID, 1), (AMMO, 300)):
+        for item, n in ((ARM_ID, 1), (HLM_ID, 1), (VEC_ID, 2), (AMMO, 400)):   # two Vectors: he dual-wields them (Ambidex Coprocessor)
             subs.append(['CNTO', fid(item) + struct.pack('<i', n)])
     if s == 'AIDT':
         subs.append(['PKID', fid(FNV['DefaultSandboxEditorLocation256NoSleepOrWander'].fid)])

@@ -39,6 +39,7 @@ typedef struct {
     CySavedMod temp[4]; int tempN;           /* an ability's boosts, on now */
     bool psycho; double psychoEnd, psychoRetarget; int aggrPrev;
     bool off; double offUntil;               /* (a Cyberware Malfunction quickhack: its chrome shut off) */
+    bool ambiChecked;                        /* (Hunter: always an Ambidex Coprocessor - his two Vectors) */
     bool ambi; char *dualModel, *dualParent, *dualProj; void *dualWeap; int dualType; bool dualOn;   /* (dual-wielding: the left-hand copy) */
 } CEnemy;
 typedef struct {                             /* (as kept in the co-save) */
@@ -211,6 +212,7 @@ static void Ce_Decide(char *ref)
         for (int i = 1; i < CY_NCAT; i++) { int v = order[i], j = i - 1; while (j >= 0 && score[order[j]] < score[v]) { order[j + 1] = order[j]; j--; } order[j + 1] = v; }
     }
     if (named) for (int i = 0; i < CY_NCAT; i++) if (g_cyCat[order[i]].special == CYS_HEART) { int t = order[0]; order[0] = order[i]; order[i] = t; break; }   /* (always a Backup Heart) */
+    if (named && !strcmp(Cy_RefName(ref), "Hunter")) for (int i = 0; i < CY_NCAT; i++) if (!strcmp(g_cyCat[order[i]].id, "cortex_ambidex")) { int t = order[1]; order[1] = order[i]; order[i] = t; break; }   /* (and Hunter his Ambidex Coprocessor) */
     int used[CY_NSLOT] = { 0 }; bool blade = false;
     for (int k = 0; k < CY_NCAT && e->nImp < want; k++) {
         const CyImpl *c = &g_cyCat[order[k]];
@@ -440,6 +442,15 @@ static void Ce_Tick(double now)
         if (!fighting && !e->abilOn && !e->psycho) { if (e->dualOn || (e->dualModel && e->dualParent)) Ce_DualDetach(e); continue; }
         char *ref = Ce_Ref(e);
         if (!ref || Ce_Num(2, ref) > 0.5) { if (e->abilOn) Ce_TempOff(e, ref); if (e->psycho) Ce_PsychoEnd(e, ref); if (e->dualModel) Ce_DualDetach(e); continue; }
+        if (!e->ambi && !e->ambiChecked) {   /* Hunter dual-wields his two Vectors: he always has the Ambidex Coprocessor (older saves too) */
+            e->ambiChecked = true;
+            const char *nm = Cy_RefName(ref);
+            if (nm && !strcmp(nm, "Hunter") && e->nImp < CE_MAXIMP)
+                for (int c = 0; c < CY_NCAT; c++) if (!strcmp(g_cyCat[c].id, "cortex_ambidex")) {
+                    e->imp[e->nImp++] = (int16_t)c; e->load += g_cyCat[c].load; e->ambi = true;
+                    for (int m = 0; m < CY_MAXMOD && g_cyCat[c].mod[m].av; m++) Ce_ModAV(ref, g_cyCat[c].mod[m].av, g_cyCat[c].mod[m].amt);
+                    Log("Chromed: Hunter - Ambidex Coprocessor (a Vector in each hand)"); break; }
+        }
         if (e->ambi) {
             Ce_DualUpdate(e, ref);
             if (e->dualOn && nd < 24) { g_ceDualAct[nd].actor = ref; g_ceDualAct[nd].proj = e->dualProj; nd++; }
