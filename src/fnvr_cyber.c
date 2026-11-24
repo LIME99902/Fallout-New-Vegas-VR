@@ -1207,6 +1207,7 @@ static void Cy_Tick(void)
             Cy_GsSet(1, g_cyBorg ? 0.7f : 1.0f);
         }
         LONG hits = InterlockedExchange(&g_cyHits, 0), kills = InterlockedExchange(&g_cyKills, 0);
+        LONG killsAll = kills;   /* (every kill counts for More RAM, Please - even the one that sets off Chrome Overload) */
         bool risk = g_cyEnd >= CY_PERK_END && (g_cyBorg || Cy_LoadUsed() > g_cyCapShown);
         if (hits && risk && !g_cyCO && now > g_cyCOReady)
             for (LONG i = 0; i < hits && !g_cyCO; i++) if (rand() % 100 < 2) Cy_CoStart();
@@ -1216,10 +1217,10 @@ static void Cy_Tick(void)
                 for (LONG i = 0; i < kills && !g_cyCO; i++) if (rand() % 100 < pct) { Log("Cyberware: a kill set off Chrome Overload (%d%% over capacity)", pct); Cy_CoStart(); kills = 0; }
             }
         }
-        if (kills && Cy_Has(CYS_RAM) && g_cyAbilReady > now) {   /* More RAM, Please: each kill 1 s off the ability's cooldown */
+        if (killsAll && Cy_Has(CYS_RAM) && g_cyAbilReady > now) {   /* More RAM, Please: each kill 1 s off the ability's cooldown */
             double floor = g_cyAbil ? g_cyAbilEnd : now;
-            g_cyAbilReady -= 1000.0 * (double)kills; if (g_cyAbilReady < floor) g_cyAbilReady = floor;
-            Log("More RAM, Please: %ld kill%s - ability ready in %.1f s", (long)kills, kills == 1 ? "" : "s", (g_cyAbilReady - now) / 1000.0);
+            g_cyAbilReady -= 1000.0 * (double)killsAll; if (g_cyAbilReady < floor) g_cyAbilReady = floor;
+            Log("More RAM, Please: %ld kill%s - ability ready in %.1f s", (long)killsAll, killsAll == 1 ? "" : "s", (g_cyAbilReady - now) / 1000.0);
         }
         if (kills && g_cyCO) {   /* each kill: 20% health back and 3 more seconds */
             Cy_HealPct(20 * (int)(kills > 5 ? 5 : kills));
