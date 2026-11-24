@@ -74,8 +74,12 @@ static bool Call(int fn, DWORD timeoutMs)
 #define END   LeaveCriticalSection(&g_cs);
 
 /* ---- textures: a shared copy the host can open ------------------------------------------------------------------------ */
-typedef struct { ID3D11Texture2D *src, *copy; HANDLE h; UINT w, hgt; DXGI_FORMAT f; ID3D11Query *q; } ShTex;
-static ShTex g_sh[16]; static int g_shN;
+typedef struct { ID3D11Texture2D *src, *copy; HANDLE h; UINT w, hgt; DXGI_FORMAT f; ID3D11Query *q; uint32_t used; } ShTex;
+/* (64 pictures kept shared - the HUD panels, the Pip-Boy, the menus, the eyes; each one remade when its size changes. When
+   they're all taken the one unused the longest goes, its copy let go: before, every new picture past 16 took the last place
+   in turn - a fresh copy each time, the old ones never freed, and the overlays that kept swapping it could show nothing) */
+#define SH_MAX 64
+static ShTex g_sh[SH_MAX]; static int g_shN; static uint32_t g_shTick;
 static bool Tex_Share(void *handle, int type, int cs, IpcTex *o)
 {
     memset(o, 0, sizeof *o); o->type = type; o->colorSpace = cs;
@@ -87,7 +91,13 @@ static bool Tex_Share(void *handle, int type, int cs, IpcTex *o)
     ShTex *e = NULL;
     for (int i = 0; i < g_shN; i++) if (g_sh[i].src == t) { e = &g_sh[i]; break; }
     if (e && (e->w != d.Width || e->hgt != d.Height || e->f != d.Format)) { if (e->copy) ID3D11Texture2D_Release(e->copy); e->copy = NULL; e->h = NULL; }
-    if (!e) { e = &g_sh[g_shN < 16 ? g_shN++ : 15]; memset(e, 0, sizeof *e); e->src = t; }
+    if (!e) {
+        if (g_shN < SH_MAX) e = &g_sh[g_shN++];
+        else { e = &g_sh[0]; for (int i = 1; i < SH_MAX; i++) if (g_sh[i].used < e->used) e = &g_sh[i];   /* (the longest unused) */
+               if (e->copy) ID3D11Texture2D_Release(e->copy); if (e->q) ID3D11Query_Release(e->q); }
+        memset(e, 0, sizeof *e); e->src = t;
+    }
+    e->used = ++g_shTick;
     if (!e->h) {
         e->w = d.Width; e->hgt = d.Height; e->f = d.Format;
         ID3D11Texture2D *src = t;
